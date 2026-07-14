@@ -3,7 +3,7 @@
 #include <concepts>
 #include <string>
 
-#include "fiasco/internal/json.hpp"
+#include "fiasco/internal/types/json.hpp"
 
 namespace fiasco::detail {
 
@@ -13,9 +13,9 @@ concept Primitive = std::same_as<T, int> || std::same_as<T, long> || std::same_a
                     std::same_as<T, std::string>;
 
 template <typename T>
-concept FromJson = requires(const json& j, T& v) { from_json(j, v); };
+concept FromJson = JsonDeserializable<T>;
 
 template <typename T>
-concept ToJson = requires(json& j, const T& v) { to_json(j, v); };
+concept ToJson = JsonSerializable<T>;
 
 }  // namespace fiasco::detail

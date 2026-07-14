@@ -14,7 +14,14 @@
 
 namespace fiasco::detail {
 
+class json_type;
 struct json_entry;
+
+template <typename T>
+concept JsonSerializable = requires(json_type& j, const T& v) { to_json(j, v); };
+
+template <typename T>
+concept JsonDeserializable = requires(const json_type& j, T& v) { from_json(j, v); };
 
 class json_type {
   public:
@@ -41,15 +48,9 @@ class json_type {
     static json_type array(std::initializer_list<json_type> values);
     static json_type object();
 
-    // From user model / container / optional / etc. via ADL to_json(json_type&, const T&)
-    // The template to_json/t_from_json families (Sequence, Map, Optional, TupleLike)
-    // below ensure a direct ADL-visible overload exists for every common type, so no
-    // silent fallback to the implicit-conversion path can occur.
-    template <typename T>
-    json_type(const T& val)
-        : json_type() {
-        construct_from_val(
-            &val, [](json_type& j, const void* v) { to_json(j, *static_cast<const T*>(v)); });
+    template <JsonSerializable T>
+    json_type(const T& val) : json_type() {
+        to_json(*this, val);
     }
 
     json_type& operator=(const json_type&);
@@ -71,14 +72,14 @@ class json_type {
     [[nodiscard]] bool empty() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
 
-    template <typename T>
+    template <JsonDeserializable T>
     [[nodiscard]] T get() const {
         T val;
-        extract_val(&val, [](const json_type& j, void* v) { from_json(j, *static_cast<T*>(v)); });
+        from_json(*this, val);
         return val;
     }
 
-    template <typename T>
+    template <JsonDeserializable T>
     [[nodiscard]] T value(const std::string& key, const T& default_val) const {
         if (contains(key)) {
             return (*this)[key].get<T>();
@@ -101,7 +102,6 @@ class json_type {
 
     ~json_type();
 
-    // Cast the returned pointer to nlohmann::json_type* in the bridge implementation
     void* data();
     const void* data() const;
 
@@ -111,12 +111,6 @@ class json_type {
     struct impl;
     std::shared_ptr<impl> m_data;
     std::vector<path_segment> m_path;
-
-    using from_val_fn = void (*)(json_type&, const void*);
-    void construct_from_val(const void* val, from_val_fn fn);
-
-    using to_val_fn = void (*)(const json_type&, void*);
-    void extract_val(void* val, to_val_fn fn) const;
 };
 
 // Enables json_type{{"key", val}, {"k2", v2}} without ambiguity vs arrays.
@@ -125,8 +119,7 @@ struct json_entry {
     json_type value;
 };
 
-// These allow get<T>(), value<T>(), and FIASCO_MODEL to work with built-in
-// types without exposing nlohmann::json_type to callers.
+// ---- Built-in primitives -------------------------------------------------
 void from_json(const json_type&, std::nullptr_t&);
 void from_json(const json_type&, bool&);
 void from_json(const json_type&, int&);
@@ -149,9 +142,21 @@ void to_json(json_type&, float);
 void to_json(json_type&, double);
 void to_json(json_type&, const std::string&);
 void to_json(json_type&, const char*);
-void to_json(json_type&, const json_type&);
-void from_json(const json_type&, json_type&);
 
+// ---- json_type self ------------------------------------------------------
+template <typename T>
+    requires std::same_as<std::remove_cvref_t<T>, json_type>
+void to_json(json_type& j, const T& val) {
+    j = val;
+}
+
+template <typename T>
+    requires std::same_as<std::remove_cvref_t<T>, json_type>
+void from_json(const json_type& j, T& val) {
+    val = j;
+}
+
+// ---- Container / optional / tuple traits ---------------------------------
 template <typename T>
 concept JsonRange = requires(T& t) {
     std::begin(t);
@@ -272,10 +277,7 @@ void from_json(const json_type& j, T& tuple) {
     from_json_tuple_impl(j, tuple, std::make_index_sequence<std::tuple_size_v<T>>{});
 }
 
-// Called by the macro-generated to_json / from_json to give std::optional
-// fields FastAPI-like treatment: tolerate missing keys on input (leaves
-// them as std::nullopt).
-
+// ---- Field-level helpers for FIASCO_MODEL ---------------------------------
 template <typename T>
 void to_json_field(json_type& j, const char* key, const T& field) {
     j[key] = json_type(field);

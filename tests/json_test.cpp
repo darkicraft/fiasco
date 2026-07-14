@@ -12,6 +12,35 @@
 using namespace fiasco::detail;
 using Catch::Approx;
 
+// ---------------------------------------------------------------------------
+// Regression: the templated json_type(const T&) constructor used to accept
+// *any* T, routing types without a real to_json through the json_type
+// self-conversion overload `to_json(json_type&, const json_type&)`.  That
+// built a json_type temporary from T, which called the templated constructor
+// again, ad infinitum -> stack overflow / segfault at runtime with no
+// compile diagnostic.  The constructor is now constrained on
+// JsonSerializable<T>; types without a real to_json must be a *compile
+// error*, never a silent crash.
+// ---------------------------------------------------------------------------
+namespace {
+struct NoToJson {};
+struct NoToJsonEither {};
+struct WithToJson {};
+void to_json(json_type&, const WithToJson&);
+}  // namespace
+
+static_assert(!JsonSerializable<NoToJson>);
+static_assert(!JsonSerializable<NoToJsonEither>);
+static_assert(!JsonDeserializable<NoToJson>);
+static_assert(JsonSerializable<WithToJson>);          // ADL to_json found
+static_assert(JsonSerializable<int>);                 // primitive overload
+static_assert(JsonSerializable<std::vector<int>>);   // JsonSequence
+static_assert(JsonSerializable<std::map<std::string, int>>);  // JsonMap
+static_assert(JsonSerializable<std::optional<int>>); // JsonOptional
+static_assert(JsonSerializable<std::tuple<int, int>>);// JsonTupleLike
+static_assert(JsonSerializable<json_type>);          // self (constrained template)
+static_assert(JsonDeserializable<json_type>);
+
 // ============================================================
 // Construction
 // ============================================================

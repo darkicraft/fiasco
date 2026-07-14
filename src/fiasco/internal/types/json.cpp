@@ -265,14 +265,6 @@ const void* json_type::data() const {
     return current;
 }
 
-void json_type::construct_from_val(const void* val, from_val_fn fn) {
-    fn(*this, val);
-}
-
-void json_type::extract_val(void* val, to_val_fn fn) const {
-    fn(*this, val);
-}
-
 void from_json(const json_type& j, std::nullptr_t&) {
     static_cast<const nlohmann::json*>(j.data())->get<std::nullptr_t>();
 }
@@ -355,14 +347,6 @@ void to_json(json_type& j, const std::string& val) {
 
 void to_json(json_type& j, const char* val) {
     *static_cast<nlohmann::json*>(j.data()) = val;
-}
-
-void to_json(json_type& j, const json_type& val) {
-    *static_cast<nlohmann::json*>(j.data()) = *static_cast<const nlohmann::json*>(val.data());
-}
-
-void from_json(const json_type& j, json_type& val) {
-    *static_cast<nlohmann::json*>(val.data()) = *static_cast<const nlohmann::json*>(j.data());
 }
 
 json_type::~json_type() = default;
