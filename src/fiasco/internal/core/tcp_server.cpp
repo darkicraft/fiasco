@@ -43,6 +43,14 @@ struct session : std::enable_shared_from_this<session> {
 
     void respond() {
         request req = parser.take_request();
+
+        try {
+            auto ep = socket.remote_endpoint();
+            req.client_address = ep.address().to_string() + ':' + std::to_string(ep.port());
+        } catch (...) {
+            req.client_address = "unknown";
+        }
+
         response res = handler(req);
 
         auto self = shared_from_this();

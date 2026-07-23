@@ -3,6 +3,7 @@
 #include "fiasco/internal/http/response.hpp"
 
 #include "fiasco/internal/json.hpp"
+#include "fiasco/internal/logging.hpp"
 #include "fiasco/internal/router.hpp"
 #include "fiasco/internal/server.hpp"
 
@@ -12,5 +13,6 @@ using json = detail::json;
 using response = detail::response;
 using router = detail::router;
 using server = detail::server;
+using logger = detail::logger;
 
 }  // namespace fiasco

@@ -35,6 +35,8 @@ struct request {
     // Positional path param values in URL order (views point into url)
     std::vector<std::string_view> ordered_path_params;
 
+    std::string client_address;
+
     [[nodiscard]] std::string header(const std::string& key) const {
         auto it = headers.find(key);
         return (it != headers.end()) ? it->second : "";

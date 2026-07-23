@@ -51,3 +51,14 @@ catch_discover_tests(fiasco_test_macros)
 add_executable(fiasco_test_integration integration_test.cpp)
 target_link_libraries(fiasco_test_integration PRIVATE Catch2::Catch2WithMain fiasco)
 catch_discover_tests(fiasco_test_integration)
+
+# ---- logging_test ----
+add_executable(fiasco_test_logging logging_test.cpp)
+target_link_libraries(fiasco_test_logging PRIVATE Catch2::Catch2WithMain fiasco_logging)
+target_link_libraries(fiasco_test_logging PRIVATE asio)
+catch_discover_tests(fiasco_test_logging)
+
+# ---- logging_integration_test ----
+add_executable(fiasco_test_logging_integration logging_integration_test.cpp)
+target_link_libraries(fiasco_test_logging_integration PRIVATE Catch2::Catch2WithMain fiasco)
+catch_discover_tests(fiasco_test_logging_integration)

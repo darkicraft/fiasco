@@ -128,6 +128,18 @@ target_link_libraries(fiasco_routing PUBLIC
     fiasco_http
 )
 
+# -- fiasco_logging ----------------------------------------
+add_library(fiasco_logging STATIC
+    src/fiasco/internal/logging/access_log.cpp
+    src/fiasco/internal/logging/log_formatter.cpp
+    src/fiasco/internal/logging/logger.cpp
+    src/fiasco/internal/logging/log_registry.cpp
+)
+
+target_include_directories(fiasco_logging PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 # -- fiasco -----------------------------------------------
 add_library(fiasco INTERFACE)
 
@@ -140,6 +152,7 @@ target_link_libraries(fiasco INTERFACE
     fiasco_core
     fiasco_http
     fiasco_routing
+    fiasco_logging
 )
 
 # == SUBDIRECTORIES ===========================================================
