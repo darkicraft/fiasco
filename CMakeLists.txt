@@ -51,7 +51,7 @@ set(JSON_SystemInclude ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     llhttp
     URL https://github.com/nodejs/llhttp/archive/refs/tags/release/v9.4.3.tar.gz
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
 )
 
 # Force llhttp to build only its static library (llhttp_static).
