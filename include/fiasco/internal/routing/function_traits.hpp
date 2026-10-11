@@ -102,7 +102,7 @@ decltype(auto) resolve_arg(const request& req, size_t& path_idx) {
         return static_cast<CleanT>(convert_path_param<CleanT>(req.ordered_path_params[path_idx++]));
     } else if constexpr (FromJson<CleanT>) {
         if (req.body.empty()) {
-            throw std::runtime_error("Handler expects a JSON body but request body is empty");
+            throw json::exception("request body is empty");
         }
         try {
             auto j = json::parse(req.body);
@@ -110,7 +110,7 @@ decltype(auto) resolve_arg(const request& req, size_t& path_idx) {
             from_json(j, val);
             return val;
         } catch (const json::exception& e) {
-            throw std::runtime_error(std::string("JSON body parse error: ") + e.what());
+            throw json::exception(std::string("invalid request body: ") + e.what());
         }
     }
 }

@@ -138,7 +138,13 @@ json_type json_type::operator[](const std::string& key) const {
     const auto& self = *static_cast<const nlohmann::json*>(data());
     json_type result;
     result.m_data = std::make_shared<impl>();
-    result.m_data->m_json = self[key];
+    // Safe lookup: a missing key yields a null value (nlohmann's const
+    // operator[] on a missing key is undefined behaviour).
+    if (self.is_object()) {
+        if (auto it = self.find(key); it != self.end()) {
+            result.m_data->m_json = *it;
+        }
+    }
     return result;
 }
 
@@ -146,7 +152,9 @@ json_type json_type::operator[](std::size_t index) const {
     const auto& self = *static_cast<const nlohmann::json*>(data());
     json_type result;
     result.m_data = std::make_shared<impl>();
-    result.m_data->m_json = self[index];
+    if (self.is_array() && index < self.size()) {
+        result.m_data->m_json = self[index];
+    }
     return result;
 }
 

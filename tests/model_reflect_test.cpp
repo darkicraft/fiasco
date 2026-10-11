@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <optional>
 #include <string>
@@ -7,6 +8,7 @@
 #include "fiasco/internal/json.hpp"
 
 using namespace fiasco::detail;
+using Catch::Matchers::ContainsSubstring;
 
 namespace {
 
@@ -54,4 +56,27 @@ TEST_CASE("reflection model honours present optionals", "[model]") {
     auto back = j.get<Nested>();
     REQUIRE(back.opt.has_value());
     REQUIRE(back.opt.value() == 42);
+}
+
+TEST_CASE("missing required field reports the field name", "[model]") {
+    json j = json_type::object();
+    j["x"] = json_type(1);  // "y" is absent
+    REQUIRE_THROWS_WITH(j.get<Point>(), ContainsSubstring("missing required field 'y'"));
+}
+
+TEST_CASE("wrong field type reports the field name", "[model]") {
+    json j = json_type::object();
+    j["x"] = json_type("not-an-int");
+    j["y"] = json_type(2);
+    REQUIRE_THROWS_WITH(j.get<Point>(), ContainsSubstring("field 'x'"));
+}
+
+TEST_CASE("absent optional field is not an error", "[model]") {
+    json j = json_type::object();
+    j["name"] = json_type("n");
+    j["p"] = json_type(Point{1, 2});
+    j["xs"] = json_type(std::vector<int>{});
+    // "opt" is omitted entirely
+    auto back = j.get<Nested>();
+    REQUIRE_FALSE(back.opt.has_value());
 }

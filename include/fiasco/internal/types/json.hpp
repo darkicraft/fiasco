@@ -296,16 +296,27 @@ void to_json_field(json_type& j, const char* key, const T& field) {
 
 template <typename T>
 void from_json_field(const json_type& j, const char* key, std::optional<T>& field) {
-    if (j.contains(key)) {
-        field = j[key].get<std::optional<T>>();
-    } else {
+    if (!j.contains(key)) {
         field.reset();
+        return;
+    }
+    try {
+        field = j[key].get<std::optional<T>>();
+    } catch (const std::exception& e) {
+        throw json_type::exception(std::string("field '") + key + "': " + e.what());
     }
 }
 
 template <typename T>
 void from_json_field(const json_type& j, const char* key, T& field) {
-    field = j[key].get<T>();
+    if (!j.contains(key)) {
+        throw json_type::exception(std::string("missing required field '") + key + "'");
+    }
+    try {
+        field = j[key].get<T>();
+    } catch (const std::exception& e) {
+        throw json_type::exception(std::string("field '") + key + "': " + e.what());
+    }
 }
 
 // ---- Aggregate models (reflection) ----------------------------------------

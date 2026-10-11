@@ -164,9 +164,7 @@ TEST_CASE("integration 405 method not allowed", "[integration]") {
     REQUIRE(extract_status(resp) == 405);
 }
 
-TEST_CASE("integration invalid JSON body returns 500", "[integration]") {
-    // resolve_arg converts json::exception to std::runtime_error,
-    // so dispatch's 422 catch is shadowed → 500.
+TEST_CASE("integration invalid JSON body returns 422", "[integration]") {
     fiasco::server app;
     app.post("/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
 
@@ -182,8 +180,8 @@ TEST_CASE("integration invalid JSON body returns 500", "[integration]") {
                                  "Content-Length: 13\r\n"
                                  "\r\n"
                                  "{invalid json}");
-    REQUIRE(extract_status(resp) == 500);
-    REQUIRE(extract_body(resp).find("JSON body parse error") != std::string::npos);
+    REQUIRE(extract_status(resp) == 422);
+    REQUIRE(extract_body(resp).find("invalid request body") != std::string::npos);
 }
 
 TEST_CASE("integration 500 internal error from handler", "[integration]") {
@@ -235,7 +233,7 @@ TEST_CASE("integration JSON body deserialization", "[integration]") {
     REQUIRE(extract_body(resp) == "30\n");
 }
 
-TEST_CASE("integration POST empty body with JSON model returns 500", "[integration]") {
+TEST_CASE("integration POST empty body with JSON model returns 422", "[integration]") {
     fiasco::server app;
     app.post("/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
 
@@ -250,6 +248,27 @@ TEST_CASE("integration POST empty body with JSON model returns 500", "[integrati
                                  "Content-Type: application/json\r\n"
                                  "Content-Length: 0\r\n"
                                  "\r\n");
-    REQUIRE(extract_status(resp) == 500);
+    REQUIRE(extract_status(resp) == 422);
     REQUIRE(extract_body(resp).find("empty") != std::string::npos);
+}
+
+TEST_CASE("integration POST missing field returns 422 with the field name", "[integration]") {
+    fiasco::server app;
+    app.post("/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
+
+    auto port = find_free_port();
+    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    wait_for_server(port);
+    ServerGuard guard{app, t};
+
+    // "b" is missing
+    auto resp = send_and_receive(port,
+                                 "POST /sum HTTP/1.1\r\n"
+                                 "Host: localhost\r\n"
+                                 "Content-Type: application/json\r\n"
+                                 "Content-Length: 7\r\n"
+                                 "\r\n"
+                                 R"({"a":1})");
+    REQUIRE(extract_status(resp) == 422);
+    REQUIRE(extract_body(resp).find("missing required field 'b'") != std::string::npos);
 }
