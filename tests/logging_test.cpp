@@ -1,22 +1,22 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
-#include <sstream>
 #include <thread>
 
 #include "fiasco/internal/logging/log_registry.hpp"
+#include "thread_safe_sink.hpp"
 
 using namespace fiasco::detail;
 
 // ---- RAII guard: redirects log output to a stringstream ----------
 
 struct RegistryGuard {
-    std::ostringstream captured;
+    fiasco_test::thread_safe_sink captured;
     log_registry* reg;
 
     RegistryGuard()
         : reg(&log_registry::instance()) {
-        reg->set_sink(captured);
+        reg->set_sink(captured.stream());
     }
 
     ~RegistryGuard() {

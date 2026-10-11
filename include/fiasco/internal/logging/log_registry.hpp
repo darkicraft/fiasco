@@ -49,7 +49,7 @@ class log_registry {
     mutable std::mutex m_mutex;
     std::ostream* m_sink{nullptr};
     log_level m_root_level{log_level::info};
-    bool m_access_log{true};
+    std::atomic<bool> m_access_log{true};
 };
 
 }  // namespace fiasco::detail

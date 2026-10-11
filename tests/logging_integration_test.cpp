@@ -2,13 +2,13 @@
 
 #include <array>
 #include <chrono>
-#include <sstream>
 #include <string>
 #include <thread>
 
 #include <asio.hpp>
 
 #include "fiasco/fiasco.hpp"
+#include "thread_safe_sink.hpp"
 
 using asio::ip::tcp;
 using namespace fiasco::detail;
@@ -91,9 +91,9 @@ static std::string send_and_receive(uint16_t port, const std::string& raw) {
 // ---- Log capture helper ----------------------------------------
 
 struct LogCapture {
-    std::ostringstream captured;
+    fiasco_test::thread_safe_sink captured;
 
-    LogCapture() { log_registry::instance().set_sink(captured); }
+    LogCapture() { log_registry::instance().set_sink(captured.stream()); }
 
     ~LogCapture() {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
