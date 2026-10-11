@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <climits>
 #include <map>
 #include <numeric>
 #include <optional>
