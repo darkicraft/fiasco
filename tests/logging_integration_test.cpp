@@ -96,11 +96,15 @@ struct LogCapture {
     LogCapture() { log_registry::instance().set_sink(captured.stream()); }
 
     ~LogCapture() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        log_registry::instance().flush();
         log_registry::instance().reset_sink();
     }
 
-    std::string str() const { return captured.str(); }
+    // Flush so the background consumer has written every log emitted so far.
+    std::string str() const {
+        log_registry::instance().flush();
+        return captured.str();
+    }
 };
 
 // ============================================================
@@ -117,7 +121,6 @@ TEST_CASE("server logs startup messages", "[logging][integration]") {
     wait_for_server(port);
     ServerGuard guard{app, t};
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     auto out = capture.str();
     REQUIRE(out.find("starting server") != std::string::npos);
     REQUIRE(out.find("listening on") != std::string::npos);
@@ -136,7 +139,6 @@ TEST_CASE("server logs access line on GET", "[logging][integration]") {
     auto resp = send_and_receive(port, "GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(resp.find("200") != std::string::npos);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     auto out = capture.str();
     REQUIRE(out.find("GET") != std::string::npos);
     REQUIRE(out.find("/hello") != std::string::npos);
@@ -156,7 +158,6 @@ TEST_CASE("server logs 404 access line", "[logging][integration]") {
     auto resp = send_and_receive(port, "GET /nonexistent HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(resp.find("404") != std::string::npos);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     auto out = capture.str();
     REQUIRE(out.find("404") != std::string::npos);
 }
@@ -175,7 +176,6 @@ TEST_CASE("server logs 405 access line", "[logging][integration]") {
         port, "POST /resource HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
     REQUIRE(resp.find("405") != std::string::npos);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     auto out = capture.str();
     REQUIRE(out.find("405") != std::string::npos);
 }
@@ -194,7 +194,6 @@ TEST_CASE("access log can be disabled", "[logging][integration]") {
     auto resp = send_and_receive(port, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(resp.find("200") != std::string::npos);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     auto out = capture.str();
     // Should have startup messages but no access logs
     REQUIRE(out.find("fiasco.access") == std::string::npos);
@@ -212,7 +211,6 @@ TEST_CASE("server logs shutdown message", "[logging][integration]") {
     app.stop();
     t.join();
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     auto out = capture.str();
     REQUIRE(out.find("server stopped") != std::string::npos);
 }

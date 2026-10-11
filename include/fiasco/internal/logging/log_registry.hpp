@@ -29,6 +29,11 @@ class log_registry {
     void set_sink(std::ostream& os);
     void reset_sink();
 
+    /// Block until every record enqueued before this call has been written to
+    /// the current sink. Intended for tests / orderly shutdown so callers do not
+    /// have to sleep and guess when the background consumer has caught up.
+    void flush();
+
     log_queue& queue() { return m_queue; }
 
     ~log_registry();

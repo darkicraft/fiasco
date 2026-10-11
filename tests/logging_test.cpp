@@ -1,8 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <chrono>
-#include <thread>
-
 #include "fiasco/internal/logging/log_registry.hpp"
 #include "thread_safe_sink.hpp"
 
@@ -20,26 +17,15 @@ struct RegistryGuard {
     }
 
     ~RegistryGuard() {
-        // Wait for consumer to drain any remaining records
-        for (int i = 0; i < 20; ++i) {
-            if (reg->queue().size() == 0) {
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
+        reg->flush();  // drain before the sink is torn down
         reg->reset_sink();
         reg->set_level(log_level::info);
     }
 
-    std::string output() const { return captured.str(); }
-
-    void wait_for_idle() const {
-        for (int i = 0; i < 20; ++i) {
-            if (reg->queue().size() == 0) {
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
+    // Flush (wait for the consumer), then snapshot -- deterministic, no sleeping.
+    std::string output() const {
+        reg->flush();
+        return captured.str();
     }
 };
 
@@ -196,7 +182,6 @@ TEST_CASE("logger level filtering", "[logging][logger]") {
     log.warn("warning message");
     log.error("error message");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(80));
     auto out = guard.output();
     REQUIRE(out.find("should not appear") == std::string::npos);
     REQUIRE(out.find("warning message") != std::string::npos);
@@ -209,12 +194,10 @@ TEST_CASE("logger set_level dynamic", "[logging][logger]") {
     log.set_level(log_level::error);
 
     log.info("filtered");
-    std::this_thread::sleep_for(std::chrono::milliseconds(80));
     REQUIRE(guard.output().find("filtered") == std::string::npos);
 
     log.set_level(log_level::debug);
     log.debug("now visible");
-    std::this_thread::sleep_for(std::chrono::milliseconds(80));
     REQUIRE(guard.output().find("now visible") != std::string::npos);
 }
 
@@ -247,7 +230,6 @@ TEST_CASE("registry log output appears via sink", "[logging][registry]") {
     auto& log = guard.reg->get("test_logger");
     log.info("test message");
 
-    guard.wait_for_idle();
     auto out = guard.output();
     REQUIRE(out.find("test message") != std::string::npos);
     REQUIRE(out.find("test_logger") != std::string::npos);

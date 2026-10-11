@@ -26,6 +26,13 @@ void log_registry::reset_sink() {
     m_sink = &std::cout;
 }
 
+void log_registry::flush() {
+    // Wait for all records enqueued as of now to be written. mark_processed()
+    // is called by the consumer after write(), and publishing it here gives the
+    // caller a happens-before edge with the sink write.
+    m_queue.wait_until_processed(m_queue.enqueued());
+}
+
 log_registry::~log_registry() {
     m_queue.stop();
     if (m_consumer_thread.joinable()) {
@@ -73,6 +80,7 @@ void log_registry::consumer_loop() {
             break;
         }
         write(record);
+        m_queue.mark_processed();
     }
 }
 
