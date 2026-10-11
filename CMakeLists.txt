@@ -1,17 +1,34 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.30)
 project(fiasco LANGUAGES CXX)
 
 option(FIASCO_BUILD_MODULES "Build C++ module targets" OFF)
 option(FIASCO_BUILD_EXAMPLES "Build examples" ON)
 option(FIASCO_BUILD_TESTS "Build tests" ON)
 
-set(CMAKE_CXX_STANDARD 23)
+# C++26 reflection (std::meta) is required and, for now, only GCC 16+ provides
+# the needed `-freflection` support.
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(FATAL_ERROR
+        "fiasco requires GCC for C++26 reflection (-freflection); "
+        "found '${CMAKE_CXX_COMPILER_ID}'.")
+endif()
+if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16.0)
+    message(FATAL_ERROR
+        "fiasco requires GCC >= 16 for C++26 reflection (-freflection); "
+        "found ${CMAKE_CXX_COMPILER_VERSION}.")
+endif()
+
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Module scanning is only needed for the opt-in module target; leave it off
+# otherwise so ordinary builds don't get -fmodules-ts / module dependency scans.
 if(FIASCO_BUILD_MODULES)
   set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+else()
+  set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 endif()
 
 # == DEPENDENCIES =============================================================
@@ -69,6 +86,11 @@ if (WIN32)
   target_link_libraries(asio INTERFACE ws2_32 mswsock)
   target_compile_definitions(asio INTERFACE _WIN32_WINNT=0x0A00)
 endif()
+
+# Reflection lives in fiasco's headers, so every fiasco target (and the
+# examples/tests/modules below) is compiled with GCC's reflection flag. Added
+# after the dependencies so third-party targets are left untouched.
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-freflection>)
 
 # == FIASCO ===================================================================
 

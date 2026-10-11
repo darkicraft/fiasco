@@ -10,8 +10,11 @@ Existing C++ web frameworks are either syntactically painful (Drogon's verbosity
 
 ## Requirements
 
-- **CMake** ≥ 3.28
-- **C++23** compiler (GCC 14+, Clang 18+)
+- **CMake** ≥ 3.30
+- **GCC ≥ 16** (C++26)
+
+> Only GCC is supported for now: fiasco relies on C++26 reflection (`std::meta`),
+> which currently requires GCC 16's `-freflection`.
 
 ## Build
 
