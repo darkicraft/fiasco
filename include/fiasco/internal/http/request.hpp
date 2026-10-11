@@ -35,6 +35,9 @@ struct request {
     // Positional path param values in URL order (views point into url)
     std::vector<std::string_view> ordered_path_params;
 
+    // Decoded query parameters (first value wins), parsed from query_string.
+    std::unordered_map<std::string, std::string> query_params;
+
     std::string client_address;
 
     [[nodiscard]] std::string header(const std::string& key) const {

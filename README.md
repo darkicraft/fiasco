@@ -1,6 +1,6 @@
 # Fiasco
 
-An expressive C++23 web framework that brings FastAPI-like ergonomics to C++.
+An expressive C++26 web framework that brings FastAPI-like ergonomics to C++.
 
 > **Status**: Alpha: the core API is functional, but expect breaking changes as features mature.
 
@@ -46,8 +46,11 @@ cmake --install build
 | Feature | Status |
 |---------|--------|
 | HTTP/1.1 (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS) | ✅ |
-| Path parameters with automatic type conversion | ✅ |
+| Path parameters bound by name with type conversion | ✅ |
+| Query parameters bound by name with type conversion | ✅ |
 | JSON request/response models (reflection, no macros) | ✅ |
+| Multiple body parameters, embedded by name | ✅ |
+| FastAPI-compatible error responses (`{"detail": ...}`, 422 validation) | ✅ |
 | Type-erased JSON wrapper | ✅ |
 | std::optional, vector, map, tuple serialization | ✅ |
 | Sub-router mounting with path prefixes | ✅ |
@@ -55,13 +58,11 @@ cmake --install build
 | Keep-alive connections | ✅ |
 | SIGINT/SIGTERM graceful shutdown | ✅ |
 | C++20 modules (experimental, opt-in) | ✅ |
-| Query parameter parsing | 🚧 Planned |
 | Better error handling (custom exception handlers) | 🚧 Planned |
 | Automatic API docs generation (OpenAPI / Swagger) | 🚧 Planned |
 | Static file serving | 🚧 Planned |
 | HTTPS / TLS | 🚧 Planned |
 | WebSocket | 🚧 Planned |
-| C++26 `std::meta` reflection-backed routing/params | 🚧 In progress |
 
 ## Quick Start
 
@@ -85,16 +86,32 @@ int main() {
 
 ## Path Parameters
 
-Path parameters are extracted automatically and assigned left-to-right by position.
+Path parameters are matched to handler arguments **by name** (via C++26
+reflection), so argument order doesn't matter.
 
 ```cpp
-app.post("/users/{user_id}/deposit/{amount}", [](int user_id, double amount) {
-    // user_id = 42, amount = 100.50
+app.post("/users/{user_id}/deposit/{amount}", [](double amount, int user_id) {
+    // user_id = 42, amount = 100.50 — order-independent
     return fiasco::json{{"status", "ok"}};
 });
 ```
 
 Supported types: `int`, `long`, `long long`, `float`, `double`, `bool`, `std::string`.
+
+## Query Parameters
+
+Scalar arguments whose name is not a path parameter are read from the query
+string, also by name.
+
+```cpp
+app.get("/search", [](std::string q, int page) {
+    // GET /search?q=cats&page=2
+    return fiasco::json{{"q", q}, {"page", page}};
+});
+```
+
+Missing or wrongly-typed parameters produce FastAPI's `422` response, e.g.
+`{"detail":[{"type":"missing","loc":["query","q"],"msg":"Field required",...}]}`.
 
 ## Request & Response Models
 
@@ -125,6 +142,9 @@ app.post("/users/{department}", [](int department_id, CreateUserRequest req) {
     return fiasco::json{{"created", true}};
 });
 ```
+
+When a handler takes more than one body model, their values are read from a
+single JSON object, embedded under each parameter's name.
 
 ### Supported field types
 
@@ -201,9 +221,9 @@ The server catches `SIGINT` and `SIGTERM` internally via Asio's `signal_set`. Pr
 All fetched automatically at configure time:
 
 - [nlohmann/json](https://github.com/nlohmann/json) v3.12 — JSON core
-- [llhttp](https://github.com/nodejs/llhttp) v9.2 — HTTP/1.1 parser
-- [Asio](https://github.com/chriskohlhoff/asio) 1.38 — async I/O
-- [Catch2](https://github.com/catchorg/Catch2) v3.5 (tests only)
+- [llhttp](https://github.com/nodejs/llhttp) v9.4 — HTTP/1.1 parser
+- [Asio](https://github.com/chriskohlhoff/asio) 1.38.2 — async I/O
+- [Catch2](https://github.com/catchorg/Catch2) v3.16 (tests only)
 
 ## License
 

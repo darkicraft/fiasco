@@ -116,6 +116,10 @@ struct SumInput {
     int b = 0;
 };
 
+struct ExtraInput {
+    int c = 0;
+};
+
 }  // namespace fiasco::detail
 
 // -------------------------------------------------------------------
@@ -273,4 +277,90 @@ TEST_CASE("integration POST missing field returns 422 with the field name", "[in
     REQUIRE(extract_status(resp) == 422);
     REQUIRE(extract_body(resp).find(R"("loc":["body","b"])") != std::string::npos);
     REQUIRE(extract_body(resp).find(R"("msg":"Field required")") != std::string::npos);
+}
+
+TEST_CASE("integration query parameter", "[integration]") {
+    fiasco::server app;
+    app.get("/greet", [](std::string name) -> std::string { return "hi " + name; });
+
+    auto port = find_free_port();
+    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    wait_for_server(port);
+    ServerGuard guard{app, t};
+
+    auto resp = send_and_receive(port, "GET /greet?name=alice HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(extract_status(resp) == 200);
+    REQUIRE(extract_body(resp) == "hi alice\n");
+}
+
+TEST_CASE("integration missing query parameter returns 422", "[integration]") {
+    fiasco::server app;
+    app.get("/greet", [](std::string name) -> std::string { return "hi " + name; });
+
+    auto port = find_free_port();
+    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    wait_for_server(port);
+    ServerGuard guard{app, t};
+
+    auto resp = send_and_receive(port, "GET /greet HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(extract_status(resp) == 422);
+    REQUIRE(extract_body(resp).find(R"("loc":["query","name"])") != std::string::npos);
+}
+
+TEST_CASE("integration path params bind by name, not position", "[integration]") {
+    fiasco::server app;
+    // parameter order is the reverse of the path placeholders
+    app.get("/{a}/{b}", [](int b, int a) -> std::string {
+        return "a=" + std::to_string(a) + " b=" + std::to_string(b);
+    });
+
+    auto port = find_free_port();
+    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    wait_for_server(port);
+    ServerGuard guard{app, t};
+
+    auto resp = send_and_receive(port, "GET /10/20 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(extract_status(resp) == 200);
+    REQUIRE(extract_body(resp) == "a=10 b=20\n");
+}
+
+TEST_CASE("integration multiple body params are embedded by name", "[integration]") {
+    fiasco::server app;
+    app.post("/embed", [](fiasco::detail::SumInput s, fiasco::detail::ExtraInput o) -> std::string {
+        return std::to_string(s.a + s.b + o.c);
+    });
+
+    auto port = find_free_port();
+    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    wait_for_server(port);
+    ServerGuard guard{app, t};
+
+    const std::string body = R"({"s":{"a":1,"b":2},"o":{"c":3}})";
+    auto resp = send_and_receive(port, "POST /embed HTTP/1.1\r\nHost: localhost\r\n"
+                                       "Content-Type: application/json\r\nContent-Length: " +
+                                           std::to_string(body.size()) + "\r\n\r\n" + body);
+    REQUIRE(extract_status(resp) == 200);
+    REQUIRE(extract_body(resp) == "6\n");
+}
+
+TEST_CASE("integration path scalar + body model is not embedded", "[integration]") {
+    // A scalar (std::string) path param must not count as a body param, so the
+    // single model still receives the whole body rather than body[label].
+    fiasco::server app;
+    app.post("/sum/{label}",
+             [](std::string label, fiasco::detail::SumInput input) -> std::string {
+                 return label + ":" + std::to_string(input.a + input.b);
+             });
+
+    auto port = find_free_port();
+    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    wait_for_server(port);
+    ServerGuard guard{app, t};
+
+    const std::string body = R"({"a":10,"b":20})";
+    auto resp = send_and_receive(port, "POST /sum/x HTTP/1.1\r\nHost: localhost\r\n"
+                                       "Content-Type: application/json\r\nContent-Length: " +
+                                           std::to_string(body.size()) + "\r\n\r\n" + body);
+    REQUIRE(extract_status(resp) == 200);
+    REQUIRE(extract_body(resp) == "x:30\n");
 }

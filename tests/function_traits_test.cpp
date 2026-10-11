@@ -126,38 +126,34 @@ TEST_CASE("make_handler captures request", "[function_traits]") {
     REQUIRE(res.body == "captured\n");
 }
 
-TEST_CASE("make_handler with path params via ordered_path_params", "[function_traits]") {
+TEST_CASE("make_handler binds named path params by name", "[function_traits]") {
     auto handler = make_handler([](int id, std::string name) -> std::string {
         return "id=" + std::to_string(id) + " name=" + name;
     });
 
     request req;
-    req.ordered_path_params.push_back("42");
-    req.ordered_path_params.push_back("alice");
+    req.path_params.emplace("id", "42");
+    req.path_params.emplace("name", "alice");
     auto res = handler(std::move(req));
     REQUIRE(res.body.find("id=42") != std::string::npos);
     REQUIRE(res.body.find("name=alice") != std::string::npos);
 }
 
-TEST_CASE("make_handler throws on insufficient path params", "[function_traits]") {
+TEST_CASE("make_handler throws on missing argument", "[function_traits]") {
     auto handler = make_handler([](int id) -> std::string { return std::to_string(id); });
 
     request req;
-    // No path params set
+    // Neither a path param nor a query param named "id"
     REQUIRE_THROWS_AS(handler(std::move(req)), request_validation_error);
 }
 
-TEST_CASE("make_handler with body deserialization", "[function_traits]") {
+TEST_CASE("make_handler with query parameter", "[function_traits]") {
     auto handler =
         make_handler([](int value) -> std::string { return "got=" + std::to_string(value); });
 
     request req;
-    req.body = R"({"value": 99})";
-    req.ordered_path_params.push_back("42");
+    req.query_params["value"] = "42";
 
-    // The handler has (int) — since int is Primitive, it consumes the path param,
-    // not the body (FromJson path)
-    // It will use ordered_path_params[0] = "42"
     auto res = handler(std::move(req));
     REQUIRE(res.body.find("got=42") != std::string::npos);
 }

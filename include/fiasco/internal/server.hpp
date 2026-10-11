@@ -150,6 +150,7 @@ class server {
                 req.path_params.emplace(name, value);
                 req.ordered_path_params.push_back(value);
             }
+            req.query_params = parse_query(req.query_string);
 
             try {
                 res = (*match.handler)(std::move(req));
