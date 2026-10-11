@@ -87,28 +87,6 @@ TEST_CASE("serialize_return double", "[function_traits]") {
 }
 
 // ============================================================
-// Static checks for lambda_traits
-// ============================================================
-
-TEST_CASE("lambda_traits return type", "[function_traits]") {
-    auto lambda = []() -> std::string { return "hi"; };
-    using traits = lambda_traits<decltype(lambda)>;
-    bool same = std::is_same_v<traits::return_type, std::string>;
-    REQUIRE(same);
-}
-
-TEST_CASE("lambda_traits arity", "[function_traits]") {
-    auto f0 = []() { return 1; };
-    REQUIRE(lambda_traits<decltype(f0)>::arity == 0);
-
-    auto f1 = [](int) { return 1; };
-    REQUIRE(lambda_traits<decltype(f1)>::arity == 1);
-
-    auto f2 = [](int, std::string) { return 1; };
-    REQUIRE(lambda_traits<decltype(f2)>::arity == 2);
-}
-
-// ============================================================
 // make_handler — wraps callables into handler_fn
 // ============================================================
 

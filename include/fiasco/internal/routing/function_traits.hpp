@@ -11,6 +11,7 @@
 #include "fiasco/internal/http/request.hpp"
 #include "fiasco/internal/http/response.hpp"
 #include "fiasco/internal/json.hpp"
+#include "fiasco/internal/meta/reflect.hpp"
 #include "fiasco/internal/routing/concepts.hpp"
 
 namespace fiasco::detail {
@@ -83,37 +84,6 @@ template <typename T>
     return {};  // unreachable
 }
 
-template <typename F>
-struct lambda_traits : lambda_traits<decltype(&F::operator())> {};
-
-template <typename C, typename R, typename... Args>
-struct lambda_traits<R (C::*)(Args...) const> {
-    using return_type = R;
-    using args_tuple = std::tuple<Args...>;
-    static constexpr size_t arity = sizeof...(Args);
-};
-
-template <typename C, typename R, typename... Args>
-struct lambda_traits<R (C::*)(Args...)> {
-    using return_type = R;
-    using args_tuple = std::tuple<Args...>;
-    static constexpr size_t arity = sizeof...(Args);
-};
-
-template <typename R, typename... Args>
-struct lambda_traits<R (*)(Args...)> {
-    using return_type = R;
-    using args_tuple = std::tuple<Args...>;
-    static constexpr size_t arity = sizeof...(Args);
-};
-
-template <typename R, typename... Args>
-struct lambda_traits<R (*)(Args...) noexcept> {
-    using return_type = R;
-    using args_tuple = std::tuple<Args...>;
-    static constexpr size_t arity = sizeof...(Args);
-};
-
 /// Dispatch order:
 ///   1. fiasco::request  -> pass raw request
 ///   2. Primitive        -> next positional path param
@@ -167,14 +137,13 @@ response dispatch_impl(F& fn, const request& req, size_t& path_idx, std::index_s
 
 template <typename F>
 [[nodiscard]] handler_fn make_handler(F&& f) {
-    using traits = lambda_traits<std::decay_t<F>>;
+    using traits = meta::callable_traits<std::decay_t<F>>;
     using args_tuple = traits::args_tuple;
-    constexpr size_t arity = traits::arity;
 
     return [fn = std::forward<F>(f)](request req) mutable -> response {
         size_t path_idx = 0;
         return dispatch_impl<decltype(fn), args_tuple>(
-            fn, req, path_idx, std::make_index_sequence<arity>{});
+            fn, req, path_idx, std::make_index_sequence<traits::arity>{});
     };
 }
 
