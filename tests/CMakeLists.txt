@@ -42,6 +42,11 @@ add_executable(fiasco_test_function_traits function_traits_test.cpp)
 target_link_libraries(fiasco_test_function_traits PRIVATE Catch2::Catch2WithMain fiasco_routing)
 catch_discover_tests(fiasco_test_function_traits)
 
+# ---- meta_reflect_test ----
+add_executable(fiasco_test_meta_reflect meta_reflect_test.cpp)
+target_link_libraries(fiasco_test_meta_reflect PRIVATE Catch2::Catch2WithMain fiasco_meta)
+catch_discover_tests(fiasco_test_meta_reflect)
+
 # ---- macros_test ----
 add_executable(fiasco_test_macros macros_test.cpp)
 target_link_libraries(fiasco_test_macros PRIVATE Catch2::Catch2WithMain fiasco_types)

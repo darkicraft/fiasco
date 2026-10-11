@@ -94,6 +94,13 @@ add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-freflection>)
 
 # == FIASCO ===================================================================
 
+# -- fiasco_meta ------------------------------------------
+# Header-only reflection foundation (see internal/meta/reflect.hpp).
+add_library(fiasco_meta INTERFACE)
+target_include_directories(fiasco_meta INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 # -- fiasco_types -----------------------------------------
 add_library(fiasco_types STATIC
     src/fiasco/internal/types/json.cpp
@@ -146,6 +153,7 @@ target_include_directories(fiasco_routing PUBLIC
 )
 
 target_link_libraries(fiasco_routing PUBLIC
+    fiasco_meta
     fiasco_types
     fiasco_http
 )
@@ -170,6 +178,7 @@ target_include_directories(fiasco INTERFACE
 )
 
 target_link_libraries(fiasco INTERFACE
+    fiasco_meta
     fiasco_types
     fiasco_core
     fiasco_http
