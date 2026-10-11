@@ -105,7 +105,9 @@ template <typename T>
 ///                          handler has more than one body parameter)
 /// Failures are reported as FastAPI-compatible request validation errors.
 template <typename T>
-decltype(auto) resolve_arg(const request& req, std::size_t& path_idx, std::string_view name,
+decltype(auto) resolve_arg(const request& req,
+                           std::size_t& path_idx,
+                           std::string_view name,
                            std::size_t body_count) {
     using CleanT = std::decay_t<T>;
 
@@ -220,15 +222,18 @@ concept BodyParam = FromJson<std::decay_t<T>> && !Primitive<std::decay_t<T>> &&
                     !std::same_as<std::decay_t<T>, request>;
 
 template <typename F, typename ArgsTuple, size_t... Is>
-response dispatch_impl(F& fn, const request& req, std::size_t& path_idx, std::index_sequence<Is...>) {
+response dispatch_impl(F& fn,
+                       const request& req,
+                       std::size_t& path_idx,
+                       std::index_sequence<Is...>) {
     using traits = meta::callable_traits<std::decay_t<F>>;
     constexpr std::size_t body_count =
         ((BodyParam<std::tuple_element_t<Is, ArgsTuple>> ? 1u : 0u) + ... + 0u);
 
     // braced init guarantees left-to-right evaluation; values are owned by the tuple
     std::tuple<arg_storage_t<std::tuple_element_t<Is, ArgsTuple>>...> args{
-        resolve_arg<std::tuple_element_t<Is, ArgsTuple>>(req, path_idx, traits::argument_name(Is),
-                                                         body_count)...};
+        resolve_arg<std::tuple_element_t<Is, ArgsTuple>>(
+            req, path_idx, traits::argument_name(Is), body_count)...};
 
     if constexpr (std::is_void_v<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>) {
         fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
@@ -246,8 +251,8 @@ template <typename F>
 
     return [fn = std::forward<F>(f)](request req) mutable -> response {
         std::size_t path_idx = 0;
-        return dispatch_impl<decltype(fn), args_tuple>(fn, req, path_idx,
-                                                       std::make_index_sequence<traits::arity>{});
+        return dispatch_impl<decltype(fn), args_tuple>(
+            fn, req, path_idx, std::make_index_sequence<traits::arity>{});
     };
 }
 

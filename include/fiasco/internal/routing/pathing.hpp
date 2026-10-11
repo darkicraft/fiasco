@@ -92,9 +92,15 @@ inline std::string url_decode(std::string_view s) {
             out.push_back(' ');
         } else if (c == '%' && i + 2 < s.size()) {
             const auto hex = [](char h) -> int {
-                if (h >= '0' && h <= '9') return h - '0';
-                if (h >= 'a' && h <= 'f') return h - 'a' + 10;
-                if (h >= 'A' && h <= 'F') return h - 'A' + 10;
+                if (h >= '0' && h <= '9') {
+                    return h - '0';
+                }
+                if (h >= 'a' && h <= 'f') {
+                    return h - 'a' + 10;
+                }
+                if (h >= 'A' && h <= 'F') {
+                    return h - 'A' + 10;
+                }
                 return -1;
             };
             const int hi = hex(s[i + 1]);
@@ -119,8 +125,9 @@ inline std::unordered_map<std::string, std::string> parse_query(std::string_view
     std::size_t start = 0;
     while (start <= query.size()) {
         const std::size_t amp = query.find('&', start);
-        const std::string_view pair =
-            (amp == std::string_view::npos) ? query.substr(start) : query.substr(start, amp - start);
+        const std::string_view pair = (amp == std::string_view::npos)
+                                          ? query.substr(start)
+                                          : query.substr(start, amp - start);
         if (!pair.empty()) {
             const std::size_t eq = pair.find('=');
             if (eq == std::string_view::npos) {

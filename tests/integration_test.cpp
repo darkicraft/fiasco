@@ -336,9 +336,10 @@ TEST_CASE("integration multiple body params are embedded by name", "[integration
     ServerGuard guard{app, t};
 
     const std::string body = R"({"s":{"a":1,"b":2},"o":{"c":3}})";
-    auto resp = send_and_receive(port, "POST /embed HTTP/1.1\r\nHost: localhost\r\n"
-                                       "Content-Type: application/json\r\nContent-Length: " +
-                                           std::to_string(body.size()) + "\r\n\r\n" + body);
+    auto resp = send_and_receive(port,
+                                 "POST /embed HTTP/1.1\r\nHost: localhost\r\n"
+                                 "Content-Type: application/json\r\nContent-Length: " +
+                                     std::to_string(body.size()) + "\r\n\r\n" + body);
     REQUIRE(extract_status(resp) == 200);
     REQUIRE(extract_body(resp) == "6\n");
 }
@@ -347,10 +348,9 @@ TEST_CASE("integration path scalar + body model is not embedded", "[integration]
     // A scalar (std::string) path param must not count as a body param, so the
     // single model still receives the whole body rather than body[label].
     fiasco::server app;
-    app.post("/sum/{label}",
-             [](std::string label, fiasco::detail::SumInput input) -> std::string {
-                 return label + ":" + std::to_string(input.a + input.b);
-             });
+    app.post("/sum/{label}", [](std::string label, fiasco::detail::SumInput input) -> std::string {
+        return label + ":" + std::to_string(input.a + input.b);
+    });
 
     auto port = find_free_port();
     std::thread t([&] { app.run(port, "127.0.0.1"); });
@@ -358,9 +358,10 @@ TEST_CASE("integration path scalar + body model is not embedded", "[integration]
     ServerGuard guard{app, t};
 
     const std::string body = R"({"a":10,"b":20})";
-    auto resp = send_and_receive(port, "POST /sum/x HTTP/1.1\r\nHost: localhost\r\n"
-                                       "Content-Type: application/json\r\nContent-Length: " +
-                                           std::to_string(body.size()) + "\r\n\r\n" + body);
+    auto resp = send_and_receive(port,
+                                 "POST /sum/x HTTP/1.1\r\nHost: localhost\r\n"
+                                 "Content-Type: application/json\r\nContent-Length: " +
+                                     std::to_string(body.size()) + "\r\n\r\n" + body);
     REQUIRE(extract_status(resp) == 200);
     REQUIRE(extract_body(resp) == "x:30\n");
 }
