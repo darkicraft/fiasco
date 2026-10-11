@@ -167,19 +167,21 @@ concept JsonRange = requires(T& t) {
 template <typename T>
 concept JsonMap = JsonRange<T> && requires { typename T::mapped_type; };
 
-template <typename T>
-concept JsonSequence = JsonRange<T> && !JsonMap<T>;
-
+// NOTE: checked before JsonSequence. Since C++26 std::optional models a range
+// (P3168 range support), it would otherwise be mistaken for a sequence.
 template <typename T>
 concept JsonOptional = requires(T& t) {
     typename T::value_type;
     t.has_value();
     t.value();
-} && !JsonRange<T>;
+};
+
+template <typename T>
+concept JsonSequence = JsonRange<T> && !JsonMap<T> && !JsonOptional<T>;
 
 template <typename T>
 concept JsonTupleLike =
-    requires(T& t) { std::tuple_size<std::decay_t<T>>::value; } && !JsonRange<T>;
+    requires(T& t) { std::tuple_size<std::decay_t<T>>::value; } && !JsonRange<T> && !JsonOptional<T>;
 
 template <JsonSequence T>
 void to_json(json_type& j, const T& seq) {
