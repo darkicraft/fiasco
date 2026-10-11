@@ -17,4 +17,4 @@ struct access_log {
     [[nodiscard]] std::string build_message() const;
 };
 
-} // namespace fiasco::detail
+}  // namespace fiasco::detail

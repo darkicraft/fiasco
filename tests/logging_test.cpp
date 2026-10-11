@@ -22,7 +22,9 @@ struct RegistryGuard {
     ~RegistryGuard() {
         // Wait for consumer to drain any remaining records
         for (int i = 0; i < 20; ++i) {
-            if (reg->queue().size() == 0) break;
+            if (reg->queue().size() == 0) {
+                break;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         reg->reset_sink();
@@ -33,7 +35,9 @@ struct RegistryGuard {
 
     void wait_for_idle() const {
         for (int i = 0; i < 20; ++i) {
-            if (reg->queue().size() == 0) break;
+            if (reg->queue().size() == 0) {
+                break;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }

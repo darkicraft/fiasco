@@ -61,7 +61,9 @@ static std::string send_and_receive(uint16_t port, const std::string& raw) {
 
     while (response.find("\r\n\r\n") == std::string::npos) {
         size_t n = socket.read_some(asio::buffer(buf), ec);
-        if (ec) break;
+        if (ec) {
+            break;
+        }
         response.append(buf.data(), n);
     }
 
@@ -77,7 +79,9 @@ static std::string send_and_receive(uint16_t port, const std::string& raw) {
 
     while (response.size() < header_end + 4 + content_length) {
         size_t n = socket.read_some(asio::buffer(buf), ec);
-        if (ec) break;
+        if (ec) {
+            break;
+        }
         response.append(buf.data(), n);
     }
 
@@ -89,9 +93,7 @@ static std::string send_and_receive(uint16_t port, const std::string& raw) {
 struct LogCapture {
     std::ostringstream captured;
 
-    LogCapture() {
-        log_registry::instance().set_sink(captured);
-    }
+    LogCapture() { log_registry::instance().set_sink(captured); }
 
     ~LogCapture() {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));

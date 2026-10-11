@@ -10,7 +10,7 @@
 namespace fiasco::detail {
 
 class log_queue {
-public:
+  public:
     log_queue() = default;
 
     void enqueue(log_record record) {
@@ -55,11 +55,11 @@ public:
         return m_records.size();
     }
 
-private:
+  private:
     mutable std::mutex m_mutex;
     std::condition_variable m_cv;
     std::deque<log_record> m_records;
     bool m_stopped = false;
 };
 
-} // namespace fiasco::detail
+}  // namespace fiasco::detail

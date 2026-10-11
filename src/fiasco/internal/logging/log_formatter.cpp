@@ -13,28 +13,32 @@ namespace fiasco::detail {
 
 namespace {
 
-constexpr const char* color_reset   = "\033[0m";
-constexpr const char* color_gray    = "\033[90m";
-constexpr const char* color_green   = "\033[32m";
-constexpr const char* color_yellow  = "\033[33m";
-constexpr const char* color_red     = "\033[31m";
-constexpr const char* color_cyan    = "\033[36m";
-constexpr const char* color_bold    = "\033[1m";
+constexpr const char* color_reset = "\033[0m";
+constexpr const char* color_gray = "\033[90m";
+constexpr const char* color_green = "\033[32m";
+constexpr const char* color_yellow = "\033[33m";
+constexpr const char* color_red = "\033[31m";
+constexpr const char* color_cyan = "\033[36m";
+constexpr const char* color_bold = "\033[1m";
 
 constexpr const char* level_color(log_level lvl) {
     switch (lvl) {
-    case log_level::debug: return color_gray;
-    case log_level::info:  return color_green;
-    case log_level::warn:  return color_yellow;
-    case log_level::error: return color_red;
+    case log_level::debug:
+        return color_gray;
+    case log_level::info:
+        return color_green;
+    case log_level::warn:
+        return color_yellow;
+    case log_level::error:
+        return color_red;
     }
     return color_reset;
 }
 
 std::string format_timestamp_human(const std::chrono::system_clock::time_point& tp) {
     auto tt = std::chrono::system_clock::to_time_t(tp);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                  tp.time_since_epoch()).count() % 1000;
+    auto ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(tp.time_since_epoch()).count() % 1000;
 
     std::tm tm{};
     localtime_r(&tt, &tm);
@@ -47,8 +51,8 @@ std::string format_timestamp_human(const std::chrono::system_clock::time_point& 
 
 std::string format_timestamp_json(const std::chrono::system_clock::time_point& tp) {
     auto tt = std::chrono::system_clock::to_time_t(tp);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                  tp.time_since_epoch()).count() % 1000;
+    auto ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(tp.time_since_epoch()).count() % 1000;
 
     std::tm tm{};
     gmtime_r(&tt, &tm);
@@ -64,18 +68,29 @@ std::string escape_json(const std::string& s) {
     out.reserve(s.size() + 2);
     for (char c : s) {
         switch (c) {
-        case '"':  out += "\\\""; break;
-        case '\\': out += "\\\\"; break;
-        case '\n': out += "\\n";  break;
-        case '\r': out += "\\r";  break;
-        case '\t': out += "\\t";  break;
-        default:   out += c;
+        case '"':
+            out += "\\\"";
+            break;
+        case '\\':
+            out += "\\\\";
+            break;
+        case '\n':
+            out += "\\n";
+            break;
+        case '\r':
+            out += "\\r";
+            break;
+        case '\t':
+            out += "\\t";
+            break;
+        default:
+            out += c;
         }
     }
     return out;
 }
 
-} // anonymous namespace
+}  // anonymous namespace
 
 // ---- human_log_formatter ---------------------------------------------------
 
@@ -186,4 +201,4 @@ std::unique_ptr<log_formatter> make_formatter(log_format_type type, bool use_col
     return std::make_unique<human_log_formatter>(use_colors);
 }
 
-} // namespace fiasco::detail
+}  // namespace fiasco::detail

@@ -19,4 +19,4 @@ std::string access_log::build_message() const {
     return msg;
 }
 
-} // namespace fiasco::detail
+}  // namespace fiasco::detail

@@ -1,8 +1,8 @@
 #include <fiasco/fiasco.hpp>
 
 #include <algorithm>
-#include <cmath>
 #include <climits>
+#include <cmath>
 #include <map>
 #include <numeric>
 #include <optional>

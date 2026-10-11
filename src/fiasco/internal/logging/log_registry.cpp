@@ -83,4 +83,4 @@ void log_registry::write(const log_record& record) {
     m_sink->flush();
 }
 
-} // namespace fiasco::detail
+}  // namespace fiasco::detail

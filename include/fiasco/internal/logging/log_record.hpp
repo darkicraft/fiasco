@@ -16,4 +16,4 @@ struct log_record {
     std::chrono::system_clock::time_point timestamp = std::chrono::system_clock::now();
 };
 
-} // namespace fiasco::detail
+}  // namespace fiasco::detail

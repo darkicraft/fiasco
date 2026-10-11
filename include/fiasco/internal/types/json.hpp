@@ -49,7 +49,8 @@ class json_type {
     static json_type object();
 
     template <JsonSerializable T>
-    json_type(const T& val) : json_type() {
+    json_type(const T& val)
+        : json_type() {
         to_json(*this, val);
     }
 

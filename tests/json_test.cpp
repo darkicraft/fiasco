@@ -32,13 +32,13 @@ void to_json(json_type&, const WithToJson&);
 static_assert(!JsonSerializable<NoToJson>);
 static_assert(!JsonSerializable<NoToJsonEither>);
 static_assert(!JsonDeserializable<NoToJson>);
-static_assert(JsonSerializable<WithToJson>);          // ADL to_json found
-static_assert(JsonSerializable<int>);                 // primitive overload
-static_assert(JsonSerializable<std::vector<int>>);   // JsonSequence
+static_assert(JsonSerializable<WithToJson>);                  // ADL to_json found
+static_assert(JsonSerializable<int>);                         // primitive overload
+static_assert(JsonSerializable<std::vector<int>>);            // JsonSequence
 static_assert(JsonSerializable<std::map<std::string, int>>);  // JsonMap
-static_assert(JsonSerializable<std::optional<int>>); // JsonOptional
-static_assert(JsonSerializable<std::tuple<int, int>>);// JsonTupleLike
-static_assert(JsonSerializable<json_type>);          // self (constrained template)
+static_assert(JsonSerializable<std::optional<int>>);          // JsonOptional
+static_assert(JsonSerializable<std::tuple<int, int>>);        // JsonTupleLike
+static_assert(JsonSerializable<json_type>);                   // self (constrained template)
 static_assert(JsonDeserializable<json_type>);
 
 // ============================================================

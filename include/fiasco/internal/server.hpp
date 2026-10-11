@@ -38,9 +38,7 @@ class server {
         return *this;
     }
 
-    logger& get_logger(const std::string& name) {
-        return log_registry::instance().get(name);
-    }
+    logger& get_logger(const std::string& name) { return log_registry::instance().get(name); }
 
     template <typename F>
     void get(const std::string& path, F&& f) {
@@ -72,9 +70,8 @@ class server {
     }
 
     void run(uint16_t port = 8080, const std::string& host = "0.0.0.0") {
-        unsigned int actual_threads = m_threads == 0
-            ? std::max(std::thread::hardware_concurrency(), 2u)
-            : m_threads;
+        unsigned int actual_threads =
+            m_threads == 0 ? std::max(std::thread::hardware_concurrency(), 2u) : m_threads;
         {
             auto& log = log_registry::instance().get("fiasco");
             log.info("starting server with " + std::to_string(actual_threads) + " threads");
@@ -103,7 +100,8 @@ class server {
     unsigned int m_threads = 0;
     std::unique_ptr<tcp_server> m_server;
 
-    void log_access(access_log alog, const response& res,
+    void log_access(access_log alog,
+                    const response& res,
                     std::chrono::steady_clock::time_point start) {
         auto& reg = log_registry::instance();
         if (!reg.access_log_enabled()) {

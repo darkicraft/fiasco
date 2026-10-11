@@ -16,7 +16,7 @@
 namespace fiasco::detail {
 
 class log_registry {
-public:
+  public:
     static log_registry& instance();
 
     logger& get(const std::string& name);
@@ -33,7 +33,7 @@ public:
 
     ~log_registry();
 
-private:
+  private:
     log_registry();
     log_registry(const log_registry&) = delete;
     log_registry& operator=(const log_registry&) = delete;
@@ -52,4 +52,4 @@ private:
     bool m_access_log{true};
 };
 
-} // namespace fiasco::detail
+}  // namespace fiasco::detail

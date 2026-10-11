@@ -10,7 +10,7 @@ namespace fiasco::detail {
 class log_queue;
 
 class logger {
-public:
+  public:
     void debug(const std::string& msg);
     void debug(const std::string& msg, std::unordered_map<std::string, std::string> fields);
     void info(const std::string& msg);
@@ -25,7 +25,7 @@ public:
 
     const std::string& name() const;
 
-private:
+  private:
     friend class log_registry;
 
     logger(std::string name, log_queue& queue, log_level level);
@@ -39,4 +39,4 @@ private:
     log_level m_level;
 };
 
-} // namespace fiasco::detail
+}  // namespace fiasco::detail

@@ -25,8 +25,8 @@ const std::string& logger::name() const {
 }
 
 void logger::log(log_level lvl,
-                  std::string msg,
-                  std::unordered_map<std::string, std::string> fields) {
+                 std::string msg,
+                 std::unordered_map<std::string, std::string> fields) {
     if (lvl < m_level) {
         return;
     }
@@ -38,14 +38,13 @@ void logger::log(log_level lvl,
     m_queue->enqueue(std::move(record));
 }
 
-#define LOGGER_METHOD(level_name, level_enum)                                  \
-    void logger::level_name(const std::string& msg) {                          \
-        log(log_level::level_enum, msg);                                       \
-    }                                                                          \
-    void logger::level_name(                                                   \
-        const std::string& msg,                                                \
-        std::unordered_map<std::string, std::string> fields) {                 \
-        log(log_level::level_enum, msg, std::move(fields));                    \
+#define LOGGER_METHOD(level_name, level_enum)                                      \
+    void logger::level_name(const std::string& msg) {                              \
+        log(log_level::level_enum, msg);                                           \
+    }                                                                              \
+    void logger::level_name(const std::string& msg,                                \
+                            std::unordered_map<std::string, std::string> fields) { \
+        log(log_level::level_enum, msg, std::move(fields));                        \
     }
 
 LOGGER_METHOD(debug, debug)
@@ -55,4 +54,4 @@ LOGGER_METHOD(error, error)
 
 #undef LOGGER_METHOD
 
-} // namespace fiasco::detail
+}  // namespace fiasco::detail
