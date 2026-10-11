@@ -29,13 +29,13 @@ FetchContent_Declare(
 # -- llhttp -----------------------------------------------
 FetchContent_Declare(
     llhttp
-    URL https://github.com/nodejs/llhttp/archive/refs/tags/release/v9.2.1.tar.gz
+    URL https://github.com/nodejs/llhttp/archive/refs/tags/release/v9.4.3.tar.gz
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
-# Force llhttp to build a static library
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+# Force llhttp to build only its static library (llhttp_static).
+set(LLHTTP_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(LLHTTP_BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(json llhttp)
 
@@ -43,21 +43,21 @@ if(FIASCO_BUILD_TESTS)
   FetchContent_Declare(
       Catch2
       GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-      GIT_TAG        v3.5.2
+      GIT_TAG        v3.16.1
       GIT_SHALLOW    TRUE
   )
   FetchContent_MakeAvailable(Catch2)
 endif()
 
-# Restore default after llhttp
-unset(BUILD_SHARED_LIBS CACHE)
-unset(BUILD_STATIC_LIBS CACHE)
+# Restore defaults after llhttp
+unset(LLHTTP_BUILD_SHARED_LIBS CACHE)
+unset(LLHTTP_BUILD_STATIC_LIBS CACHE)
 
 # -- asio -------------------------------------------------
 FetchContent_Declare(
     asio
     GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
-    GIT_TAG        asio-1-38-0
+    GIT_TAG        asio-1-38-2
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(asio)
