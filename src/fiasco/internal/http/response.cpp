@@ -51,7 +51,7 @@ response response::error(const std::string& message, int status) {
     response r;
     r.status_code = status;
     ::fiasco::detail::json j;
-    j["error"] = message;
+    j["detail"] = message;
     r.body = j.dump();
     r.body += '\n';
     r.headers["Content-Type"] = "application/json";

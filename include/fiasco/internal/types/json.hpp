@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <concepts>
+#include <exception>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -28,6 +30,19 @@ class json_type {
   public:
     struct exception : std::runtime_error {
         using std::runtime_error::runtime_error;
+    };
+
+    // Thrown by parse() for invalid JSON; carries the byte offset of the error
+    // (mapped to FastAPI's json_invalid "loc": ["body", <pos>]).
+    struct parse_exception : exception {
+        parse_exception(const std::string& message, std::size_t position)
+            : exception(message),
+              m_position(position) {}
+
+        [[nodiscard]] std::size_t position() const noexcept { return m_position; }
+
+      private:
+        std::size_t m_position;
     };
 
     json_type();
@@ -158,6 +173,64 @@ void from_json(const json_type& j, T& val) {
     val = j;
 }
 
+// ---- Pydantic-style validation errors (FastAPI 422 "detail" entries) -------
+struct validation_error {
+    std::string type;
+    std::vector<std::variant<std::string, std::size_t>> loc;
+    std::string msg;
+    json_type input;
+};
+
+class request_validation_error : public std::exception {
+  public:
+    explicit request_validation_error(std::vector<validation_error> errors)
+        : m_errors(std::move(errors)) {}
+
+    [[nodiscard]] const std::vector<validation_error>& errors() const noexcept { return m_errors; }
+
+    [[nodiscard]] const char* what() const noexcept override {
+        return "request validation error";
+    }
+
+  private:
+    std::vector<validation_error> m_errors;
+};
+
+/// Serialise validation errors the way FastAPI does: {"detail": [ ... ]}.
+[[nodiscard]] inline std::string to_fastapi_error_json(
+    const std::vector<validation_error>& errors) {
+    json_type list = json_type::array({});
+    for (const auto& err : errors) {
+        json_type entry = json_type::object();
+        entry["type"] = json_type(err.type);
+        json_type loc = json_type::array({});
+        for (const auto& segment : err.loc) {
+            if (const auto* name = std::get_if<std::string>(&segment)) {
+                loc.push_back(json_type(*name));
+            } else {
+                loc.push_back(json_type(static_cast<long long>(std::get<std::size_t>(segment))));
+            }
+        }
+        entry["loc"] = loc;
+        entry["msg"] = json_type(err.msg);
+        entry["input"] = err.input;
+        list.push_back(entry);
+    }
+    json_type out = json_type::object();
+    out["detail"] = list;
+    return out.dump();
+}
+
+/// Prepend a location segment (e.g. "body") to every error's loc, the way
+/// Pydantic nests inner errors under their containing field.
+[[nodiscard]] inline std::vector<validation_error> prefix_loc(
+    std::vector<validation_error> errors, const std::string& segment) {
+    for (auto& err : errors) {
+        err.loc.insert(err.loc.begin(), segment);
+    }
+    return errors;
+}
+
 // ---- Container / optional / tuple traits ---------------------------------
 template <typename T>
 concept JsonRange = requires(T& t) {
@@ -191,6 +264,95 @@ concept JsonModel =
     std::is_class_v<T> && std::meta::is_aggregate_type(^^T) && !JsonRange<T> && !JsonOptional<T> &&
     !JsonTupleLike<T> && !std::same_as<std::remove_cvref_t<T>, json_type>;
 
+// ---- Pydantic v2 error vocabulary (the subset we can match) ----------------
+template <typename T>
+consteval std::string_view pydantic_type_name() {
+    using D = std::remove_cvref_t<T>;
+    if constexpr (std::same_as<D, bool>) {
+        return "bool_type";
+    } else if constexpr (std::integral<D>) {
+        return "int_type";
+    } else if constexpr (std::floating_point<D>) {
+        return "float_type";
+    } else if constexpr (std::same_as<D, std::string>) {
+        return "string_type";
+    } else if constexpr (JsonMap<D>) {
+        return "dict_type";
+    } else if constexpr (JsonSequence<D>) {
+        return "list_type";
+    } else if constexpr (JsonModel<D>) {
+        return "model_type";
+    } else {
+        return "value_error";
+    }
+}
+
+template <typename T>
+consteval std::string_view pydantic_message() {
+    using D = std::remove_cvref_t<T>;
+    if constexpr (std::same_as<D, bool>) {
+        return "Input should be a valid boolean";
+    } else if constexpr (std::integral<D>) {
+        return "Input should be a valid integer";
+    } else if constexpr (std::floating_point<D>) {
+        return "Input should be a valid number";
+    } else if constexpr (std::same_as<D, std::string>) {
+        return "Input should be a valid string";
+    } else if constexpr (JsonMap<D>) {
+        return "Input should be a valid dictionary";
+    } else if constexpr (JsonSequence<D>) {
+        return "Input should be a valid list";
+    } else if constexpr (JsonModel<D>) {
+        return "Input should be a valid dictionary";
+    } else {
+        return "Invalid value";
+    }
+}
+
+template <typename T>
+consteval std::string_view pydantic_parsing_type_name() {
+    using D = std::remove_cvref_t<T>;
+    if constexpr (std::same_as<D, bool>) {
+        return "bool_parsing";
+    } else if constexpr (std::integral<D>) {
+        return "int_parsing";
+    } else if constexpr (std::floating_point<D>) {
+        return "float_parsing";
+    } else {
+        return "value_error";
+    }
+}
+
+template <typename T>
+consteval std::string_view pydantic_parsing_message() {
+    using D = std::remove_cvref_t<T>;
+    if constexpr (std::same_as<D, bool>) {
+        return "Input should be a valid boolean, unable to interpret input";
+    } else if constexpr (std::integral<D>) {
+        return "Input should be a valid integer, unable to parse string as an integer";
+    } else if constexpr (std::floating_point<D>) {
+        return "Input should be a valid number, unable to parse string as a number";
+    } else {
+        return "Invalid value";
+    }
+}
+
+/// Build a Pydantic-style error for a value that failed to become `T`. Uses the
+/// `*_parsing` vocabulary when a scalar field received a JSON string (matching
+/// Pydantic), and the `*_type` vocabulary otherwise.
+template <typename T>
+[[nodiscard]] inline validation_error make_type_error(
+    std::vector<std::variant<std::string, std::size_t>> loc, const json_type& value) {
+    using D = std::remove_cvref_t<T>;
+    constexpr bool scalar = std::integral<D> || std::floating_point<D> || std::same_as<D, bool>;
+    const bool parsing = scalar && value.is_string();
+    return validation_error{
+        .type = std::string(parsing ? pydantic_parsing_type_name<D>() : pydantic_type_name<D>()),
+        .loc = std::move(loc),
+        .msg = std::string(parsing ? pydantic_parsing_message<D>() : pydantic_message<D>()),
+        .input = value};
+}
+
 template <JsonSequence T>
 void to_json(json_type& j, const T& seq) {
     json_type arr = json_type::array({});
@@ -202,19 +364,37 @@ void to_json(json_type& j, const T& seq) {
 
 template <JsonSequence T>
 void from_json(const json_type& j, T& seq) {
+    using ValueT = typename T::value_type;
+    std::vector<validation_error> errors;
+
     seq.clear();
     auto n = j.size();
     if constexpr (requires { seq.reserve(n); }) {
         seq.reserve(n);
     }
     for (std::size_t i = 0; i < n; ++i) {
-        typename T::value_type elem;
-        from_json(j[i], elem);
-        if constexpr (requires(T& c, typename T::value_type& v) { c.push_back(v); }) {
+        ValueT elem{};
+        try {
+            from_json(j[i], elem);
+        } catch (const request_validation_error& nested) {
+            for (auto err : nested.errors()) {
+                err.loc.insert(err.loc.begin(), i);
+                errors.push_back(std::move(err));
+            }
+            continue;
+        } catch (const std::exception&) {
+            errors.push_back(make_type_error<ValueT>({i}, j[i]));
+            continue;
+        }
+        if constexpr (requires(T& c, ValueT& v) { c.push_back(v); }) {
             seq.push_back(std::move(elem));
         } else {
             seq.insert(seq.end(), std::move(elem));
         }
+    }
+
+    if (!errors.empty()) {
+        throw request_validation_error(std::move(errors));
     }
 }
 
@@ -236,17 +416,35 @@ void to_json(json_type& j, const T& map) {
 
 template <JsonMap T>
 void from_json(const json_type& j, T& map) {
+    using MappedT = typename T::mapped_type;
+    std::vector<validation_error> errors;
+
     map.clear();
     auto keys = j.object_keys();
     for (const auto& key : keys) {
-        typename T::mapped_type val;
-        from_json(j[key], val);
+        MappedT val{};
+        try {
+            from_json(j[key], val);
+        } catch (const request_validation_error& nested) {
+            for (auto err : nested.errors()) {
+                err.loc.insert(err.loc.begin(), key);
+                errors.push_back(std::move(err));
+            }
+            continue;
+        } catch (const std::exception&) {
+            errors.push_back(make_type_error<MappedT>({key}, j[key]));
+            continue;
+        }
         if constexpr (std::convertible_to<decltype(key), typename T::key_type>) {
             map[key] = std::move(val);
         } else {
             typename T::key_type k(key);
             map[std::move(k)] = std::move(val);
         }
+    }
+
+    if (!errors.empty()) {
+        throw request_validation_error(std::move(errors));
     }
 }
 
@@ -294,35 +492,11 @@ void to_json_field(json_type& j, const char* key, const T& field) {
     j[key] = json_type(field);
 }
 
-template <typename T>
-void from_json_field(const json_type& j, const char* key, std::optional<T>& field) {
-    if (!j.contains(key)) {
-        field.reset();
-        return;
-    }
-    try {
-        field = j[key].get<std::optional<T>>();
-    } catch (const std::exception& e) {
-        throw json_type::exception(std::string("field '") + key + "': " + e.what());
-    }
-}
-
-template <typename T>
-void from_json_field(const json_type& j, const char* key, T& field) {
-    if (!j.contains(key)) {
-        throw json_type::exception(std::string("missing required field '") + key + "'");
-    }
-    try {
-        field = j[key].get<T>();
-    } catch (const std::exception& e) {
-        throw json_type::exception(std::string("field '") + key + "': " + e.what());
-    }
-}
-
 // ---- Aggregate models (reflection) ----------------------------------------
 // Member-wise (de)serialisation driven by std::meta; replaces the FIASCO_MODEL
 // macro. Members without an identifier (e.g. anonymous unions, unnamed
-// bit-fields) are skipped.
+// bit-fields) are skipped. Deserialisation collects *all* FastAPI-style
+// validation errors instead of failing fast.
 template <JsonModel T>
 void to_json(json_type& j, const T& v) {
     json_type obj = json_type::object();
@@ -338,12 +512,40 @@ void to_json(json_type& j, const T& v) {
 
 template <JsonModel T>
 void from_json(const json_type& j, T& v) {
+    std::vector<validation_error> errors;
+
     template for (constexpr auto member :
                   std::define_static_array(std::meta::nonstatic_data_members_of(
                       ^^T, std::meta::access_context::unchecked()))) {
         if constexpr (std::meta::has_identifier(member)) {
-            from_json_field(j, std::meta::identifier_of(member).data(), v.[:member:]);
+            using FieldT = std::remove_cvref_t<decltype(v.[:member:])>;
+            std::string key(std::meta::identifier_of(member));
+
+            if (!j.contains(key)) {
+                if constexpr (JsonOptional<FieldT>) {
+                    v.[:member:].reset();
+                } else {
+                    errors.push_back(validation_error{
+                        .type = "missing", .loc = {key}, .msg = "Field required", .input = j});
+                }
+                continue;
+            }
+
+            try {
+                from_json(j[key], v.[:member:]);
+            } catch (const request_validation_error& nested) {
+                for (auto err : nested.errors()) {
+                    err.loc.insert(err.loc.begin(), key);
+                    errors.push_back(std::move(err));
+                }
+            } catch (const std::exception&) {
+                errors.push_back(make_type_error<FieldT>({key}, j[key]));
+            }
         }
+    }
+
+    if (!errors.empty()) {
+        throw request_validation_error(std::move(errors));
     }
 }
 

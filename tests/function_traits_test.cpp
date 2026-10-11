@@ -137,7 +137,7 @@ TEST_CASE("make_handler throws on insufficient path params", "[function_traits]"
 
     request req;
     // No path params set
-    REQUIRE_THROWS_AS(handler(std::move(req)), std::runtime_error);
+    REQUIRE_THROWS_AS(handler(std::move(req)), request_validation_error);
 }
 
 TEST_CASE("make_handler with body deserialization", "[function_traits]") {

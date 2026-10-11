@@ -5,7 +5,7 @@
 namespace fiasco::detail {
 
 struct json_type::impl {
-    nlohmann::json m_json;
+    nlohmann::ordered_json m_json;
 };
 
 json_type::json_type()
@@ -80,30 +80,30 @@ json_type::json_type(std::initializer_list<json_entry> entries)
     : m_data(std::make_shared<impl>()) {
     auto& obj = m_data->m_json;
     for (const auto& e : entries) {
-        obj[e.key] = *static_cast<const nlohmann::json*>(e.value.data());
+        obj[e.key] = *static_cast<const nlohmann::ordered_json*>(e.value.data());
     }
 }
 
 json_type json_type::object() {
     json_type j;
-    j.m_data->m_json = nlohmann::json::object();
+    j.m_data->m_json = nlohmann::ordered_json::object();
     return j;
 }
 
 json_type json_type::array(std::initializer_list<json_type> values) {
     json_type j;
-    j.m_data->m_json = nlohmann::json::array();
+    j.m_data->m_json = nlohmann::ordered_json::array();
     auto& arr = j.m_data->m_json;
     for (const auto& v : values) {
-        arr.push_back(*static_cast<const nlohmann::json*>(v.data()));
+        arr.push_back(*static_cast<const nlohmann::ordered_json*>(v.data()));
     }
     return j;
 }
 
 json_type& json_type::operator=(const json_type& other) {
     if (this != &other) {
-        auto& self = *static_cast<nlohmann::json*>(data());
-        const auto& src = *static_cast<const nlohmann::json*>(other.data());
+        auto& self = *static_cast<nlohmann::ordered_json*>(data());
+        const auto& src = *static_cast<const nlohmann::ordered_json*>(other.data());
         self = src;
     }
     return *this;
@@ -111,8 +111,8 @@ json_type& json_type::operator=(const json_type& other) {
 
 json_type& json_type::operator=(json_type&& other) noexcept {
     if (this != &other) {
-        auto& self = *static_cast<nlohmann::json*>(data());
-        auto& src = *static_cast<nlohmann::json*>(other.data());
+        auto& self = *static_cast<nlohmann::ordered_json*>(data());
+        auto& src = *static_cast<nlohmann::ordered_json*>(other.data());
         self = std::move(src);
     }
     return *this;
@@ -135,7 +135,7 @@ json_type json_type::operator[](std::size_t index) {
 }
 
 json_type json_type::operator[](const std::string& key) const {
-    const auto& self = *static_cast<const nlohmann::json*>(data());
+    const auto& self = *static_cast<const nlohmann::ordered_json*>(data());
     json_type result;
     result.m_data = std::make_shared<impl>();
     // Safe lookup: a missing key yields a null value (nlohmann's const
@@ -149,7 +149,7 @@ json_type json_type::operator[](const std::string& key) const {
 }
 
 json_type json_type::operator[](std::size_t index) const {
-    const auto& self = *static_cast<const nlohmann::json*>(data());
+    const auto& self = *static_cast<const nlohmann::ordered_json*>(data());
     json_type result;
     result.m_data = std::make_shared<impl>();
     if (self.is_array() && index < self.size()) {
@@ -159,78 +159,80 @@ json_type json_type::operator[](std::size_t index) const {
 }
 
 bool json_type::is_null() const noexcept {
-    return static_cast<const nlohmann::json*>(data())->is_null();
+    return static_cast<const nlohmann::ordered_json*>(data())->is_null();
 }
 
 bool json_type::is_boolean() const noexcept {
-    return static_cast<const nlohmann::json*>(data())->is_boolean();
+    return static_cast<const nlohmann::ordered_json*>(data())->is_boolean();
 }
 
 bool json_type::is_number() const noexcept {
-    return static_cast<const nlohmann::json*>(data())->is_number();
+    return static_cast<const nlohmann::ordered_json*>(data())->is_number();
 }
 
 bool json_type::is_string() const noexcept {
-    return static_cast<const nlohmann::json*>(data())->is_string();
+    return static_cast<const nlohmann::ordered_json*>(data())->is_string();
 }
 
 bool json_type::is_object() const noexcept {
-    return static_cast<const nlohmann::json*>(data())->is_object();
+    return static_cast<const nlohmann::ordered_json*>(data())->is_object();
 }
 
 bool json_type::is_array() const noexcept {
-    return static_cast<const nlohmann::json*>(data())->is_array();
+    return static_cast<const nlohmann::ordered_json*>(data())->is_array();
 }
 
 bool json_type::contains(const std::string& key) const noexcept {
-    return static_cast<const nlohmann::json*>(data())->contains(key);
+    return static_cast<const nlohmann::ordered_json*>(data())->contains(key);
 }
 
 bool json_type::empty() const noexcept {
-    return static_cast<const nlohmann::json*>(data())->empty();
+    return static_cast<const nlohmann::ordered_json*>(data())->empty();
 }
 
 std::size_t json_type::size() const noexcept {
-    return static_cast<const nlohmann::json*>(data())->size();
+    return static_cast<const nlohmann::ordered_json*>(data())->size();
 }
 
 json_type json_type::parse(const std::string& str) {
     try {
         json_type j;
-        j.m_data->m_json = nlohmann::json::parse(str);
+        j.m_data->m_json = nlohmann::ordered_json::parse(str);
         return j;
-    } catch (const nlohmann::json::exception& e) {
+    } catch (const nlohmann::ordered_json::parse_error& e) {
+        throw json_type::parse_exception(e.what(), static_cast<std::size_t>(e.byte));
+    } catch (const nlohmann::ordered_json::exception& e) {
         throw json_type::exception(e.what());
     }
 }
 
 std::string json_type::dump(int indent) const {
-    return static_cast<const nlohmann::json*>(data())->dump(indent);
+    return static_cast<const nlohmann::ordered_json*>(data())->dump(indent);
 }
 
 void json_type::push_back(json_type value) {
-    auto& arr = *static_cast<nlohmann::json*>(data());
-    arr.push_back(std::move(*static_cast<nlohmann::json*>(value.data())));
+    auto& arr = *static_cast<nlohmann::ordered_json*>(data());
+    arr.push_back(std::move(*static_cast<nlohmann::ordered_json*>(value.data())));
 }
 
 void json_type::erase(const std::string& key) {
-    auto& obj = *static_cast<nlohmann::json*>(data());
+    auto& obj = *static_cast<nlohmann::ordered_json*>(data());
     obj.erase(key);
 }
 
 void json_type::merge_patch(const json_type& patch) {
-    auto& obj = *static_cast<nlohmann::json*>(data());
-    const auto& p = *static_cast<const nlohmann::json*>(patch.data());
+    auto& obj = *static_cast<nlohmann::ordered_json*>(data());
+    const auto& p = *static_cast<const nlohmann::ordered_json*>(patch.data());
     obj.merge_patch(p);
 }
 
 void json_type::clear() {
-    static_cast<nlohmann::json*>(data())->clear();
+    static_cast<nlohmann::ordered_json*>(data())->clear();
 }
 
 bool json_type::operator==(const json_type& other) const noexcept {
-    return *static_cast<const nlohmann::json*>(data()) ==
-           *static_cast<const nlohmann::json*>(other.data());
+    return *static_cast<const nlohmann::ordered_json*>(data()) ==
+           *static_cast<const nlohmann::ordered_json*>(other.data());
 }
 
 bool json_type::operator!=(const json_type& other) const noexcept {
@@ -239,7 +241,7 @@ bool json_type::operator!=(const json_type& other) const noexcept {
 
 std::vector<std::string> json_type::object_keys() const {
     std::vector<std::string> keys;
-    const auto& j = *static_cast<const nlohmann::json*>(data());
+    const auto& j = *static_cast<const nlohmann::ordered_json*>(data());
     if (!j.is_object()) {
         return keys;
     }
@@ -250,7 +252,7 @@ std::vector<std::string> json_type::object_keys() const {
 }
 
 void* json_type::data() {
-    nlohmann::json* current = &m_data->m_json;
+    nlohmann::ordered_json* current = &m_data->m_json;
     for (const auto& seg : m_path) {
         if (auto* key = std::get_if<std::string>(&seg)) {
             current = &(*current)[*key];
@@ -262,7 +264,7 @@ void* json_type::data() {
 }
 
 const void* json_type::data() const {
-    const nlohmann::json* current = &m_data->m_json;
+    const nlohmann::ordered_json* current = &m_data->m_json;
     for (const auto& seg : m_path) {
         if (auto* key = std::get_if<std::string>(&seg)) {
             current = &(*current)[*key];
@@ -274,87 +276,87 @@ const void* json_type::data() const {
 }
 
 void from_json(const json_type& j, std::nullptr_t&) {
-    static_cast<const nlohmann::json*>(j.data())->get<std::nullptr_t>();
+    static_cast<const nlohmann::ordered_json*>(j.data())->get<std::nullptr_t>();
 }
 
 void from_json(const json_type& j, bool& val) {
-    val = static_cast<const nlohmann::json*>(j.data())->get<bool>();
+    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<bool>();
 }
 
 void from_json(const json_type& j, int& val) {
-    val = static_cast<const nlohmann::json*>(j.data())->get<int>();
+    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<int>();
 }
 
 void from_json(const json_type& j, long& val) {
-    val = static_cast<const nlohmann::json*>(j.data())->get<long>();
+    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<long>();
 }
 
 void from_json(const json_type& j, long long& val) {
-    val = static_cast<const nlohmann::json*>(j.data())->get<long long>();
+    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<long long>();
 }
 
 void from_json(const json_type& j, unsigned long& val) {
-    val = static_cast<const nlohmann::json*>(j.data())->get<unsigned long>();
+    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<unsigned long>();
 }
 
 void from_json(const json_type& j, unsigned long long& val) {
-    val = static_cast<const nlohmann::json*>(j.data())->get<unsigned long long>();
+    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<unsigned long long>();
 }
 
 void from_json(const json_type& j, float& val) {
-    val = static_cast<const nlohmann::json*>(j.data())->get<float>();
+    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<float>();
 }
 
 void from_json(const json_type& j, double& val) {
-    val = static_cast<const nlohmann::json*>(j.data())->get<double>();
+    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<double>();
 }
 
 void from_json(const json_type& j, std::string& val) {
-    val = static_cast<const nlohmann::json*>(j.data())->get<std::string>();
+    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<std::string>();
 }
 
 void to_json(json_type& j, std::nullptr_t) {
-    *static_cast<nlohmann::json*>(j.data()) = nullptr;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = nullptr;
 }
 
 void to_json(json_type& j, bool val) {
-    *static_cast<nlohmann::json*>(j.data()) = val;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
 void to_json(json_type& j, int val) {
-    *static_cast<nlohmann::json*>(j.data()) = val;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
 void to_json(json_type& j, long val) {
-    *static_cast<nlohmann::json*>(j.data()) = val;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
 void to_json(json_type& j, long long val) {
-    *static_cast<nlohmann::json*>(j.data()) = val;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
 void to_json(json_type& j, unsigned long val) {
-    *static_cast<nlohmann::json*>(j.data()) = val;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
 void to_json(json_type& j, unsigned long long val) {
-    *static_cast<nlohmann::json*>(j.data()) = val;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
 void to_json(json_type& j, float val) {
-    *static_cast<nlohmann::json*>(j.data()) = val;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
 void to_json(json_type& j, double val) {
-    *static_cast<nlohmann::json*>(j.data()) = val;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
 void to_json(json_type& j, const std::string& val) {
-    *static_cast<nlohmann::json*>(j.data()) = val;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
 void to_json(json_type& j, const char* val) {
-    *static_cast<nlohmann::json*>(j.data()) = val;
+    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
 json_type::~json_type() = default;

@@ -65,9 +65,9 @@ TEST_CASE("response::error creates JSON error body", "[response]") {
     auto r = response::error("Something went wrong", 400);
     REQUIRE(r.status_code == 400);
     REQUIRE(r.headers.at("Content-Type") == "application/json");
-    // Body should contain {"error":"Something went wrong"}
+    // Body should contain {"detail":"Something went wrong"}
     REQUIRE(r.body.find("Something went wrong") != std::string::npos);
-    REQUIRE(r.body.find("error") != std::string::npos);
+    REQUIRE(r.body.find("detail") != std::string::npos);
 }
 
 // ============================================================

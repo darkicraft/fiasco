@@ -181,7 +181,7 @@ TEST_CASE("integration invalid JSON body returns 422", "[integration]") {
                                  "\r\n"
                                  "{invalid json}");
     REQUIRE(extract_status(resp) == 422);
-    REQUIRE(extract_body(resp).find("invalid request body") != std::string::npos);
+    REQUIRE(extract_body(resp).find("JSON decode error") != std::string::npos);
 }
 
 TEST_CASE("integration 500 internal error from handler", "[integration]") {
@@ -249,7 +249,8 @@ TEST_CASE("integration POST empty body with JSON model returns 422", "[integrati
                                  "Content-Length: 0\r\n"
                                  "\r\n");
     REQUIRE(extract_status(resp) == 422);
-    REQUIRE(extract_body(resp).find("empty") != std::string::npos);
+    REQUIRE(extract_body(resp).find(R"("loc":["body"])") != std::string::npos);
+    REQUIRE(extract_body(resp).find(R"("msg":"Field required")") != std::string::npos);
 }
 
 TEST_CASE("integration POST missing field returns 422 with the field name", "[integration]") {
@@ -270,5 +271,6 @@ TEST_CASE("integration POST missing field returns 422 with the field name", "[in
                                  "\r\n"
                                  R"({"a":1})");
     REQUIRE(extract_status(resp) == 422);
-    REQUIRE(extract_body(resp).find("missing required field 'b'") != std::string::npos);
+    REQUIRE(extract_body(resp).find(R"("loc":["body","b"])") != std::string::npos);
+    REQUIRE(extract_body(resp).find(R"("msg":"Field required")") != std::string::npos);
 }

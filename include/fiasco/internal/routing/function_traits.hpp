@@ -88,29 +88,62 @@ template <typename T>
 ///   1. fiasco::request  -> pass raw request
 ///   2. Primitive        -> next positional path param
 ///   3. FromJson         -> deserialize request body
+/// Failures are reported as FastAPI-compatible request validation errors.
 template <typename T>
-decltype(auto) resolve_arg(const request& req, size_t& path_idx) {
+decltype(auto) resolve_arg(const request& req, size_t& path_idx, std::string_view name) {
     using CleanT = std::decay_t<T>;
 
     if constexpr (std::same_as<CleanT, request>) {
         return req;
     } else if constexpr (Primitive<CleanT>) {
         if (path_idx >= req.ordered_path_params.size()) {
-            throw std::runtime_error("Not enough path params for handler argument at position " +
-                                     std::to_string(path_idx));
+            throw request_validation_error({{.type = "missing",
+                                             .loc = {std::string("path"), std::string(name)},
+                                             .msg = "Field required",
+                                             .input = json_type()}});
         }
-        return static_cast<CleanT>(convert_path_param<CleanT>(req.ordered_path_params[path_idx++]));
+        std::string_view raw = req.ordered_path_params[path_idx++];
+        try {
+            return static_cast<CleanT>(convert_path_param<CleanT>(raw));
+        } catch (const std::exception&) {
+            throw request_validation_error(
+                {{.type = std::string(pydantic_parsing_type_name<CleanT>()),
+                  .loc = {std::string("path"), std::string(name)},
+                  .msg = std::string(pydantic_parsing_message<CleanT>()),
+                  .input = json_type(std::string(raw))}});
+        }
     } else if constexpr (FromJson<CleanT>) {
         if (req.body.empty()) {
-            throw json::exception("request body is empty");
+            throw request_validation_error({{.type = "missing",
+                                             .loc = {std::string("body")},
+                                             .msg = "Field required",
+                                             .input = json_type()}});
+        }
+        json_type j;
+        try {
+            j = json::parse(req.body);
+        } catch (const json_type::parse_exception& e) {
+            throw request_validation_error({{.type = "json_invalid",
+                                             .loc = {std::string("body"), e.position()},
+                                             .msg = "JSON decode error",
+                                             .input = json_type::object()}});
+        } catch (const json::exception&) {
+            throw request_validation_error({{.type = "json_invalid",
+                                             .loc = {std::string("body"), std::size_t{0}},
+                                             .msg = "JSON decode error",
+                                             .input = json_type::object()}});
         }
         try {
-            auto j = json::parse(req.body);
             CleanT val;
             from_json(j, val);
             return val;
-        } catch (const json::exception& e) {
-            throw json::exception(std::string("invalid request body: ") + e.what());
+        } catch (const request_validation_error& e) {
+            throw request_validation_error(prefix_loc(e.errors(), "body"));
+        } catch (const std::exception&) {
+            throw request_validation_error({{.type = std::string(pydantic_type_name<CleanT>()),
+                                             .loc = {std::string("body")},
+                                             .msg = std::string(pydantic_message<CleanT>()),
+                                             .input = j}});
         }
     }
 }
@@ -123,7 +156,8 @@ template <typename F, typename ArgsTuple, size_t... Is>
 response dispatch_impl(F& fn, const request& req, size_t& path_idx, std::index_sequence<Is...>) {
     // braced init guarantees left-to-right evaluation; values are owned by the tuple
     std::tuple<arg_storage_t<std::tuple_element_t<Is, ArgsTuple>>...> args{
-        resolve_arg<std::tuple_element_t<Is, ArgsTuple>>(req, path_idx)...};
+        resolve_arg<std::tuple_element_t<Is, ArgsTuple>>(
+            req, path_idx, meta::callable_traits<std::decay_t<F>>::argument_name(Is))...};
 
     if constexpr (std::is_void_v<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>) {
         fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);

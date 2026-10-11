@@ -153,6 +153,8 @@ class server {
 
             try {
                 res = (*match.handler)(std::move(req));
+            } catch (const request_validation_error& e) {
+                res = response::json(to_fastapi_error_json(e.errors()), 422);
             } catch (const json::exception& e) {
                 res = response::error(e.what(), 422);
             } catch (const std::exception& e) {
