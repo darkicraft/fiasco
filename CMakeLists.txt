@@ -43,6 +43,10 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
 )
 
+# Treat nlohmann/json headers as system headers so warnings originating in the
+# dependency (e.g. C++26 deprecating std::is_trivial) don't pollute our build.
+set(JSON_SystemInclude ON CACHE BOOL "" FORCE)
+
 # -- llhttp -----------------------------------------------
 FetchContent_Declare(
     llhttp
@@ -80,7 +84,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(asio)
 
 add_library(asio INTERFACE)
-target_include_directories(asio INTERFACE ${asio_SOURCE_DIR}/include)
+target_include_directories(asio SYSTEM INTERFACE ${asio_SOURCE_DIR}/include)
 target_compile_definitions(asio INTERFACE ASIO_STANDALONE)
 if (WIN32)
   target_link_libraries(asio INTERFACE ws2_32 mswsock)
