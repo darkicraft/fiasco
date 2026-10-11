@@ -63,9 +63,9 @@ struct callable_traits {
     static constexpr std::size_t arity = std::meta::parameters_of(reflection()).size();
 
     /// std::tuple<parameter types...> (type-adjusted, as reported by type_of).
-    using args_tuple = [: arguments_type_impl<F>(std::make_index_sequence<arity>()) :];
+    using args_tuple = [:arguments_type_impl<F>(std::make_index_sequence<arity>()):];
 
-    using return_type = [: std::meta::return_type_of(reflection()) :];
+    using return_type = [:std::meta::return_type_of(reflection()):];
 
     /// True if the callable's parameters carry names (function entities and
     /// lambda call operators do; function types do not).

@@ -181,15 +181,15 @@ template <typename T>
 concept JsonSequence = JsonRange<T> && !JsonMap<T> && !JsonOptional<T>;
 
 template <typename T>
-concept JsonTupleLike =
-    requires(T& t) { std::tuple_size<std::decay_t<T>>::value; } && !JsonRange<T> && !JsonOptional<T>;
+concept JsonTupleLike = requires(T& t) { std::tuple_size<std::decay_t<T>>::value; } &&
+                        !JsonRange<T> && !JsonOptional<T>;
 
 // An aggregate "model": (de)serialised member-wise via reflection. Excludes the
 // categories handled above (ranges/maps/optionals/tuples/JSON itself).
 template <typename T>
-concept JsonModel = std::is_class_v<T> && std::meta::is_aggregate_type(^^T) &&
-                    !JsonRange<T> && !JsonOptional<T> && !JsonTupleLike<T> &&
-                    !std::same_as<std::remove_cvref_t<T>, json_type>;
+concept JsonModel =
+    std::is_class_v<T> && std::meta::is_aggregate_type(^^T) && !JsonRange<T> && !JsonOptional<T> &&
+    !JsonTupleLike<T> && !std::same_as<std::remove_cvref_t<T>, json_type>;
 
 template <JsonSequence T>
 void to_json(json_type& j, const T& seq) {

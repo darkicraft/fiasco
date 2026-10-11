@@ -29,7 +29,9 @@ class thread_safe_sink {
 
   private:
     struct sink_buf : std::streambuf {
-        sink_buf(thread_safe_sink* owner, std::mutex* mutex) : m_owner(owner), m_mutex(mutex) {}
+        sink_buf(thread_safe_sink* owner, std::mutex* mutex)
+            : m_owner(owner),
+              m_mutex(mutex) {}
 
         std::streamsize xsputn(const char* s, std::streamsize n) override {
             std::lock_guard<std::mutex> lock(*m_mutex);

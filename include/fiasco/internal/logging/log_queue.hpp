@@ -13,7 +13,7 @@
 namespace fiasco::detail {
 
 class log_queue {
-public:
+  public:
     log_queue() = default;
 
     void enqueue(log_record record) {
@@ -81,7 +81,7 @@ public:
         });
     }
 
-private:
+  private:
     mutable std::mutex m_mutex;
     std::condition_variable m_cv;
     std::deque<log_record> m_records;

@@ -28,7 +28,6 @@ struct AllPrimitives {
     std::string s;
 };
 
-
 TEST_CASE("reflection model roundtrip all primitives", "[model]") {
     AllPrimitives v{42, 99L, 100LL, 3.14f, 2.718, true, "hello"};
 
@@ -77,7 +76,6 @@ struct Outer {
     Inner inner;
 };
 
-
 TEST_CASE("reflection model nested structs", "[model]") {
     Outer v{42, {7, "nested"}};
 
@@ -104,7 +102,6 @@ struct WithOptional {
     std::optional<std::string> name;
     std::optional<int> age;
 };
-
 
 TEST_CASE("reflection model optional fields present", "[model]") {
     WithOptional v{1, std::optional<std::string>("Alice"), std::optional<int>(30)};
@@ -145,7 +142,6 @@ struct WithVector {
     std::vector<std::string> tags;
 };
 
-
 TEST_CASE("reflection model vector fields", "[model]") {
     WithVector v{1, {90, 95, 88}, {"fast", "secure"}};
 
@@ -179,7 +175,6 @@ TEST_CASE("reflection model vector fields", "[model]") {
 struct SingleField {
     std::string value;
 };
-
 
 TEST_CASE("reflection model single field", "[model]") {
     SingleField v{"only"};
