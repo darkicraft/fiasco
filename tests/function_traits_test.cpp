@@ -45,7 +45,14 @@ TEST_CASE("convert_path_param bool true", "[function_traits]") {
 TEST_CASE("convert_path_param bool false", "[function_traits]") {
     REQUIRE(convert_path_param<bool>("false") == false);
     REQUIRE(convert_path_param<bool>("0") == false);
-    REQUIRE(convert_path_param<bool>("anything") == false);
+    REQUIRE(convert_path_param<bool>("no") == false);
+    REQUIRE(convert_path_param<bool>("off") == false);
+}
+
+TEST_CASE("convert_path_param bool rejects non-boolean", "[function_traits]") {
+    // Pydantic does not treat arbitrary strings as false.
+    REQUIRE_THROWS(convert_path_param<bool>("anything"));
+    REQUIRE_THROWS(convert_path_param<bool>("2"));
 }
 
 TEST_CASE("convert_path_param int throws on bad input", "[function_traits]") {

@@ -112,6 +112,29 @@ TEST_CASE("bad list element reports the index", "[model]") {
     }
 }
 
+TEST_CASE("pydantic-lax: numeric string and integral float coerce to int", "[model]") {
+    json j = json_type::object();
+    j["x"] = json_type("123");
+    j["y"] = json_type(7.0);
+    auto p = j.get<Point>();
+    REQUIRE(p.x == 123);
+    REQUIRE(p.y == 7);
+}
+
+TEST_CASE("pydantic-lax: fractional float is rejected for an int field", "[model]") {
+    json j = json_type::object();
+    j["x"] = json_type(1.5);  // must NOT silently truncate to 1
+    j["y"] = json_type(2);
+    try {
+        (void)j.get<Point>();
+        FAIL("expected request_validation_error");
+    } catch (const request_validation_error& e) {
+        auto detail = to_fastapi_error_json(e.errors());
+        REQUIRE_THAT(detail, ContainsSubstring(R"("type":"int_from_float")"));
+        REQUIRE_THAT(detail, ContainsSubstring(R"("loc":["x"])"));
+    }
+}
+
 TEST_CASE("absent optional field is not an error", "[model]") {
     json j = json_type::object();
     j["name"] = json_type("n");

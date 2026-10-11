@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cctype>
 #include <charconv>
 #include <functional>
 #include <stdexcept>
@@ -55,7 +56,19 @@ template <Primitive T>
         }
         return val;
     } else if constexpr (std::same_as<T, bool>) {
-        return s == "true" || s == "1";
+        std::string lowered(s);
+        for (char& c : lowered) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        if (lowered == "1" || lowered == "true" || lowered == "yes" || lowered == "on" ||
+            lowered == "t" || lowered == "y" || lowered == "enable") {
+            return true;
+        }
+        if (lowered == "0" || lowered == "false" || lowered == "no" || lowered == "off" ||
+            lowered == "f" || lowered == "n" || lowered == "disable") {
+            return false;
+        }
+        throw std::runtime_error("bad path param");
     }
 
     return {};  // unreachable

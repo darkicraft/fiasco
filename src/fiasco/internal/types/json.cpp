@@ -2,6 +2,11 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cctype>
+#include <charconv>
+#include <cmath>
+#include <string>
+
 namespace fiasco::detail {
 
 struct json_type::impl {
@@ -279,40 +284,179 @@ void from_json(const json_type& j, std::nullptr_t&) {
     static_cast<const nlohmann::ordered_json*>(j.data())->get<std::nullptr_t>();
 }
 
+namespace {
+
+std::string ascii_lower(std::string s) {
+    for (char& c : s) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return s;
+}
+
+// Pydantic-lax integer conversion: integers, integral floats, booleans and
+// numeric strings are accepted; fractional floats are int_from_float and
+// non-numeric strings are int_parsing (never a silent narrowing).
+template <typename T>
+void read_integral(const json_type& j, T& val) {
+    const auto& n = *static_cast<const nlohmann::ordered_json*>(j.data());
+    if (n.is_number_integer() || n.is_number_unsigned()) {
+        val = n.get<T>();
+        return;
+    }
+    if (n.is_number_float()) {
+        const double d = n.get<double>();
+        if (std::isfinite(d) && d == std::floor(d)) {
+            val = static_cast<T>(d);
+            return;
+        }
+        throw request_validation_error(
+            {{.type = "int_from_float",
+              .loc = {},
+              .msg = "Input should be a valid integer, got a number with a fractional part",
+              .input = j}});
+    }
+    if (n.is_boolean()) {
+        val = n.get<bool>() ? T{1} : T{0};
+        return;
+    }
+    if (n.is_string()) {
+        const std::string& s = n.get_ref<const std::string&>();
+        T parsed{};
+        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), parsed);
+        if (ec == std::errc() && ptr == s.data() + s.size()) {
+            val = parsed;
+            return;
+        }
+        throw request_validation_error({{.type = std::string(pydantic_parsing_type_name<T>()),
+                                         .loc = {},
+                                         .msg = std::string(pydantic_parsing_message<T>()),
+                                         .input = j}});
+    }
+    throw request_validation_error({{.type = std::string(pydantic_type_name<T>()),
+                                     .loc = {},
+                                     .msg = std::string(pydantic_message<T>()),
+                                     .input = j}});
+}
+
+// Pydantic-lax float conversion: numbers, booleans and numeric strings.
+template <typename T>
+void read_floating(const json_type& j, T& val) {
+    const auto& n = *static_cast<const nlohmann::ordered_json*>(j.data());
+    if (n.is_number()) {
+        val = n.get<T>();
+        return;
+    }
+    if (n.is_boolean()) {
+        val = n.get<bool>() ? T{1} : T{0};
+        return;
+    }
+    if (n.is_string()) {
+        const std::string& s = n.get_ref<const std::string&>();
+        T parsed{};
+        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), parsed);
+        if (ec == std::errc() && ptr == s.data() + s.size()) {
+            val = parsed;
+            return;
+        }
+        throw request_validation_error({{.type = std::string(pydantic_parsing_type_name<T>()),
+                                         .loc = {},
+                                         .msg = std::string(pydantic_parsing_message<T>()),
+                                         .input = j}});
+    }
+    throw request_validation_error({{.type = std::string(pydantic_type_name<T>()),
+                                     .loc = {},
+                                     .msg = std::string(pydantic_message<T>()),
+                                     .input = j}});
+}
+
+}  // namespace
+
 void from_json(const json_type& j, bool& val) {
-    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<bool>();
+    const auto& n = *static_cast<const nlohmann::ordered_json*>(j.data());
+    const auto bool_parsing = [&j] {
+        return request_validation_error(
+            {{.type = "bool_parsing",
+              .loc = {},
+              .msg = "Input should be a valid boolean, unable to interpret input",
+              .input = j}});
+    };
+    if (n.is_boolean()) {
+        val = n.get<bool>();
+        return;
+    }
+    if (n.is_number_integer() || n.is_number_unsigned()) {
+        const long long i = n.get<long long>();
+        if (i == 1) {
+            val = true;
+            return;
+        }
+        if (i == 0) {
+            val = false;
+            return;
+        }
+        throw bool_parsing();
+    }
+    if (n.is_number_float()) {
+        const double d = n.get<double>();
+        if (d == 1.0) {
+            val = true;
+            return;
+        }
+        if (d == 0.0) {
+            val = false;
+            return;
+        }
+        throw bool_parsing();
+    }
+    if (n.is_string()) {
+        const std::string s = ascii_lower(n.get_ref<const std::string&>());
+        if (s == "1" || s == "true" || s == "yes" || s == "on" || s == "t" || s == "y" ||
+            s == "enable") {
+            val = true;
+            return;
+        }
+        if (s == "0" || s == "false" || s == "no" || s == "off" || s == "f" || s == "n" ||
+            s == "disable") {
+            val = false;
+            return;
+        }
+        throw bool_parsing();
+    }
+    throw request_validation_error(
+        {{.type = "bool_type", .loc = {}, .msg = "Input should be a valid boolean", .input = j}});
 }
 
 void from_json(const json_type& j, int& val) {
-    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<int>();
+    read_integral(j, val);
 }
-
 void from_json(const json_type& j, long& val) {
-    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<long>();
+    read_integral(j, val);
 }
-
 void from_json(const json_type& j, long long& val) {
-    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<long long>();
+    read_integral(j, val);
 }
-
 void from_json(const json_type& j, unsigned long& val) {
-    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<unsigned long>();
+    read_integral(j, val);
 }
-
 void from_json(const json_type& j, unsigned long long& val) {
-    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<unsigned long long>();
+    read_integral(j, val);
 }
 
 void from_json(const json_type& j, float& val) {
-    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<float>();
+    read_floating(j, val);
 }
-
 void from_json(const json_type& j, double& val) {
-    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<double>();
+    read_floating(j, val);
 }
 
 void from_json(const json_type& j, std::string& val) {
-    val = static_cast<const nlohmann::ordered_json*>(j.data())->get<std::string>();
+    const auto& n = *static_cast<const nlohmann::ordered_json*>(j.data());
+    if (n.is_string()) {
+        val = n.get<std::string>();
+        return;
+    }
+    throw request_validation_error(
+        {{.type = "string_type", .loc = {}, .msg = "Input should be a valid string", .input = j}});
 }
 
 void to_json(json_type& j, std::nullptr_t) {

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstddef>
 #include <concepts>
+#include <cstddef>
 #include <exception>
 #include <initializer_list>
 #include <iterator>
@@ -188,9 +188,7 @@ class request_validation_error : public std::exception {
 
     [[nodiscard]] const std::vector<validation_error>& errors() const noexcept { return m_errors; }
 
-    [[nodiscard]] const char* what() const noexcept override {
-        return "request validation error";
-    }
+    [[nodiscard]] const char* what() const noexcept override { return "request validation error"; }
 
   private:
     std::vector<validation_error> m_errors;
@@ -223,8 +221,8 @@ class request_validation_error : public std::exception {
 
 /// Prepend a location segment (e.g. "body") to every error's loc, the way
 /// Pydantic nests inner errors under their containing field.
-[[nodiscard]] inline std::vector<validation_error> prefix_loc(
-    std::vector<validation_error> errors, const std::string& segment) {
+[[nodiscard]] inline std::vector<validation_error> prefix_loc(std::vector<validation_error> errors,
+                                                              const std::string& segment) {
     for (auto& err : errors) {
         err.loc.insert(err.loc.begin(), segment);
     }
