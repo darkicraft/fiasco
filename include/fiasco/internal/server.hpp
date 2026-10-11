@@ -140,7 +140,7 @@ class server {
             }
 
             try {
-                res = match.handler(std::move(req));
+                res = (*match.handler)(std::move(req));
             } catch (const json::exception& e) {
                 res = response::error(e.what(), 422);
             } catch (const std::exception& e) {

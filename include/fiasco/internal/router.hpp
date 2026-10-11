@@ -53,7 +53,7 @@ class router {
         m_routes.merge_with_prefix(std::move(sub.m_routes), full_prefix);
     }
 
-    match_result match(http_method method, std::string_view path) const {
+    match_result match(http_method method, std::string_view path) {
         return m_routes.match(method, path);
     }
 

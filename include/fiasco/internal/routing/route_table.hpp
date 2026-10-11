@@ -27,14 +27,18 @@ struct string_hash {
 
 struct match_result {
     bool matched = false;
-    handler_fn handler;
+    // Non-owning pointer to the matched handler, which is owned by the
+    // route_table. nullptr when !matched. Handlers are move-only, so the table
+    // cannot hand out a copy; callers invoke via `(*match.handler)(req)`.
+    // match() is non-const because move_only_function::operator() is non-const.
+    handler_fn* handler = nullptr;
     std::vector<std::pair<std::string_view, std::string_view>> path_params;
 };
 
 class route_table {
   public:
     void add(http_method method, const std::string& pattern, handler_fn handler);
-    match_result match(http_method method, std::string_view path) const;
+    match_result match(http_method method, std::string_view path);
     bool any_method_matches(std::string_view path) const;
     void merge_with_prefix(route_table&& other, std::string_view prefix);
 

@@ -1,6 +1,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <memory>
 #include <string>
 
 #include "fiasco/internal/routing/function_traits.hpp"
@@ -191,6 +192,19 @@ TEST_CASE("make_handler with function pointer", "[function_traits]") {
     req.ordered_path_params.push_back("77");
     auto res = handler(std::move(req));
     REQUIRE(res.body.find("free:77") != std::string::npos);
+}
+
+// ============================================================
+// make_handler — move-only callables
+// ============================================================
+
+TEST_CASE("make_handler accepts move-only callables", "[function_traits]") {
+    auto owned = std::make_unique<int>(41);
+    auto handler = make_handler([p = std::move(owned)]() -> int { return *p + 1; });
+
+    request req;
+    auto res = handler(std::move(req));
+    REQUIRE(res.body == "42\n");
 }
 
 // ============================================================

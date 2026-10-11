@@ -15,9 +15,9 @@ struct session : std::enable_shared_from_this<session> {
     tcp::socket socket;
     llhttp_parser parser;
     std::array<char, 8192> buf;
-    const request_handler& handler;
+    request_handler& handler;
 
-    session(tcp::socket sock, asio::io_context::executor_type ex, const request_handler& h)
+    session(tcp::socket sock, asio::io_context::executor_type ex, request_handler& h)
         : strand(asio::make_strand(ex)),
           socket(std::move(sock)),
           handler(h) {}
@@ -97,7 +97,7 @@ tcp_server::tcp_server(uint16_t port,
                        const std::string& host,
                        request_handler handler,
                        unsigned int num_threads)
-    : p_impl(std::make_unique<impl>(port, host, handler, num_threads)) {}
+    : p_impl(std::make_unique<impl>(port, host, std::move(handler), num_threads)) {}
 
 void tcp_server::run() {
     accept();

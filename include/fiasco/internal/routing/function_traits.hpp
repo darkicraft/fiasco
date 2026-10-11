@@ -15,7 +15,11 @@
 
 namespace fiasco::detail {
 
-using handler_fn = std::function<response(request)>;
+// Move-only so handlers may capture move-only state (e.g. unique_ptr) without
+// paying std::function's copyable-requirement / allocation model.
+// Note: std::move_only_function::operator() is non-const, so handlers are
+// invoked through a non-const reference (see route_table::match).
+using handler_fn = std::move_only_function<response(request)>;
 
 template <Primitive T>
 [[nodiscard]] T convert_path_param(std::string_view s) {

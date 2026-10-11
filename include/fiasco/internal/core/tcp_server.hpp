@@ -9,7 +9,10 @@
 
 namespace fiasco::detail {
 
-using request_handler = std::function<response(request)>;
+// Move-only, for the same reason as routing's handler_fn: handlers may capture
+// move-only state. Consequence: request_handler::operator() is non-const, so
+// sessions must hold and invoke it through a non-const reference.
+using request_handler = std::move_only_function<response(request)>;
 
 class tcp_server {
   public:

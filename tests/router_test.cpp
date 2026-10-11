@@ -14,7 +14,7 @@ TEST_CASE("router get route match", "[router]") {
     REQUIRE(result.matched);
 
     request req;
-    auto res = result.handler(std::move(req));
+    auto res = (*result.handler)(std::move(req));
     REQUIRE(res.status_code == 200);
     REQUIRE(res.body == "world\n");
 }
@@ -27,7 +27,7 @@ TEST_CASE("router post route", "[router]") {
     auto result = r.match(http_method::post, "/data");
     REQUIRE(result.matched);
 
-    auto res = result.handler(request{});
+    auto res = (*result.handler)(request{});
     REQUIRE(res.status_code == 200);
 }
 
@@ -74,7 +74,7 @@ TEST_CASE("router include_router with prefix", "[router]") {
     auto result = main.match(http_method::get, "/api/info");
     REQUIRE(result.matched);
 
-    auto res = result.handler(request{});
+    auto res = (*result.handler)(request{});
     REQUIRE(res.body == "sub info\n");
 }
 

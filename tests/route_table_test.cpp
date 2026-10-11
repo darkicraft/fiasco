@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <memory>
 #include <string>
 
 #include "fiasco/internal/routing/route_table.hpp"
@@ -27,7 +28,7 @@ TEST_CASE("route_table static route match", "[route_table]") {
     REQUIRE(result.matched);
     REQUIRE(result.path_params.empty());
 
-    auto res = result.handler(request{});
+    auto res = (*result.handler)(request{});
     REQUIRE(res.status_code == 200);
     REQUIRE(res.body == "world");
 }
@@ -252,4 +253,26 @@ TEST_CASE("route_table add multiple methods same path", "[route_table]") {
 
     auto r3 = table.match(http_method::put, "/item");
     REQUIRE_FALSE(r3.matched);
+}
+
+// ============================================================
+// move-only handlers
+// ============================================================
+
+TEST_CASE("route_table stores and invokes move-only handlers", "[route_table]") {
+    route_table table;
+    auto counter = std::make_unique<int>(0);
+    table.add(http_method::get, "/mv", [c = std::move(counter)](request) -> response {
+        return response::text(std::to_string(++*c));
+    });
+
+    auto r1 = table.match(http_method::get, "/mv");
+    REQUIRE(r1.matched);
+    // The table owns the handler; the result only borrows it.
+    REQUIRE((*r1.handler)(request{}).body == "1\n");
+
+    // Handler state persists across matches (not moved out of the table).
+    auto r2 = table.match(http_method::get, "/mv");
+    REQUIRE(r2.matched);
+    REQUIRE((*r2.handler)(request{}).body == "2\n");
 }
