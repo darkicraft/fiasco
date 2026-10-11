@@ -141,14 +141,23 @@ decltype(auto) resolve_arg(const request& req, size_t& path_idx) {
     }
 }
 
+template <typename T>
+using arg_storage_t = std::conditional_t<std::same_as<std::decay_t<T>, request>,
+                                         const request&,
+                                         std::decay_t<T>>;
+
 template <typename F, typename ArgsTuple, size_t... Is>
 response dispatch_impl(F& fn, const request& req, size_t& path_idx, std::index_sequence<Is...>) {
+    // braced init guarantees left-to-right evaluation; values are owned by the tuple
+    std::tuple<arg_storage_t<std::tuple_element_t<Is, ArgsTuple>>...> args{
+        resolve_arg<std::tuple_element_t<Is, ArgsTuple>>(req, path_idx)...};
+
     if constexpr (std::is_void_v<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>) {
-        fn(resolve_arg<std::tuple_element_t<Is, ArgsTuple>>(req, path_idx)...);
+        fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
         return response::empty();
     } else {
         return serialize_return(
-            fn(resolve_arg<std::tuple_element_t<Is, ArgsTuple>>(req, path_idx)...));
+            fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...));
     }
 }
 
