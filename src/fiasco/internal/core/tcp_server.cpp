@@ -112,7 +112,11 @@ void tcp_server::run() {
 }
 
 void tcp_server::stop() noexcept {
-    p_impl->m_work_guard.reset();
+    // io_context::stop() is the documented, thread-safe way to interrupt run()
+    // from another thread. We intentionally do NOT touch m_work_guard here:
+    // resetting it from a foreign thread races with the io threads on Asio's
+    // internal state (and Asio's fence-based synchronization is invisible to
+    // TSan). stop() alone is sufficient to make run() return.
     p_impl->m_ioc.stop();
 }
 

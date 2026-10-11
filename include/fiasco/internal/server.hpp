@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <utility>
@@ -82,14 +83,24 @@ class server {
                 log.info("listening on " + host + ":" + std::to_string(port));
             }
         }
-        m_server = std::make_unique<tcp_server>(
-            port, host, [this](request req) { return dispatch(std::move(req)); }, m_threads);
-        m_server->run();
-        m_server.reset();
+        // run() may be called on a different thread than stop(); guard m_server.
+        tcp_server* running = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(m_server_mutex);
+            m_server = std::make_unique<tcp_server>(
+                port, host, [this](request req) { return dispatch(std::move(req)); }, m_threads);
+            running = m_server.get();
+        }
+        running->run();
+        {
+            std::lock_guard<std::mutex> lock(m_server_mutex);
+            m_server.reset();
+        }
         log_registry::instance().get("fiasco").info("server stopped");
     }
 
     void stop() {
+        std::lock_guard<std::mutex> lock(m_server_mutex);
         if (m_server) {
             m_server->stop();
         }
@@ -98,6 +109,7 @@ class server {
   private:
     router m_router;
     unsigned int m_threads = 0;
+    std::mutex m_server_mutex;
     std::unique_ptr<tcp_server> m_server;
 
     void log_access(access_log alog,
