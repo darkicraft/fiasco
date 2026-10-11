@@ -15,20 +15,17 @@ struct filter_cfg {
     std::optional<double> matrix_scale;  // scale all matrix values
     std::vector<std::string> tags;       // echoed back, sorted
 };
-FIASCO_MODEL(filter_cfg, min_degree, matrix_scale, tags);
 
 struct request_body {
     std::string label;
     std::vector<int> weights;  // applied to matrix rows
     filter_cfg filters;
 };
-FIASCO_MODEL(request_body, label, weights, filters);
 
 // --- Response Models ---------------------------------------------------------
 struct vec3 {
     double x, y, z;
 };
-FIASCO_MODEL(vec3, x, y, z);
 
 struct weighted_row {
     int index;
@@ -38,7 +35,6 @@ struct weighted_row {
     double weighted_sum;
     double dot_with_unit;
 };
-FIASCO_MODEL(weighted_row, index, raw, weighted, raw_sum, weighted_sum, dot_with_unit);
 
 struct prime_info {
     int value;
@@ -47,7 +43,6 @@ struct prime_info {
     std::vector<int> factors;
     int factor_count;
 };
-FIASCO_MODEL(prime_info, value, is_prime, next_prime, factors, factor_count);
 
 struct graph_node {
     int id;
@@ -57,7 +52,6 @@ struct graph_node {
     bool is_leaf;
     std::optional<std::string> tag;  // assigned from body.filters.tags if available
 };
-FIASCO_MODEL(graph_node, id, label, neighbors, degree, is_leaf, tag);
 
 struct graph_stats {
     int node_count;
@@ -67,13 +61,11 @@ struct graph_stats {
     std::vector<int> leaf_ids;
     std::vector<int> hub_ids;  // degree > mean
 };
-FIASCO_MODEL(graph_stats, node_count, edge_count, max_degree, min_degree, leaf_ids, hub_ids);
 
 struct char_freq {
     std::string ch;
     int count;
 };
-FIASCO_MODEL(char_freq, ch, count);
 
 struct label_analysis {
     std::string original;
@@ -82,13 +74,11 @@ struct label_analysis {
     bool is_palindrome;
     std::optional<std::string> longest_run;  // longest consecutive same-char run
 };
-FIASCO_MODEL(label_analysis, original, length, freq, is_palindrome, longest_run);
 
 struct mode_info {
     int index;
     double value;
 };
-FIASCO_MODEL(mode_info, index, value);
 
 struct statistics {
     double min;
@@ -99,7 +89,6 @@ struct statistics {
     mode_info mode;
     double weighted_mean;
 };
-FIASCO_MODEL(statistics, min, max, mean, variance, std_dev, mode, weighted_mean);
 
 struct response {
     // path params echoed
@@ -134,23 +123,6 @@ struct response {
     bool combined_is_prime;
     std::vector<int> combined_factors;
 };
-FIASCO_MODEL(response,
-             seed,
-             multiplier,
-             label,
-             sorted_tags,
-             matrix_scale,
-             unit_vector,
-             matrix,
-             stats,
-             primes,
-             secret,
-             graph,
-             g_stats,
-             analysis,
-             combined,
-             combined_is_prime,
-             combined_factors);
 
 // --- Helpers -----------------------------------------------------------------
 bool chk_prime(int n) {

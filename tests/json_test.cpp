@@ -19,19 +19,23 @@ using Catch::Approx;
 // built a json_type temporary from T, which called the templated constructor
 // again, ad infinitum -> stack overflow / segfault at runtime with no
 // compile diagnostic.  The constructor is now constrained on
-// JsonSerializable<T>; types without a real to_json must be a *compile
-// error*, never a silent crash.
+// JsonSerializable<T>; non-serialisable types must be a *compile error*, never
+// a silent crash.  (Plain aggregate structs are now serialisable automatically
+// via reflection -- see JsonModel and model_reflect_test.)
 // ---------------------------------------------------------------------------
 namespace {
-struct NoToJson {};
-struct NoToJsonEither {};
+struct Aggregate {};  // auto (reflection) model
 struct WithToJson {};
 void to_json(json_type&, const WithToJson&);
+struct NotAnAggregate {
+    explicit NotAnAggregate(int) {}  // user-declared ctor -> no automatic to_json
+};
 }  // namespace
 
-static_assert(!JsonSerializable<NoToJson>);
-static_assert(!JsonSerializable<NoToJsonEither>);
-static_assert(!JsonDeserializable<NoToJson>);
+static_assert(JsonSerializable<Aggregate>);  // aggregate -> reflection model
+static_assert(JsonDeserializable<Aggregate>);
+static_assert(!JsonSerializable<NotAnAggregate>);
+static_assert(!JsonDeserializable<NotAnAggregate>);
 static_assert(JsonSerializable<WithToJson>);                  // ADL to_json found
 static_assert(JsonSerializable<int>);                         // primitive overload
 static_assert(JsonSerializable<std::vector<int>>);            // JsonSequence

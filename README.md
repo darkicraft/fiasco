@@ -47,7 +47,7 @@ cmake --install build
 |---------|--------|
 | HTTP/1.1 (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS) | ✅ |
 | Path parameters with automatic type conversion | ✅ |
-| JSON request/response models via `FIASCO_MODEL` | ✅ |
+| JSON request/response models (reflection, no macros) | ✅ |
 | Type-erased JSON wrapper | ✅ |
 | std::optional, vector, map, tuple serialization | ✅ |
 | Sub-router mounting with path prefixes | ✅ |
@@ -61,7 +61,7 @@ cmake --install build
 | Static file serving | 🚧 Planned |
 | HTTPS / TLS | 🚧 Planned |
 | WebSocket | 🚧 Planned |
-| C++26 `std::meta` reflection (replace macros) | 🚧 Future |
+| C++26 `std::meta` reflection-backed routing/params | 🚧 In progress |
 
 ## Quick Start
 
@@ -98,14 +98,14 @@ Supported types: `int`, `long`, `long long`, `float`, `double`, `bool`, `std::st
 
 ## Request & Response Models
 
-Define a struct, annotate it with `FIASCO_MODEL`, and return it directly.
+Just define a struct and return it — fiasco (de)serialises it member-wise using
+C++26 reflection (`std::meta`). No macros, no boilerplate.
 
 ```cpp
 struct UserResponse {
     std::string username;
     int age;
 };
-FIASCO_MODEL(UserResponse, username, age)
 
 app.get("/users/{id}", [](int id) {
     return UserResponse{"John Doe", 21};
@@ -119,7 +119,6 @@ struct CreateUserRequest {
     std::string username;
     int age;
 };
-FIASCO_MODEL(CreateUserRequest, username, age)
 
 app.post("/users/{department}", [](int department_id, CreateUserRequest req) {
     // department_id from path, req from JSON body
@@ -127,22 +126,21 @@ app.post("/users/{department}", [](int department_id, CreateUserRequest req) {
 });
 ```
 
-### Supported field types inside FIASCO_MODEL
+### Supported field types
 
 - Primitive types (`int`, `double`, `bool`, `std::string`, …)
-- Nested `FIASCO_MODEL` structs
+- Nested aggregate structs (also serialised by reflection)
 - `std::vector<T>` and other sequence containers
 - `std::map<std::string, T>` and other map containers
-- `std::optional<T>` (omitted from JSON → `std::nullopt`)
+- `std::optional<T>` (absent in JSON → `std::nullopt`)
 - `std::pair<T, U>`, `std::tuple<…>`
 
-> **Note**: The `FIASCO_MODEL` macro is a placeholder until C++26 reflection stabilises.
-> Once `std::meta` is widely available, model serialisation will be automatic —
-> no macros, no boilerplate.
+Any aggregate `struct` is a model automatically; JSON keys are the member
+identifiers, and unnamed members (e.g. anonymous unions) are skipped.
 
 ## Response Types
 
-Every handler returns a `fiasco::response`. If you return a plain value (string, int, or a `FIASCO_MODEL` type), it's wrapped automatically. For full control, use the factory methods:
+Every handler returns a `fiasco::response`. If you return a plain value (string, int, or a model struct), it's wrapped automatically. For full control, use the factory methods:
 
 ```cpp
 app.get("/text", []() {

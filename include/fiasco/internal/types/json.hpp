@@ -4,6 +4,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <meta>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -183,6 +184,13 @@ template <typename T>
 concept JsonTupleLike =
     requires(T& t) { std::tuple_size<std::decay_t<T>>::value; } && !JsonRange<T> && !JsonOptional<T>;
 
+// An aggregate "model": (de)serialised member-wise via reflection. Excludes the
+// categories handled above (ranges/maps/optionals/tuples/JSON itself).
+template <typename T>
+concept JsonModel = std::is_class_v<T> && std::meta::is_aggregate_type(^^T) &&
+                    !JsonRange<T> && !JsonOptional<T> && !JsonTupleLike<T> &&
+                    !std::same_as<std::remove_cvref_t<T>, json_type>;
+
 template <JsonSequence T>
 void to_json(json_type& j, const T& seq) {
     json_type arr = json_type::array({});
@@ -280,7 +288,7 @@ void from_json(const json_type& j, T& tuple) {
     from_json_tuple_impl(j, tuple, std::make_index_sequence<std::tuple_size_v<T>>{});
 }
 
-// ---- Field-level helpers for FIASCO_MODEL ---------------------------------
+// ---- Field-level helpers ---------------------------------------------------
 template <typename T>
 void to_json_field(json_type& j, const char* key, const T& field) {
     j[key] = json_type(field);
@@ -298,6 +306,34 @@ void from_json_field(const json_type& j, const char* key, std::optional<T>& fiel
 template <typename T>
 void from_json_field(const json_type& j, const char* key, T& field) {
     field = j[key].get<T>();
+}
+
+// ---- Aggregate models (reflection) ----------------------------------------
+// Member-wise (de)serialisation driven by std::meta; replaces the FIASCO_MODEL
+// macro. Members without an identifier (e.g. anonymous unions, unnamed
+// bit-fields) are skipped.
+template <JsonModel T>
+void to_json(json_type& j, const T& v) {
+    json_type obj = json_type::object();
+    template for (constexpr auto member :
+                  std::define_static_array(std::meta::nonstatic_data_members_of(
+                      ^^T, std::meta::access_context::unchecked()))) {
+        if constexpr (std::meta::has_identifier(member)) {
+            to_json_field(obj, std::meta::identifier_of(member).data(), v.[:member:]);
+        }
+    }
+    j = std::move(obj);
+}
+
+template <JsonModel T>
+void from_json(const json_type& j, T& v) {
+    template for (constexpr auto member :
+                  std::define_static_array(std::meta::nonstatic_data_members_of(
+                      ^^T, std::meta::access_context::unchecked()))) {
+        if constexpr (std::meta::has_identifier(member)) {
+            from_json_field(j, std::meta::identifier_of(member).data(), v.[:member:]);
+        }
+    }
 }
 
 }  // namespace fiasco::detail

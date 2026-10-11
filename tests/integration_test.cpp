@@ -107,7 +107,7 @@ static std::string extract_body(const std::string& response) {
 
 // -------------------------------------------------------------------
 // Helpers: struct used in body-deserialization tests
-// Struct + FIASCO_MODEL must be inside fiasco::detail for ADL.
+// Struct must be visible for ADL from json_type.
 // -------------------------------------------------------------------
 namespace fiasco::detail {
 
@@ -116,7 +116,6 @@ struct SumInput {
     int b = 0;
 };
 
-FIASCO_MODEL(SumInput, a, b)
 
 }  // namespace fiasco::detail
 

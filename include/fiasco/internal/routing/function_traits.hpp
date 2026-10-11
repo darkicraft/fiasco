@@ -78,7 +78,7 @@ template <typename T>
     } else {
         static_assert(!sizeof(T),
                       "Handler return type must be a primitive, "
-                      "fiasco::response, or a FIASCO_MODEL type");
+                      "fiasco::response, or a reflectable model type");
     }
 
     return {};  // unreachable

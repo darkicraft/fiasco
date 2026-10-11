@@ -47,10 +47,15 @@ add_executable(fiasco_test_meta_reflect meta_reflect_test.cpp)
 target_link_libraries(fiasco_test_meta_reflect PRIVATE Catch2::Catch2WithMain fiasco_meta)
 catch_discover_tests(fiasco_test_meta_reflect)
 
-# ---- macros_test ----
-add_executable(fiasco_test_macros macros_test.cpp)
-target_link_libraries(fiasco_test_macros PRIVATE Catch2::Catch2WithMain fiasco_types)
-catch_discover_tests(fiasco_test_macros)
+# ---- model_reflect_test ----
+add_executable(fiasco_test_model_reflect model_reflect_test.cpp)
+target_link_libraries(fiasco_test_model_reflect PRIVATE Catch2::Catch2WithMain fiasco_types)
+catch_discover_tests(fiasco_test_model_reflect)
+
+# ---- model_serialization_test ----
+add_executable(fiasco_test_model_serialization model_serialization_test.cpp)
+target_link_libraries(fiasco_test_model_serialization PRIVATE Catch2::Catch2WithMain fiasco_types)
+catch_discover_tests(fiasco_test_model_serialization)
 
 # ---- integration_test ----
 add_executable(fiasco_test_integration integration_test.cpp)

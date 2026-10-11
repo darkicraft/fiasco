@@ -6,13 +6,12 @@
 #include <vector>
 
 #include "fiasco/internal/json.hpp"
-#include "fiasco/internal/types/macros.hpp"
 
 using namespace fiasco::detail;
 using Catch::Approx;
 
-// Structs and FIASCO_MODEL invocations must be in fiasco::detail so
-// ADL from json_type's template constructor and get<T>() finds them.
+// Structs live in fiasco::detail so ADL from json_type's template constructor
+// and get<T>() finds the reflection serialisers.
 namespace fiasco::detail {
 
 // ============================================================
@@ -29,9 +28,8 @@ struct AllPrimitives {
     std::string s;
 };
 
-FIASCO_MODEL(AllPrimitives, i, l, ll, f, d, b, s)
 
-TEST_CASE("FIASCO_MODEL roundtrip all primitives", "[macros]") {
+TEST_CASE("reflection model roundtrip all primitives", "[model]") {
     AllPrimitives v{42, 99L, 100LL, 3.14f, 2.718, true, "hello"};
 
     json_type j;
@@ -57,7 +55,7 @@ TEST_CASE("FIASCO_MODEL roundtrip all primitives", "[macros]") {
     REQUIRE(v2.s == "hello");
 }
 
-TEST_CASE("FIASCO_MODEL template constructor", "[macros]") {
+TEST_CASE("reflection model template constructor", "[model]") {
     AllPrimitives v{1, 2, 3, 1.0f, 2.0, false, "test"};
     json_type j(v);
     REQUIRE(j.is_object());
@@ -79,10 +77,8 @@ struct Outer {
     Inner inner;
 };
 
-FIASCO_MODEL(Inner, x, label)
-FIASCO_MODEL(Outer, id, inner)
 
-TEST_CASE("FIASCO_MODEL nested structs", "[macros]") {
+TEST_CASE("reflection model nested structs", "[model]") {
     Outer v{42, {7, "nested"}};
 
     json_type j;
@@ -109,9 +105,8 @@ struct WithOptional {
     std::optional<int> age;
 };
 
-FIASCO_MODEL(WithOptional, id, name, age)
 
-TEST_CASE("FIASCO_MODEL optional fields present", "[macros]") {
+TEST_CASE("reflection model optional fields present", "[model]") {
     WithOptional v{1, std::optional<std::string>("Alice"), std::optional<int>(30)};
 
     json_type j;
@@ -129,7 +124,7 @@ TEST_CASE("FIASCO_MODEL optional fields present", "[macros]") {
     REQUIRE(v2.age.value() == 30);
 }
 
-TEST_CASE("FIASCO_MODEL optional fields absent in json", "[macros]") {
+TEST_CASE("reflection model optional fields absent in json", "[model]") {
     json_type j = json_type::object();
     j["id"] = json_type(42);
 
@@ -150,9 +145,8 @@ struct WithVector {
     std::vector<std::string> tags;
 };
 
-FIASCO_MODEL(WithVector, id, scores, tags)
 
-TEST_CASE("FIASCO_MODEL vector fields", "[macros]") {
+TEST_CASE("reflection model vector fields", "[model]") {
     WithVector v{1, {90, 95, 88}, {"fast", "secure"}};
 
     json_type j;
@@ -186,9 +180,8 @@ struct SingleField {
     std::string value;
 };
 
-FIASCO_MODEL(SingleField, value)
 
-TEST_CASE("FIASCO_MODEL single field", "[macros]") {
+TEST_CASE("reflection model single field", "[model]") {
     SingleField v{"only"};
     json_type j;
     to_json(j, v);
@@ -200,10 +193,10 @@ TEST_CASE("FIASCO_MODEL single field", "[macros]") {
 }
 
 // ============================================================
-// get<T>() with FIASCO_MODEL types
+// get<T>() with reflection model types
 // ============================================================
 
-TEST_CASE("FIASCO_MODEL get<T> from json_type", "[macros]") {
+TEST_CASE("reflection model get<T> from json_type", "[model]") {
     AllPrimitives v{1, 2, 3, 1.5f, 2.5, true, "get_test"};
     json_type j(v);
 
