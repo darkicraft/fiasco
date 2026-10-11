@@ -11,7 +11,7 @@
 
 namespace fiasco::detail {
 
-constexpr size_t num_http_methods = 8;
+inline constexpr size_t num_http_methods = 8;
 
 inline size_t method_index(http_method m) {
     return static_cast<size_t>(m);
