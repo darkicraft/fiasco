@@ -38,7 +38,7 @@ class server {
         return *this;
     }
 
-    logger& logger(const std::string& name) {
+    logger& get_logger(const std::string& name) {
         return log_registry::instance().get(name);
     }
 
@@ -103,24 +103,26 @@ class server {
     unsigned int m_threads = 0;
     std::unique_ptr<tcp_server> m_server;
 
-    void log_access(const request& req, const response& res, std::chrono::steady_clock::time_point start) {
+    void log_access(access_log alog, const response& res,
+                    std::chrono::steady_clock::time_point start) {
         auto& reg = log_registry::instance();
         if (!reg.access_log_enabled()) {
             return;
         }
         auto end = std::chrono::steady_clock::now();
-        auto us = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        access_log alog;
-        alog.client = req.client_address;
-        alog.method = req.method;
-        alog.path = req.path;
         alog.status_code = res.status_code;
-        alog.duration_us = us;
+        alog.duration_us =
+            std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         reg.get("fiasco.access").info(alog.build_message());
     }
 
     response dispatch(request req) {
         auto start = std::chrono::steady_clock::now();
+
+        access_log alog;
+        alog.client = req.client_address;
+        alog.method = req.method;
+        alog.path = req.path;
 
         auto match = m_router.match(req.method, req.path);
         response res;
@@ -150,7 +152,7 @@ class server {
             }
         }
 
-        log_access(req, res, start);
+        log_access(std::move(alog), res, start);
         return res;
     }
 };
