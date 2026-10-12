@@ -116,6 +116,16 @@ struct SumInput {
     int b = 0;
 };
 
+// No default member initializers => both required (exact Pydantic 1:1).
+struct RequiredInput {
+    int a;
+    int b;
+};
+
+struct ConstrainedInput {
+    [[= field{.gt = 0, .le = 10}]] int a = 0;
+};
+
 struct ExtraInput {
     int c = 0;
 };
@@ -259,7 +269,7 @@ TEST_CASE("integration POST empty body with JSON model returns 422", "[integrati
 
 TEST_CASE("integration POST missing field returns 422 with the field name", "[integration]") {
     fiasco::server app;
-    app.post("/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
+    app.post("/sum", [](const fiasco::detail::RequiredInput&) -> std::string { return ""; });
 
     auto port = find_free_port();
     std::thread t([&] { app.run(port, "127.0.0.1"); });
@@ -277,6 +287,28 @@ TEST_CASE("integration POST missing field returns 422 with the field name", "[in
     REQUIRE(extract_status(resp) == 422);
     REQUIRE(extract_body(resp).find(R"("loc":["body","b"])") != std::string::npos);
     REQUIRE(extract_body(resp).find(R"("msg":"Field required")") != std::string::npos);
+}
+
+TEST_CASE("integration POST constraint violation returns Pydantic 422 with ctx", "[integration]") {
+    fiasco::server app;
+    app.post("/c", [](const fiasco::detail::ConstrainedInput&) -> std::string { return ""; });
+
+    auto port = find_free_port();
+    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    wait_for_server(port);
+    ServerGuard guard{app, t};
+
+    auto resp = send_and_receive(port,
+                                 "POST /c HTTP/1.1\r\n"
+                                 "Host: localhost\r\n"
+                                 "Content-Type: application/json\r\n"
+                                 "Content-Length: 7\r\n"
+                                 "\r\n"
+                                 R"({"a":0})");
+    REQUIRE(extract_status(resp) == 422);
+    REQUIRE(extract_body(resp).find(R"("type":"greater_than")") != std::string::npos);
+    REQUIRE(extract_body(resp).find(R"("loc":["body","a"])") != std::string::npos);
+    REQUIRE(extract_body(resp).find(R"("ctx":{"gt":0})") != std::string::npos);
 }
 
 TEST_CASE("integration query parameter", "[integration]") {

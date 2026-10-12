@@ -21,7 +21,7 @@ struct Nested {
     std::string name;
     Point p;
     std::vector<int> xs;
-    std::optional<int> opt;
+    std::optional<int> opt = std::nullopt;  // no default => required (Pydantic 1:1)
 };
 
 }  // namespace

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <charconv>
+#include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <exception>
@@ -14,6 +16,8 @@
 #include <type_traits>
 #include <variant>
 #include <vector>
+
+#include "fiasco/internal/meta/annotations.hpp"
 
 namespace fiasco::detail {
 
@@ -179,6 +183,7 @@ struct validation_error {
     std::vector<std::variant<std::string, std::size_t>> loc;
     std::string msg;
     json_type input;
+    std::optional<json_type> ctx{};  // Pydantic's per-error context (constraints)
 };
 
 class request_validation_error : public std::exception {
@@ -212,6 +217,9 @@ class request_validation_error : public std::exception {
         entry["loc"] = loc;
         entry["msg"] = json_type(err.msg);
         entry["input"] = err.input;
+        if (err.ctx.has_value()) {
+            entry["ctx"] = *err.ctx;
+        }
         list.push_back(entry);
     }
     json_type out = json_type::object();
@@ -486,8 +494,183 @@ void from_json(const json_type& j, T& tuple) {
 
 // ---- Field-level helpers ---------------------------------------------------
 template <typename T>
-void to_json_field(json_type& j, const char* key, const T& field) {
-    j[key] = json_type(field);
+void to_json_field(json_type& j, std::string_view key, const T& field) {
+    j[std::string(key)] = json_type(field);
+}
+
+// ---- Constraint engine (Pydantic-exact) ------------------------------------
+// `Spec` is a non-type template parameter so its values are constant
+// expressions; that lets the applicability checks below be static_asserts.
+
+/// Render a numeric bound the way Pydantic does *in messages* (no trailing
+/// ".0"): 5.0 -> "5", 5.5 -> "5.5".
+[[nodiscard]] inline std::string constraint_number(double v) {
+    char buf[64];
+    auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), v);
+    if (ec != std::errc()) {
+        return std::to_string(v);
+    }
+    return std::string(buf, ptr);
+}
+
+constexpr bool is_integral_value(double v) {
+    if (v < -1.0e18 || v > 1.0e18) {
+        return false;
+    }
+    return static_cast<double>(static_cast<long long>(v)) == v;
+}
+
+constexpr const char* plural(long n, const char* one, const char* many) {
+    return n == 1 ? one : many;
+}
+
+/// ctx keeps the field's numeric type: integers for integer fields, floats
+/// (e.g. 5.0) for floating fields.
+template <class D>
+[[nodiscard]] json_type numeric_ctx(const char* name, double bound) {
+    json_type ctx = json_type::object();
+    if constexpr (std::integral<std::remove_cvref_t<D>>) {
+        ctx[name] = json_type(static_cast<long long>(bound));
+    } else {
+        ctx[name] = json_type(bound);
+    }
+    return ctx;
+}
+
+template <fiasco::field<> Spec, class D>
+void apply_field_constraints(const D& value, const json_type& raw, const std::string& loc_key,
+                             std::vector<validation_error>& errors) {
+    using U = std::remove_cvref_t<D>;
+    constexpr bool is_bool = std::same_as<U, bool>;
+    constexpr bool is_number = !is_bool && (std::integral<U> || std::floating_point<U>);
+    constexpr bool is_string = std::same_as<U, std::string>;
+    constexpr bool is_sized = JsonSequence<U> || JsonMap<U>;
+    constexpr bool is_lengthy = is_string || is_sized;
+
+    static_assert(!Spec.gt.has || is_number, "'gt' is only valid on numeric fields");
+    static_assert(!Spec.ge.has || is_number, "'ge' is only valid on numeric fields");
+    static_assert(!Spec.lt.has || is_number, "'lt' is only valid on numeric fields");
+    static_assert(!Spec.le.has || is_number, "'le' is only valid on numeric fields");
+    static_assert(!Spec.multiple_of.has || is_number,
+                  "'multiple_of' is only valid on numeric fields");
+    static_assert(!Spec.min_length.has || is_lengthy,
+                  "'min_length' is only valid on string/sequence fields");
+    static_assert(!Spec.max_length.has || is_lengthy,
+                  "'max_length' is only valid on string/sequence fields");
+    static_assert(!Spec.pattern.has, "'pattern' is not implemented yet");
+    if constexpr (is_number && std::integral<U>) {
+        static_assert(!Spec.gt.has || is_integral_value(Spec.gt.value),
+                      "'gt' must be an integer on an integer field");
+        static_assert(!Spec.ge.has || is_integral_value(Spec.ge.value),
+                      "'ge' must be an integer on an integer field");
+        static_assert(!Spec.lt.has || is_integral_value(Spec.lt.value),
+                      "'lt' must be an integer on an integer field");
+        static_assert(!Spec.le.has || is_integral_value(Spec.le.value),
+                      "'le' must be an integer on an integer field");
+        static_assert(!Spec.multiple_of.has || is_integral_value(Spec.multiple_of.value),
+                      "'multiple_of' must be an integer on an integer field");
+    }
+
+    auto raise = [&](std::string type, std::string msg, json_type ctx) {
+        errors.push_back(validation_error{.type = std::move(type),
+                                          .loc = {loc_key},
+                                          .msg = std::move(msg),
+                                          .input = raw,
+                                          .ctx = std::move(ctx)});
+    };
+
+    if constexpr (is_number) {
+        const double v = static_cast<double>(value);
+        // Pydantic's check order (verified): multiple_of, le, lt, ge, gt.
+        if (Spec.multiple_of.has) {
+            bool ok = false;
+            if constexpr (std::integral<U>) {
+                const auto m = static_cast<long long>(Spec.multiple_of.value);
+                ok = m != 0 && static_cast<long long>(value) % m == 0;
+            } else {
+                const double m = Spec.multiple_of.value;
+                ok = m != 0.0 && std::fmod(v, m) == 0.0;
+            }
+            if (!ok) {
+                raise("multiple_of",
+                      "Input should be a multiple of " +
+                          constraint_number(Spec.multiple_of.value),
+                      numeric_ctx<D>("multiple_of", Spec.multiple_of.value));
+                return;
+            }
+        }
+        if (Spec.le.has && !(v <= Spec.le.value)) {
+            raise("less_than_equal",
+                  "Input should be less than or equal to " + constraint_number(Spec.le.value),
+                  numeric_ctx<D>("le", Spec.le.value));
+            return;
+        }
+        if (Spec.lt.has && !(v < Spec.lt.value)) {
+            raise("less_than", "Input should be less than " + constraint_number(Spec.lt.value),
+                  numeric_ctx<D>("lt", Spec.lt.value));
+            return;
+        }
+        if (Spec.ge.has && !(v >= Spec.ge.value)) {
+            raise("greater_than_equal",
+                  "Input should be greater than or equal to " + constraint_number(Spec.ge.value),
+                  numeric_ctx<D>("ge", Spec.ge.value));
+            return;
+        }
+        if (Spec.gt.has && !(v > Spec.gt.value)) {
+            raise("greater_than", "Input should be greater than " + constraint_number(Spec.gt.value),
+                  numeric_ctx<D>("gt", Spec.gt.value));
+            return;
+        }
+    } else if constexpr (is_string) {
+        const auto n = static_cast<long>(value.size());
+        if (Spec.min_length.has && n < Spec.min_length.value) {
+            json_type ctx = json_type::object();
+            ctx["min_length"] = json_type(Spec.min_length.value);
+            raise("string_too_short",
+                  "String should have at least " + std::to_string(Spec.min_length.value) +
+                      plural(Spec.min_length.value, " character", " characters"),
+                  std::move(ctx));
+            return;
+        }
+        if (Spec.max_length.has && n > Spec.max_length.value) {
+            json_type ctx = json_type::object();
+            ctx["max_length"] = json_type(Spec.max_length.value);
+            raise("string_too_long",
+                  "String should have at most " + std::to_string(Spec.max_length.value) +
+                      plural(Spec.max_length.value, " character", " characters"),
+                  std::move(ctx));
+            return;
+        }
+    } else if constexpr (is_sized) {
+        const char* field_type = JsonMap<U> ? "Dictionary" : "List";
+        const auto n = static_cast<long>(value.size());
+        if (Spec.min_length.has && n < Spec.min_length.value) {
+            json_type ctx = json_type::object();
+            ctx["field_type"] = json_type(field_type);
+            ctx["min_length"] = json_type(Spec.min_length.value);
+            ctx["actual_length"] = json_type(static_cast<long long>(value.size()));
+            raise("too_short",
+                  std::string(field_type) + " should have at least " +
+                      std::to_string(Spec.min_length.value) +
+                      plural(Spec.min_length.value, " item", " items") +
+                      " after validation, not " + std::to_string(value.size()),
+                  std::move(ctx));
+            return;
+        }
+        if (Spec.max_length.has && n > Spec.max_length.value) {
+            json_type ctx = json_type::object();
+            ctx["field_type"] = json_type(field_type);
+            ctx["max_length"] = json_type(Spec.max_length.value);
+            ctx["actual_length"] = json_type(static_cast<long long>(value.size()));
+            raise("too_long",
+                  std::string(field_type) + " should have at most " +
+                      std::to_string(Spec.max_length.value) +
+                      plural(Spec.max_length.value, " item", " items") +
+                      " after validation, not " + std::to_string(value.size()),
+                  std::move(ctx));
+            return;
+        }
+    }
 }
 
 // ---- Aggregate models (reflection) ----------------------------------------
@@ -495,6 +678,9 @@ void to_json_field(json_type& j, const char* key, const T& field) {
 // macro. Members without an identifier (e.g. anonymous unions, unnamed
 // bit-fields) are skipped. Deserialisation collects *all* FastAPI-style
 // validation errors instead of failing fast.
+//
+// Requiredness is exact 1:1 with Pydantic: a member is *required* iff it has no
+// default member initializer; `std::optional<T>` controls nullability only.
 template <JsonModel T>
 void to_json(json_type& j, const T& v) {
     json_type obj = json_type::object();
@@ -502,7 +688,12 @@ void to_json(json_type& j, const T& v) {
                   std::define_static_array(std::meta::nonstatic_data_members_of(
                       ^^T, std::meta::access_context::unchecked()))) {
         if constexpr (std::meta::has_identifier(member)) {
-            to_json_field(obj, std::meta::identifier_of(member).data(), v.[:member:]);
+            static_assert(fiasco::detail::meta::field_annotation_count(member) <= 1,
+                          "only one field/path/query/body annotation is allowed per member");
+            constexpr auto spec = fiasco::detail::meta::field_of(member);
+            constexpr std::string_view key =
+                spec.alias.has ? spec.alias.view() : std::meta::identifier_of(member);
+            to_json_field(obj, key, v.[:member:]);
         }
     }
     j = std::move(obj);
@@ -516,28 +707,42 @@ void from_json(const json_type& j, T& v) {
                   std::define_static_array(std::meta::nonstatic_data_members_of(
                       ^^T, std::meta::access_context::unchecked()))) {
         if constexpr (std::meta::has_identifier(member)) {
+            static_assert(fiasco::detail::meta::field_annotation_count(member) <= 1,
+                          "only one field/path/query/body annotation is allowed per member");
             using FieldT = std::remove_cvref_t<decltype(v.[:member:])>;
-            std::string key(std::meta::identifier_of(member));
+            constexpr auto spec = fiasco::detail::meta::field_of(member);
+            constexpr bool required = !std::meta::has_default_member_initializer(member);
+            constexpr std::string_view key =
+                spec.alias.has ? spec.alias.view() : std::meta::identifier_of(member);
+            const std::string key_str(key);
 
-            if (!j.contains(key)) {
-                if constexpr (JsonOptional<FieldT>) {
-                    v.[:member:].reset();
-                } else {
+            if (!j.contains(key_str)) {
+                if constexpr (required) {
                     errors.push_back(validation_error{
-                        .type = "missing", .loc = {key}, .msg = "Field required", .input = j});
+                        .type = "missing", .loc = {key_str}, .msg = "Field required", .input = j});
                 }
                 continue;
             }
 
             try {
-                from_json(j[key], v.[:member:]);
+                from_json(j[key_str], v.[:member:]);
             } catch (const request_validation_error& nested) {
                 for (auto err : nested.errors()) {
-                    err.loc.insert(err.loc.begin(), key);
+                    err.loc.insert(err.loc.begin(), key_str);
                     errors.push_back(std::move(err));
                 }
+                continue;
             } catch (const std::exception&) {
-                errors.push_back(make_type_error<FieldT>({key}, j[key]));
+                errors.push_back(make_type_error<FieldT>({key_str}, j[key_str]));
+                continue;
+            }
+
+            if constexpr (JsonOptional<FieldT>) {
+                if (v.[:member:].has_value()) {
+                    apply_field_constraints<spec>(*v.[:member:], j[key_str], key_str, errors);
+                }
+            } else {
+                apply_field_constraints<spec>(v.[:member:], j[key_str], key_str, errors);
             }
         }
     }

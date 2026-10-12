@@ -1,5 +1,6 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include <optional>
 #include <string>
@@ -9,6 +10,7 @@
 
 using namespace fiasco::detail;
 using Catch::Approx;
+using Catch::Matchers::ContainsSubstring;
 
 // Structs live in fiasco::detail so ADL from json_type's template constructor
 // and get<T>() finds the reflection serialisers.
@@ -99,8 +101,8 @@ TEST_CASE("reflection model nested structs", "[model]") {
 
 struct WithOptional {
     int id = 0;
-    std::optional<std::string> name;
-    std::optional<int> age;
+    std::optional<std::string> name = std::nullopt;
+    std::optional<int> age = std::nullopt;
 };
 
 TEST_CASE("reflection model optional fields present", "[model]") {
@@ -125,11 +127,31 @@ TEST_CASE("reflection model optional fields absent in json", "[model]") {
     json_type j = json_type::object();
     j["id"] = json_type(42);
 
-    WithOptional v{0, std::optional<std::string>("default"), std::optional<int>(99)};
+    // Absent fields keep their default (Pydantic validates into a fresh model),
+    // so we start from a freshly default-constructed instance.
+    WithOptional v{};
     from_json(j, v);
     REQUIRE(v.id == 42);
     REQUIRE_FALSE(v.name.has_value());
     REQUIRE_FALSE(v.age.has_value());
+}
+
+struct RequiredOptional {
+    std::optional<int> v;
+};
+
+TEST_CASE("reflection model: optional without default is required", "[model]") {
+    // Exact 1:1 with Pydantic v2: `std::optional<T>` is *nullable*, not
+    // optional; requiredness comes from a default member initializer.
+    json_type j = json_type::object();
+    try {
+        (void)j.get<RequiredOptional>();
+        FAIL("expected request_validation_error");
+    } catch (const request_validation_error& e) {
+        auto detail = to_fastapi_error_json(e.errors());
+        REQUIRE_THAT(detail, ContainsSubstring(R"("type":"missing")"));
+        REQUIRE_THAT(detail, ContainsSubstring(R"("loc":["v"])"));
+    }
 }
 
 // ============================================================

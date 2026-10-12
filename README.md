@@ -152,11 +152,51 @@ single JSON object, embedded under each parameter's name.
 - Nested aggregate structs (also serialised by reflection)
 - `std::vector<T>` and other sequence containers
 - `std::map<std::string, T>` and other map containers
-- `std::optional<T>` (absent in JSON → `std::nullopt`)
+- `std::optional<T>` (a JSON `null` becomes `std::nullopt`)
 - `std::pair<T, U>`, `std::tuple<…>`
 
 Any aggregate `struct` is a model automatically; JSON keys are the member
 identifiers, and unnamed members (e.g. anonymous unions) are skipped.
+
+### Required vs. nullable (exactly like Pydantic)
+
+The two are independent:
+
+- a member is **required** iff it has **no default member initializer**;
+- `std::optional<T>` controls **nullability only** (whether `null` is accepted).
+
+```cpp
+struct M {
+    int a;                               // required, not nullable
+    int b = 0;                           // optional (default 0)
+    std::optional<int> c;                // required, nullable
+    std::optional<int> d = std::nullopt; // optional, nullable
+};
+```
+
+Absent + required ⇒ `missing`; absent + default ⇒ the default is used (and not
+validated); `null` on a non-nullable field is a type error.
+
+### Field constraints
+
+Attach Pydantic-style constraints with an annotation:
+
+```cpp
+using fiasco::field;
+struct Item {
+    [[= field{.gt = 0, .le = 100}]]   int percent;
+    [[= field{.multiple_of = 3}]]     int boxes;
+    [[= field{.min_length = 2}]]      std::string code;
+    [[= field{.min_length = 1}]]      std::vector<int> tags;
+    [[= field{.alias = "user-name"}]] std::string username;
+};
+```
+
+Supported now: `gt`, `ge`, `lt`, `le`, `multiple_of`, `min_length`, `max_length`,
+`alias`. Violations produce the same 422 `{"detail": [...]}` payloads as
+FastAPI/Pydantic (including `ctx`). Misuse (e.g. `.gt` on a string, a fractional
+bound on an `int`, or two `field` annotations on one member) is a **compile-time
+error**.
 
 ## Response Types
 
