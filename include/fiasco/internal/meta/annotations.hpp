@@ -66,7 +66,7 @@ struct lit {
 template <param_in In = param_in::infer>
 struct field {
     opt<double> gt{}, ge{}, lt{}, le{}, multiple_of{};
-    opt<long>   min_length{}, max_length{};
+    opt<std::size_t> min_length{}, max_length{};
     lit         pattern{}, alias{}, title{}, description{};
     bool        embed = false;
 

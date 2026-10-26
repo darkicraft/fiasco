@@ -520,7 +520,7 @@ constexpr bool is_integral_value(double v) {
     return static_cast<double>(static_cast<long long>(v)) == v;
 }
 
-constexpr const char* plural(long n, const char* one, const char* many) {
+constexpr const char* plural(std::size_t n, const char* one, const char* many) {
     return n == 1 ? one : many;
 }
 
@@ -622,10 +622,10 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
             return;
         }
     } else if constexpr (is_string) {
-        const auto n = static_cast<long>(value.size());
+        const auto n = value.size();
         if (Spec.min_length.has && n < Spec.min_length.value) {
             json_type ctx = json_type::object();
-            ctx["min_length"] = json_type(Spec.min_length.value);
+            ctx["min_length"] = json_type(static_cast<std::uint64_t>(Spec.min_length.value));
             raise("string_too_short",
                   "String should have at least " + std::to_string(Spec.min_length.value) +
                       plural(Spec.min_length.value, " character", " characters"),
@@ -634,7 +634,7 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
         }
         if (Spec.max_length.has && n > Spec.max_length.value) {
             json_type ctx = json_type::object();
-            ctx["max_length"] = json_type(Spec.max_length.value);
+            ctx["max_length"] = json_type(static_cast<std::uint64_t>(Spec.max_length.value));
             raise("string_too_long",
                   "String should have at most " + std::to_string(Spec.max_length.value) +
                       plural(Spec.max_length.value, " character", " characters"),
@@ -643,12 +643,12 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
         }
     } else if constexpr (is_sized) {
         const char* field_type = JsonMap<U> ? "Dictionary" : "List";
-        const auto n = static_cast<long>(value.size());
+        const auto n = value.size();
         if (Spec.min_length.has && n < Spec.min_length.value) {
             json_type ctx = json_type::object();
             ctx["field_type"] = json_type(field_type);
-            ctx["min_length"] = json_type(Spec.min_length.value);
-            ctx["actual_length"] = json_type(static_cast<long long>(value.size()));
+            ctx["min_length"] = json_type(static_cast<std::uint64_t>(Spec.min_length.value));
+            ctx["actual_length"] = json_type(static_cast<std::uint64_t>(value.size()));
             raise("too_short",
                   std::string(field_type) + " should have at least " +
                       std::to_string(Spec.min_length.value) +
@@ -660,8 +660,8 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
         if (Spec.max_length.has && n > Spec.max_length.value) {
             json_type ctx = json_type::object();
             ctx["field_type"] = json_type(field_type);
-            ctx["max_length"] = json_type(Spec.max_length.value);
-            ctx["actual_length"] = json_type(static_cast<long long>(value.size()));
+            ctx["max_length"] = json_type(static_cast<std::uint64_t>(Spec.max_length.value));
+            ctx["actual_length"] = json_type(static_cast<std::uint64_t>(value.size()));
             raise("too_long",
                   std::string(field_type) + " should have at most " +
                       std::to_string(Spec.max_length.value) +
