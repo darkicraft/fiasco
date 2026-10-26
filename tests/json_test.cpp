@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <optional>
 #include <string>
@@ -337,6 +338,56 @@ TEST_CASE("json_type parse and dump", "[json]") {
 
 TEST_CASE("json_type parse invalid JSON throws", "[json]") {
     REQUIRE_THROWS_AS(json_type::parse("{invalid}"), json_type::exception);
+}
+
+TEST_CASE("json_type parse rejects trailing data", "[json]") {
+    try {
+        static_cast<void>(json_type::parse(R"({"a":1} trailing)"));
+        FAIL("expected parse failure");
+    } catch (const json_type::parse_exception& e) {
+        REQUIRE(e.position() > 0);
+    }
+}
+
+TEST_CASE("json_type parse keeps the last duplicate key", "[json]") {
+    auto j = json_type::parse(R"({"a":1,"a":2})");
+
+    REQUIRE(j.size() == 1);
+    REQUIRE(j.object_keys() == std::vector<std::string>{"a"});
+    REQUIRE(j["a"].get<int>() == 2);
+}
+
+TEST_CASE("json_type parse rejects malformed or overflowing numbers", "[json]") {
+    REQUIRE_THROWS_AS(json_type::parse("01"), json_type::exception);
+    REQUIRE_THROWS_AS(json_type::parse("1e999"), json_type::exception);
+}
+
+TEST_CASE("json_type numeric boundaries round-trip", "[json]") {
+    const auto int_min = json_type::parse("-9223372036854775808");
+    const auto int_max = json_type::parse("9223372036854775807");
+    const auto uint_max = json_type::parse("18446744073709551615");
+
+    REQUIRE(int_min.get<std::int64_t>() == std::numeric_limits<std::int64_t>::min());
+    REQUIRE(int_max.get<std::int64_t>() == std::numeric_limits<std::int64_t>::max());
+    REQUIRE(uint_max.get<std::uint64_t>() == std::numeric_limits<std::uint64_t>::max());
+}
+
+TEST_CASE("json_type dump and parse round-trip escaped strings", "[json]") {
+    json_type original{{"quote", json_type(R"(a"b)")},
+                       {"slash", json_type(R"(a\b)")},
+                       {"control", json_type("line\n\ttab")},
+                       {"unicode", json_type("caf\u00e9")}};
+
+    const auto round_trip = json_type::parse(original.dump());
+    REQUIRE(round_trip == original);
+}
+
+TEST_CASE("json_type const access returns null for missing elements", "[json]") {
+    const json_type object{{"present", json_type(1)}};
+    REQUIRE(object["missing"].is_null());
+
+    const json_type array = json_type::array({json_type(1)});
+    REQUIRE(array[99].is_null());
 }
 
 TEST_CASE("json_type dump compact", "[json]") {
