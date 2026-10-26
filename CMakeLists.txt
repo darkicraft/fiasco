@@ -36,11 +36,13 @@ endif()
 include(FetchContent)
 
 # -- nlohmann/json ----------------------------------------
+# Pin a post-v3.12.0 commit: v3.12.0 uses std::is_trivial, which is deprecated
+# in C++26. Upstream now uses std::is_trivially_copyable and
+# std::is_trivially_default_constructible when compiling as C++26.
 FetchContent_Declare(
     json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG        v3.12.0
-    GIT_SHALLOW    TRUE
+    URL https://github.com/nlohmann/json/archive/2a56afc714d485870ae41cb1ac4fb0556f86726b.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
 )
 
 # Treat nlohmann/json headers as system headers so warnings originating in the
