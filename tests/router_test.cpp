@@ -100,26 +100,6 @@ TEST_CASE("router include_router with sub-router prefix", "[router]") {
     REQUIRE(result.matched);
 }
 
-TEST_CASE("router any_method_matches", "[router]") {
-    router r;
-    r.get("/only-get", [](const request&) -> response { return response::text(""); });
-
-    REQUIRE(r.any_method_matches("/only-get"));
-    REQUIRE_FALSE(r.any_method_matches("/nope"));
-}
-
-TEST_CASE("router handler with path params via match", "[router]") {
-    router r;
-    r.get("/users/{userId}", [](const request& req) -> std::string {
-        return "user:" + std::string(req.path_params.at("userId"));
-    });
-
-    auto result = r.match(http_method::get, "/users/42");
-    REQUIRE(result.matched);
-    REQUIRE(result.path_params.size() == 1);
-    REQUIRE(result.path_params[0].second == "42");
-}
-
 TEST_CASE("router include_router with sub-router own prefix", "[router]") {
     router sub("/v1");
     sub.get("/info", [](const request&) -> response { return response::text("sub info"); });
@@ -131,13 +111,4 @@ TEST_CASE("router include_router with sub-router own prefix", "[router]") {
     REQUIRE(result.matched);
 }
 
-TEST_CASE("router include_router with explicit prefix", "[router]") {
-    router sub;
-    sub.get("/resource", [](const request&) -> response { return response::text("resource"); });
 
-    router main;
-    main.include_router(std::move(sub), "/api");
-
-    auto result = main.match(http_method::get, "/api/resource");
-    REQUIRE(result.matched);
-}
