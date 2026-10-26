@@ -45,20 +45,25 @@ cmake --install build
 
 | Feature | Status |
 |---------|--------|
-| HTTP/1.1 (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS) | ✅ |
-| Path parameters bound by name with type conversion | ✅ |
-| Query parameters bound by name with type conversion | ✅ |
+| HTTP/1.1 (GET, POST, PUT, PATCH, DELETE) | ✅ |
+| Path parameters bound **by name** with type conversion | ✅ |
+| Query parameters bound **by name** with type conversion | ✅ |
 | JSON request/response models (reflection, no macros) | ✅ |
-| Multiple body parameters, embedded by name | ✅ |
-| FastAPI-compatible error responses (`{"detail": ...}`, 422 validation) | ✅ |
+| Multiple body parameters, auto-embedded by name | ✅ |
+| Nested models, `vector`/`map`/`pair`/`tuple`/`optional` fields | ✅ |
+| Exact Pydantic required-vs-nullable rules | ✅ |
+| `[[= field{...}]]` constraints (`gt`/`ge`/`lt`/`le`/`multiple_of`, `min_length`/`max_length`, `alias`) | ✅ |
+| FastAPI-compatible `422` payloads (`{"detail": ...}`, `type`/`loc`/`msg`/`input`/`ctx`) | ✅ |
 | Type-erased JSON wrapper | ✅ |
-| std::optional, vector, map, tuple serialization | ✅ |
+| Generic arithmetic parsing, including fixed-width `std::int*_t` / `std::uint*_t` | ✅ |
+| Declarative per-server configuration (`server_config`) | ✅ |
+| Per-server logging with configurable sinks | ✅ |
 | Sub-router mounting with path prefixes | ✅ |
 | Multi-threaded Asio-based async I/O | ✅ |
-| Keep-alive connections | ✅ |
-| SIGINT/SIGTERM graceful shutdown | ✅ |
+| Keep-alive, `Connection: close`, and malformed-request handling | ✅ |
+| `SIGINT`/`SIGTERM` graceful shutdown | ✅ |
 | C++20 modules (experimental, opt-in) | ✅ |
-| Better error handling (custom exception handlers) | 🚧 Planned |
+| Explicit parameter sources (`[[= query{}]]`, `[[= path{}]]`, `[[= body{}]]`, …) | 🚧 Planned |
 | Automatic API docs generation (OpenAPI / Swagger) | 🚧 Planned |
 | Static file serving | 🚧 Planned |
 | HTTPS / TLS | 🚧 Planned |
@@ -73,21 +78,36 @@ int main() {
     fiasco::server app;
 
     app.get("/hello", []() {
-        return "Hello, World!";
+        return "Hello, World!";                 // text/plain
     });
 
     app.get("/json", []() {
-        return fiasco::json{
-            {"message", "Hello, World!"}
-        };
+        return fiasco::json{{"message", "Hello, World!"}};  // application/json
     });
+
+    app.run();
 }
+```
+
+## How requests are bound
+
+Handler arguments are bound **by name** using C++26 reflection, so the order of
+the parameters does not matter. A scalar parameter is resolved as a **path**
+parameter if the route captured its name, otherwise as a **query** parameter. A
+non-scalar JSON parameter is the **request body**.
+
+```cpp
+// POST /users/{user_id}?notify=true   body: {"name": "Ada"}
+app.post("/users/{user_id}",
+         [](bool notify, int user_id, CreateUser body) {
+             // user_id <- path, notify <- query, body <- JSON body
+             return body;
+         });
 ```
 
 ## Path Parameters
 
-Path parameters are matched to handler arguments **by name** (via C++26
-reflection), so argument order doesn't matter.
+Bound by name; argument order doesn't matter.
 
 ```cpp
 app.post("/users/{user_id}/deposit/{amount}", [](double amount, int user_id) {
@@ -96,12 +116,16 @@ app.post("/users/{user_id}/deposit/{amount}", [](double amount, int user_id) {
 });
 ```
 
-Supported types: `int`, `long`, `long long`, `float`, `double`, `bool`, `std::string`.
+Supported types: any integral or floating-point type, plus `bool` and
+`std::string`. That includes the fixed-width `std::int*_t` / `std::uint*_t`
+types. Platform-width types such as `long` use their native width. A value that
+cannot be converted produces a `422` `*_parsing` error
+(`loc: ["path", "<name>"]`). Empty path parameter segments are rejected.
 
 ## Query Parameters
 
-Scalar arguments whose name is not a path parameter are read from the query
-string, also by name.
+Scalar arguments whose name is **not** captured by the path are read from the
+query string, also by name.
 
 ```cpp
 app.get("/search", [](std::string q, int page) {
@@ -110,41 +134,39 @@ app.get("/search", [](std::string q, int page) {
 });
 ```
 
-Missing or wrongly-typed parameters produce FastAPI's `422` response, e.g.
+Query names and values are percent-decoded, `+` is treated as a space, and the
+first value wins for duplicate keys. A missing required parameter is a `422`
+`missing` error;
 `{"detail":[{"type":"missing","loc":["query","q"],"msg":"Field required",...}]}`.
 
-## Request & Response Models
+## Request Bodies
 
-Just define a struct and return it — fiasco (de)serialises it member-wise using
-C++26 reflection (`std::meta`). No macros, no boilerplate.
+Any aggregate `struct` is a model automatically. fiasco (de)serialises it
+member-wise via reflection — no macros, no boilerplate.
 
 ```cpp
-struct UserResponse {
+struct CreateUser {
     std::string username;
-    int age;
+    int         age;
 };
 
-app.get("/users/{id}", [](int id) {
-    return UserResponse{"John Doe", 21};
+app.post("/users", [](CreateUser body) {
+    return CreateUser{body.username, body.age + 1};   // a model response
 });
 ```
 
-Request body models work the same way — mixed freely with path parameters.
+When a handler takes **more than one** body model, each is embedded under its
+parameter name (exactly like FastAPI):
 
 ```cpp
-struct CreateUserRequest {
-    std::string username;
-    int age;
-};
+struct Payment { std::string card; int cents; };
 
-app.post("/users/{department}", [](int department_id, CreateUserRequest req) {
-    // department_id from path, req from JSON body
-    return fiasco::json{{"created", true}};
+app.post("/orders/{order_id}", [](std::string order_id, CreateUser buyer, Payment pay) {
+    // order_id <- path
+    // body: {"buyer": {...}, "pay": {...}}
+    return fiasco::json{{"order_id", order_id}, {"paid", pay.cents}};
 });
 ```
-
-When a handler takes more than one body model, their values are read from a
-single JSON object, embedded under each parameter's name.
 
 ### Supported field types
 
@@ -183,6 +205,7 @@ Attach Pydantic-style constraints with an annotation:
 
 ```cpp
 using fiasco::field;
+
 struct Item {
     [[= field{.gt = 0, .le = 100}]]   int percent;
     [[= field{.multiple_of = 3}]]     int boxes;
@@ -193,42 +216,57 @@ struct Item {
 ```
 
 Supported now: `gt`, `ge`, `lt`, `le`, `multiple_of`, `min_length`, `max_length`,
-`alias`. Violations produce the same 422 `{"detail": [...]}` payloads as
-FastAPI/Pydantic (including `ctx`). Misuse (e.g. `.gt` on a string, a fractional
-bound on an `int`, or two `field` annotations on one member) is a **compile-time
-error**.
+`alias`. `alias` changes the JSON key used for both reading and writing.
+
+Misuse (e.g. `.gt` on a string, a fractional bound on an `int`, or two `field`
+annotations on one member) is a **compile-time error** with a clear message.
+
+## Validation Errors
+
+Every failure produces FastAPI's `422` envelope. Errors are **collected**, not
+failed fast, and nested locations are reported with their full path:
+
+```json
+{
+  "detail": [
+    {"type": "greater_than", "loc": ["body", "age"],
+     "msg": "Input should be greater than 0", "input": -5, "ctx": {"gt": 0}},
+    {"type": "string_too_short", "loc": ["body", "home", "street"],
+     "msg": "String should have at least 2 characters", "input": "", "ctx": {"min_length": 2}},
+    {"type": "missing", "loc": ["body", "home", "zip-code"],
+     "msg": "Field required", "input": {"street": "", "number": 1}}
+  ]
+}
+```
+
+Notes:
+
+- `loc` starts with `"body"`, `"path"`, or `"query"` (as in FastAPI).
+- `input` is the **raw** value as received (the string from the URL for path/query,
+  the JSON value for a body).
+- `ctx` carries the constraint parameters and is omitted when Pydantic has none.
 
 ## Response Types
 
-Every handler returns a `fiasco::response`. If you return a plain value (string, int, or a model struct), it's wrapped automatically. For full control, use the factory methods:
+Every handler returns a `fiasco::response`. Returning a plain value (string, int,
+or a model struct) wraps it automatically. For full control, use the factories:
 
 ```cpp
-app.get("/text", []() {
-    return fiasco::response::text("plain text");
-});
-
-app.get("/html", []() {
-    return fiasco::response::html("<h1>Hello</h1>");
-});
-
-app.get("/json", []() {
-    return fiasco::response::json(R"({"key":"value"})");
-});
-
-app.get("/redirect", []() {
-    return fiasco::response::redirect("/new-location");
-});
-
-app.get("/error", []() {
-    return fiasco::response::error("something went wrong", 400);
-});
-
-app.get("/empty", []() {
-    return fiasco::response::empty(204);
-});
+app.get("/text", []() { return fiasco::response::text("plain text"); });
+app.get("/html", []() { return fiasco::response::html("<h1>Hello</h1>"); });
+app.get("/json", []() { return fiasco::response::json(R"({"key":"value"})"); });
+app.get("/redirect", []() { return fiasco::response::redirect("/new-location"); });
+app.get("/error", []() { return fiasco::response::error("something went wrong", 400); });
+app.get("/empty", []() { return fiasco::response::empty(204); });
 ```
 
-Status codes and headers can be set directly on the response struct after construction.
+- `std::string` / `const char*` → `text/plain`
+- a numeric primitive → its text form
+- a model struct or `fiasco::json` → `application/json`
+- a `void` handler → `204 No Content`
+
+Status codes and headers can be set directly on the response struct after
+construction.
 
 ## Sub-routers
 
@@ -239,28 +277,120 @@ fiasco::router api("/v1");
 api.get("/status", []() { return "ok"; });
 
 fiasco::server app;
-app.include_router(std::move(api));
-// GET /v1/status now works
+app.include_router(std::move(api), "/api");
+// GET /api/v1/status now works
 ```
+
+`app.print_routes()` prints every registered route (useful at start-up).
+
+## Configuration
+
+Server construction is declarative. `server_config` is entirely optional; with
+no config, Fiasco uses `0.0.0.0:8080`, automatic worker count, `info` level,
+human logging, access logging enabled, and stdout as the sink.
+
+```cpp
+fiasco::server app{fiasco::server_config{
+    .network = {
+        .host = "0.0.0.0",
+        .port = 8080,
+        .workers = 4,  // 0 = hardware concurrency, minimum 2
+    },
+    .logging = {
+        .enabled = true,
+        .access = true,
+        .level = fiasco::log_level::info,
+        .format = fiasco::log_format::human,
+        .colors = true,
+        // .sink omitted => stdout
+    },
+}};
+
+app.run();
+```
+
+`server_config` is move-only because the optional sink is move-only. A temporary
+config can be passed directly; a named config must be moved:
+
+```cpp
+fiasco::server_config config{/* ... */};
+fiasco::server app{std::move(config)};
+```
+
+Lifecycle helpers:
+
+```cpp
+auto actual_port = app.port();  // useful when the config uses port 0
+app.wait_until_started();       // when run() is executing on another thread
+app.flush_logs();
+app.stop();
+```
+
+## Logging
+
+Each server owns its own log registry, queue, and consumer thread. Named loggers
+are created on demand and share that server's thread:
+
+```cpp
+fiasco::server app;
+auto& log = app.get_logger("app");
+log.info("starting up");
+log.warn("careful", {{"key", "value"}});
+```
+
+Levels: `debug`, `info`, `warn`, `error`. Access logging (`fiasco.access`) is on
+by default.
+
+The logging config controls the level, formatter, colors, access logs, and the
+sink. A sink is a move-only callable:
+
+```cpp
+using log_sink = std::move_only_function<void(std::string_view)>;
+```
+
+Use the provided stream helper or provide your own callback:
+
+```cpp
+auto sink = fiasco::make_ostream_log_sink(std::cerr);
+config.logging.sink = std::move(sink);
+```
+
+```cpp
+config.logging.sink = [&](std::string_view line) {
+    external_logger.info("{}", line);
+};
+```
+
+Omitting the sink uses stdout. Set `.logging.enabled = false` to disable all
+logging, or `.logging.access = false` to keep application logs but suppress
+per-request access lines.
+
+The example executable also accepts `--no-log`, `--log`, `--no-access-log`,
+`--access-log`, and `FIASCO_LOG=off`.
 
 ## Threading
 
-By default, Fiasco spawns `std::thread::hardware_concurrency()` threads (minimum 2). Pass the desired count to the constructor:
+Workers are configured through `server_config`:
 
 ```cpp
-fiasco::server app(4);  // 4 worker threads
-app.run(8080);
+fiasco::server app{fiasco::server_config{
+    .network = {.workers = 4},
+}};
+app.run();
 ```
+
+`workers = 0` uses `std::thread::hardware_concurrency()`, with a minimum of 2.
 
 ## Signal Handling
 
-The server catches `SIGINT` and `SIGTERM` internally via Asio's `signal_set`. Pressing Ctrl+C shuts down all worker threads gracefully and returns from `run()`.
+The server catches `SIGINT` and `SIGTERM` internally via Asio's `signal_set`.
+Pressing Ctrl+C shuts down all worker threads gracefully and returns from `run()`.
 
 ## Dependencies
 
 All fetched automatically at configure time:
 
-- [nlohmann/json](https://github.com/nlohmann/json) v3.12 — JSON core
+- [nlohmann/json](https://github.com/nlohmann/json) post-v3.12.0 commit — JSON core
 - [llhttp](https://github.com/nodejs/llhttp) v9.4 — HTTP/1.1 parser
 - [Asio](https://github.com/chriskohlhoff/asio) 1.38.2 — async I/O
 - [Catch2](https://github.com/catchorg/Catch2) v3.16 (tests only)
