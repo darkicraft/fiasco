@@ -62,6 +62,11 @@ add_executable(fiasco_test_field_annotation field_annotation_test.cpp)
 target_link_libraries(fiasco_test_field_annotation PRIVATE Catch2::Catch2WithMain fiasco_types)
 catch_discover_tests(fiasco_test_field_annotation)
 
+# ---- server_test ----
+add_executable(fiasco_test_server server_test.cpp)
+target_link_libraries(fiasco_test_server PRIVATE Catch2::Catch2WithMain fiasco)
+catch_discover_tests(fiasco_test_server)
+
 # ---- integration_test ----
 add_executable(fiasco_test_integration integration_test.cpp)
 target_link_libraries(fiasco_test_integration PRIVATE Catch2::Catch2WithMain fiasco)
