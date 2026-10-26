@@ -2,13 +2,38 @@
 
 #include <asio.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <memory>
+#include <string>
+#include <string_view>
 
 #include "fiasco/internal/http/parser.hpp"
 
 namespace fiasco::detail {
 
 using asio::ip::tcp;
+
+namespace {
+
+std::string ascii_lower(std::string_view value) {
+    std::string result(value);
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return result;
+}
+
+bool request_wants_close(const request& req) {
+    return ascii_lower(req.header("Connection")) == "close";
+}
+
+bool response_wants_close(const response& res) {
+    const auto it = res.headers.find("Connection");
+    return it != res.headers.end() && ascii_lower(it->second) == "close";
+}
+
+}  // namespace
 
 struct session : std::enable_shared_from_this<session> {
     asio::strand<asio::io_context::executor_type> strand;
@@ -32,10 +57,10 @@ struct session : std::enable_shared_from_this<session> {
                 if (ec) {
                     return;
                 }
-                self->parser.feed(self->buf.data(), n);
+                const bool fed = self->parser.feed(self->buf.data(), n);
                 if (self->parser.is_complete()) {
                     self->respond();
-                } else {
+                } else if (fed) {
                     self->read();
                 }
             }));
@@ -53,13 +78,18 @@ struct session : std::enable_shared_from_this<session> {
 
         response res = handler(req);
 
+        const bool close = request_wants_close(req) || response_wants_close(res);
+        if (close) {
+            res.headers["Connection"] = "close";
+        }
+
         auto self = shared_from_this();
         auto raw = std::make_shared<std::string>(res.serialize());
         asio::async_write(
             socket,
             asio::buffer(*raw),
-            asio::bind_executor(strand, [self, raw](asio::error_code ec, std::size_t) {
-                if (!ec) {
+            asio::bind_executor(strand, [self, raw, close](asio::error_code ec, std::size_t) {
+                if (!ec && !close) {
                     self->parser.reset();  // reset parser state for next request
                     self->read();          // keep reading on same connection
                 }
