@@ -62,7 +62,12 @@ match_result route_table::match(http_method method, std::string_view path) {
 
         bool ok = true;
         for (size_t i = 0; i < entry.segments.size(); ++i) {
-            if (!entry.is_param_seg[i] && entry.segments[i] != req_segs[i]) {
+            if (entry.is_param_seg[i]) {
+                if (req_segs[i].empty()) {
+                    ok = false;
+                    break;
+                }
+            } else if (entry.segments[i] != req_segs[i]) {
                 ok = false;
                 break;
             }
@@ -102,7 +107,12 @@ bool route_table::any_method_matches(std::string_view path) const {
             }
             bool ok = true;
             for (size_t i = 0; i < entry.segments.size(); ++i) {
-                if (!entry.is_param_seg[i] && entry.segments[i] != req_segs[i]) {
+                if (entry.is_param_seg[i]) {
+                    if (req_segs[i].empty()) {
+                        ok = false;
+                        break;
+                    }
+                } else if (entry.segments[i] != req_segs[i]) {
                     ok = false;
                     break;
                 }
