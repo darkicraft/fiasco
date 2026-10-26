@@ -137,11 +137,14 @@ struct ExtraInput {
 // -------------------------------------------------------------------
 
 TEST_CASE("integration GET returns 200", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.get("/hello", []() -> std::string { return "world"; });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -151,11 +154,14 @@ TEST_CASE("integration GET returns 200", "[integration]") {
 }
 
 TEST_CASE("integration 404 not found", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.get("/exists", []() -> std::string { return "ok"; });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -165,11 +171,14 @@ TEST_CASE("integration 404 not found", "[integration]") {
 }
 
 TEST_CASE("integration 405 method not allowed", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.get("/resource", []() -> std::string { return "ok"; });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -179,11 +188,14 @@ TEST_CASE("integration 405 method not allowed", "[integration]") {
 }
 
 TEST_CASE("integration invalid JSON body returns 422", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.post("/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -199,11 +211,14 @@ TEST_CASE("integration invalid JSON body returns 422", "[integration]") {
 }
 
 TEST_CASE("integration 500 internal error from handler", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.get("/crash", []() -> std::string { throw std::runtime_error("boom"); });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -212,11 +227,14 @@ TEST_CASE("integration 500 internal error from handler", "[integration]") {
 }
 
 TEST_CASE("integration path parameters", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.get("/users/{uid}", [](int uid) -> std::string { return "user:" + std::to_string(uid); });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -226,13 +244,16 @@ TEST_CASE("integration path parameters", "[integration]") {
 }
 
 TEST_CASE("integration JSON body deserialization", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.post("/sum", [](const fiasco::detail::SumInput& input) -> std::string {
         return std::to_string(input.a + input.b);
     });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -248,11 +269,14 @@ TEST_CASE("integration JSON body deserialization", "[integration]") {
 }
 
 TEST_CASE("integration POST empty body with JSON model returns 422", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.post("/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -268,11 +292,14 @@ TEST_CASE("integration POST empty body with JSON model returns 422", "[integrati
 }
 
 TEST_CASE("integration POST missing field returns 422 with the field name", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.post("/sum", [](const fiasco::detail::RequiredInput&) -> std::string { return ""; });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -290,11 +317,14 @@ TEST_CASE("integration POST missing field returns 422 with the field name", "[in
 }
 
 TEST_CASE("integration POST constraint violation returns Pydantic 422 with ctx", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.post("/c", [](const fiasco::detail::ConstrainedInput&) -> std::string { return ""; });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -312,11 +342,14 @@ TEST_CASE("integration POST constraint violation returns Pydantic 422 with ctx",
 }
 
 TEST_CASE("integration query parameter", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.get("/greet", [](std::string name) -> std::string { return "hi " + name; });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -326,11 +359,14 @@ TEST_CASE("integration query parameter", "[integration]") {
 }
 
 TEST_CASE("integration missing query parameter returns 422", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.get("/greet", [](std::string name) -> std::string { return "hi " + name; });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -340,14 +376,17 @@ TEST_CASE("integration missing query parameter returns 422", "[integration]") {
 }
 
 TEST_CASE("integration path params bind by name, not position", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     // parameter order is the reverse of the path placeholders
     app.get("/{a}/{b}", [](int b, int a) -> std::string {
         return "a=" + std::to_string(a) + " b=" + std::to_string(b);
     });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -357,13 +396,16 @@ TEST_CASE("integration path params bind by name, not position", "[integration]")
 }
 
 TEST_CASE("integration multiple body params are embedded by name", "[integration]") {
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.post("/embed", [](fiasco::detail::SumInput s, fiasco::detail::ExtraInput o) -> std::string {
         return std::to_string(s.a + s.b + o.c);
     });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 
@@ -379,13 +421,16 @@ TEST_CASE("integration multiple body params are embedded by name", "[integration
 TEST_CASE("integration path scalar + body model is not embedded", "[integration]") {
     // A scalar (std::string) path param must not count as a body param, so the
     // single model still receives the whole body rather than body[label].
-    fiasco::server app;
+    auto port = find_free_port();
+    fiasco::server app{fiasco::server_config{
+        .network = {.host = "127.0.0.1", .port = port},
+        .logging = {.enabled = false},
+    }};
     app.post("/sum/{label}", [](std::string label, fiasco::detail::SumInput input) -> std::string {
         return label + ":" + std::to_string(input.a + input.b);
     });
 
-    auto port = find_free_port();
-    std::thread t([&] { app.run(port, "127.0.0.1"); });
+    std::thread t([&] { app.run(); });
     wait_for_server(port);
     ServerGuard guard{app, t};
 

@@ -28,5 +28,5 @@ int main() {
         return {req.message, name};
     });
 
-    app.run(8080);
+    app.run();
 }

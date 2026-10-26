@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -14,37 +15,49 @@
 #include "fiasco/internal/logging.hpp"
 #include "fiasco/internal/router.hpp"
 
+namespace fiasco {
+
+using log_level = detail::log_level;
+using log_format = detail::log_format_type;
+
+struct network_config {
+    std::string host = "0.0.0.0";
+    std::uint16_t port = 8080;
+    unsigned int workers = 0;  // 0 = hardware concurrency, at least 2
+};
+
+struct logging_config {
+    bool enabled = true;
+    bool access = true;
+    log_level level = log_level::info;
+    log_format format = log_format::human;
+    bool colors = true;
+    log_sink sink;  // empty => std::cout
+};
+
+struct server_config {
+    network_config network{};
+    logging_config logging{};
+};
+
+}  // namespace fiasco
+
 namespace fiasco::detail {
 
 class server {
   public:
     void print_routes() const { m_router.print_routes(); }
 
-    explicit server(unsigned int num_threads = 0)
-        : m_threads(num_threads) {}
+    explicit server(fiasco::server_config config = {})
+        : m_config(std::move(config)),
+          m_logging(m_config.logging.enabled,
+                    m_config.logging.access,
+                    m_config.logging.level,
+                    m_config.logging.format,
+                    m_config.logging.colors,
+                    std::move(m_config.logging.sink)) {}
 
-    server& log_level(const std::string& lvl) {
-        log_registry::instance().set_level(log_level_from_string(lvl));
-        return *this;
-    }
-
-    server& log_format(const std::string& fmt) {
-        auto type = (fmt == "json") ? log_format_type::json : log_format_type::human;
-        log_registry::instance().set_format(type);
-        return *this;
-    }
-
-    server& enable_logging(bool en) {
-        log_registry::instance().enable_logging(en);
-        return *this;
-    }
-
-    server& enable_access_log(bool en) {
-        log_registry::instance().enable_access_log(en);
-        return *this;
-    }
-
-    logger& get_logger(const std::string& name) { return log_registry::instance().get(name); }
+    logger& get_logger(const std::string& name) { return m_logging.get(name); }
 
     template <typename F>
     void get(const std::string& path, F&& f) {
@@ -75,11 +88,15 @@ class server {
         m_router.include_router(std::move(sub), prefix);
     }
 
-    void run(uint16_t port = 8080, const std::string& host = "0.0.0.0") {
-        unsigned int actual_threads =
-            m_threads == 0 ? std::max(std::thread::hardware_concurrency(), 2u) : m_threads;
+    void run() {
+        const auto& network = m_config.network;
+        const uint16_t port = network.port;
+        const std::string& host = network.host;
+        const unsigned int workers = network.workers;
+        const unsigned int actual_threads =
+            workers == 0 ? std::max(std::thread::hardware_concurrency(), 2u) : workers;
         {
-            auto& log = log_registry::instance().get("fiasco");
+            auto& log = m_logging.get("fiasco");
             log.info("starting server with " + std::to_string(actual_threads) + " threads");
             if (host == "0.0.0.0" || host == "::") {
                 log.info("listening on port " + std::to_string(port) +
@@ -93,7 +110,7 @@ class server {
         {
             std::lock_guard<std::mutex> lock(m_server_mutex);
             m_server = std::make_unique<tcp_server>(
-                port, host, [this](request req) { return dispatch(std::move(req)); }, m_threads);
+                port, host, [this](request req) { return dispatch(std::move(req)); }, workers);
             running = m_server.get();
         }
         running->run();
@@ -101,8 +118,10 @@ class server {
             std::lock_guard<std::mutex> lock(m_server_mutex);
             m_server.reset();
         }
-        log_registry::instance().get("fiasco").info("server stopped");
+        m_logging.get("fiasco").info("server stopped");
     }
+
+    void flush_logs() { m_logging.flush(); }
 
     void stop() {
         std::lock_guard<std::mutex> lock(m_server_mutex);
@@ -112,28 +131,28 @@ class server {
     }
 
   private:
+    fiasco::server_config m_config;
+    log_registry m_logging;
     router m_router;
-    unsigned int m_threads = 0;
     std::mutex m_server_mutex;
     std::unique_ptr<tcp_server> m_server;
 
     void log_access(access_log alog,
                     const response& res,
                     std::chrono::steady_clock::time_point start) {
-        auto& reg = log_registry::instance();
-        if (!reg.access_log_enabled() || !reg.logging_enabled()) {
+        if (!m_logging.access_log_enabled() || !m_logging.logging_enabled()) {
             return;
         }
         auto end = std::chrono::steady_clock::now();
         alog.status_code = res.status_code;
         alog.duration_us =
             std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        reg.get("fiasco.access").info(alog.build_message());
+        m_logging.get("fiasco.access").info(alog.build_message());
     }
 
     response dispatch(request req) {
-        const auto& reg = log_registry::instance();
-        const bool access_logging = reg.access_log_enabled() && reg.logging_enabled();
+        const bool access_logging =
+            m_logging.access_log_enabled() && m_logging.logging_enabled();
         auto start = access_logging ? std::chrono::steady_clock::now()
                                     : std::chrono::steady_clock::time_point{};
 

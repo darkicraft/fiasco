@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 // --- Request Body ------------------------------------------------------------
@@ -160,24 +161,28 @@ std::vector<int> factorize(int n) {
 }
 
 int main(int argc, char** argv) {
-    fiasco::server app;
+    fiasco::server_config config{
+        .network = {.host = "0.0.0.0", .port = 8080},
+    };
 
     if (const char* env = std::getenv("FIASCO_LOG"); env && std::string_view{env} == "off") {
-        app.enable_logging(false);
+        config.logging.enabled = false;
     }
 
     for (int i = 1; i < argc; ++i) {
         std::string_view arg = argv[i];
         if (arg == "--no-log") {
-            app.enable_logging(false);
+            config.logging.enabled = false;
         } else if (arg == "--log") {
-            app.enable_logging(true);
+            config.logging.enabled = true;
         } else if (arg == "--no-access-log") {
-            app.enable_access_log(false);
+            config.logging.access = false;
         } else if (arg == "--access-log") {
-            app.enable_access_log(true);
+            config.logging.access = true;
         }
     }
+
+    fiasco::server app{std::move(config)};
 
     app.post("/{seed}/{multiplier}", [](int seed, int multiplier, request_body body) -> response {
         double scale = body.filters.matrix_scale.value_or(1.0);
@@ -376,5 +381,5 @@ int main(int argc, char** argv) {
                 cf};
     });
 
-    app.run(8080);
+    app.run();
 }
