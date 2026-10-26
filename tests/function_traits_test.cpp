@@ -1,6 +1,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -23,8 +25,26 @@ TEST_CASE("convert_path_param int", "[function_traits]") {
 }
 
 TEST_CASE("convert_path_param long", "[function_traits]") {
-    auto v = convert_path_param<long>("2147483648");
-    REQUIRE(v == 2147483648L);
+    const auto max = std::numeric_limits<long>::max();
+    auto v = convert_path_param<long>(std::to_string(max));
+    REQUIRE(v == max);
+}
+
+TEST_CASE("convert_path_param long long", "[function_traits]") {
+    auto v = convert_path_param<long long>("2147483648");
+    REQUIRE(v == 2147483648LL);
+}
+
+TEST_CASE("convert_path_param fixed-width integers", "[function_traits]") {
+    REQUIRE(static_cast<int>(convert_path_param<std::int8_t>("-12")) == -12);
+    REQUIRE(static_cast<unsigned int>(convert_path_param<std::uint8_t>("200")) == 200);
+    REQUIRE(convert_path_param<std::int16_t>("-1234") == -1234);
+    REQUIRE(convert_path_param<std::uint16_t>("65000") == 65000);
+    REQUIRE(convert_path_param<std::int32_t>("-123456") == -123456);
+    REQUIRE(convert_path_param<std::uint32_t>("4294967295") == 4294967295u);
+    REQUIRE(convert_path_param<std::int64_t>("2147483648") == 2147483648LL);
+    REQUIRE(convert_path_param<std::uint64_t>("18446744073709551615") ==
+            18446744073709551615ULL);
 }
 
 TEST_CASE("convert_path_param float", "[function_traits]") {

@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <charconv>
+#include <concepts>
 #include <functional>
 #include <stdexcept>
 #include <string>
@@ -27,34 +28,6 @@ template <Primitive T>
 [[nodiscard]] T convert_path_param(std::string_view s) {
     if constexpr (std::same_as<T, std::string>) {
         return std::string(s);
-    } else if constexpr (std::same_as<T, int> || std::same_as<T, long>) {
-        T val;
-        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
-        if (ec != std::errc()) {
-            throw std::runtime_error("bad path param");
-        }
-        return val;
-    } else if constexpr (std::same_as<T, long long>) {
-        long long val;
-        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
-        if (ec != std::errc()) {
-            throw std::runtime_error("bad path param");
-        }
-        return val;
-    } else if constexpr (std::same_as<T, float>) {
-        float val;
-        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
-        if (ec != std::errc()) {
-            throw std::runtime_error("bad path param");
-        }
-        return val;
-    } else if constexpr (std::same_as<T, double>) {
-        double val;
-        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
-        if (ec != std::errc()) {
-            throw std::runtime_error("bad path param");
-        }
-        return val;
     } else if constexpr (std::same_as<T, bool>) {
         std::string lowered(s);
         for (char& c : lowered) {
@@ -69,6 +42,13 @@ template <Primitive T>
             return false;
         }
         throw std::runtime_error("bad path param");
+    } else if constexpr (std::integral<T> || std::floating_point<T>) {
+        T val{};
+        auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), val);
+        if (ec != std::errc()) {
+            throw std::runtime_error("bad path param");
+        }
+        return val;
     }
 
     return {};  // unreachable
