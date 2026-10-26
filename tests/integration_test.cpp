@@ -90,7 +90,7 @@ TEST_CASE("integration invalid JSON body returns 422", "[integration]") {
                                           "POST /sum HTTP/1.1\r\n"
                                           "Host: localhost\r\n"
                                           "Content-Type: application/json\r\n"
-                                          "Content-Length: 13\r\n"
+                                          "Content-Length: 14\r\n"
                                           "\r\n"
                                           "{invalid json}");
     REQUIRE(fiasco_test::extract_status(resp) == 422);

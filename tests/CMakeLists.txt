@@ -67,6 +67,11 @@ add_executable(fiasco_test_server server_test.cpp)
 target_link_libraries(fiasco_test_server PRIVATE Catch2::Catch2WithMain fiasco)
 catch_discover_tests(fiasco_test_server)
 
+# ---- http_boundary_test ----
+add_executable(fiasco_test_http_boundary http_boundary_test.cpp)
+target_link_libraries(fiasco_test_http_boundary PRIVATE Catch2::Catch2WithMain fiasco)
+catch_discover_tests(fiasco_test_http_boundary)
+
 # ---- integration_test ----
 add_executable(fiasco_test_integration integration_test.cpp)
 target_link_libraries(fiasco_test_integration PRIVATE Catch2::Catch2WithMain fiasco)
