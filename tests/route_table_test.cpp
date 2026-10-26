@@ -97,6 +97,35 @@ TEST_CASE("route_table param route static segment mismatch", "[route_table]") {
     REQUIRE_FALSE(result.matched);
 }
 
+TEST_CASE("route_table param route rejects an empty segment", "[route_table]") {
+    route_table table;
+    table.add(http_method::get, "/users/{id}", make_dummy_response(200, ""));
+
+    REQUIRE_FALSE(table.match(http_method::get, "/users/").matched);
+    REQUIRE_FALSE(table.any_method_matches("/users/"));
+}
+
+TEST_CASE("route_table param routes use registration order", "[route_table]") {
+    route_table table;
+    table.add(http_method::get, "/users/{id}", make_dummy_response(200, "first"));
+    table.add(http_method::get, "/users/{name}", make_dummy_response(200, "second"));
+
+    auto result = table.match(http_method::get, "/users/42");
+    REQUIRE(result.matched);
+    REQUIRE(result.path_params.size() == 1);
+    REQUIRE(result.path_params[0].first == "id");
+    REQUIRE((*result.handler)(request{}).body == "first");
+}
+
+TEST_CASE("route_table trailing slash is a distinct static path", "[route_table]") {
+    route_table table;
+    table.add(http_method::get, "/items", make_dummy_response(200, "without"));
+    table.add(http_method::get, "/items/", make_dummy_response(200, "with"));
+
+    REQUIRE((*table.match(http_method::get, "/items").handler)(request{}).body == "without");
+    REQUIRE((*table.match(http_method::get, "/items/").handler)(request{}).body == "with");
+}
+
 // ============================================================
 // Mixed static and param routes
 // ============================================================

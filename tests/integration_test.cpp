@@ -227,6 +227,24 @@ TEST_CASE("integration query parameter", "[integration]") {
     REQUIRE(fiasco_test::extract_body(resp) == "hi alice\n");
 }
 
+TEST_CASE("integration query parameters are decoded", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/echo", [](std::string name, std::string empty, std::string flag) -> std::string {
+        return name + "|" + empty + "|" + flag;
+    });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(
+        server.port(),
+        "GET /echo?name=hello+world&name=second&empty=&flag HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "hello world||\n");
+}
+
 TEST_CASE("integration missing query parameter returns 422", "[integration]") {
     fiasco_test::test_server server{
         fiasco::server_config{.logging = {.enabled = false}},

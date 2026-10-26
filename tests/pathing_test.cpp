@@ -122,3 +122,54 @@ TEST_CASE("join_prefix empty path", "[pathing]") {
 TEST_CASE("join_prefix both empty", "[pathing]") {
     REQUIRE(join_prefix("", "").empty());
 }
+
+// ============================================================
+// url_decode
+// ============================================================
+
+TEST_CASE("url_decode decodes plus and percent escapes", "[pathing]") {
+    REQUIRE(url_decode("hello+world") == "hello world");
+    REQUIRE(url_decode("a%20b") == "a b");
+    REQUIRE(url_decode("%2F%41%62") == "/Ab");
+}
+
+TEST_CASE("url_decode leaves invalid escapes unchanged", "[pathing]") {
+    REQUIRE(url_decode("100%") == "100%");
+    REQUIRE(url_decode("%2") == "%2");
+    REQUIRE(url_decode("%ZZ") == "%ZZ");
+}
+
+// ============================================================
+// parse_query
+// ============================================================
+
+TEST_CASE("parse_query parses values and flags", "[pathing]") {
+    auto params = parse_query("a=1&flag&empty=&b=two");
+
+    REQUIRE(params.at("a") == "1");
+    REQUIRE(params.at("flag").empty());
+    REQUIRE(params.at("empty").empty());
+    REQUIRE(params.at("b") == "two");
+}
+
+TEST_CASE("parse_query keeps the first duplicate value", "[pathing]") {
+    auto params = parse_query("a=first&a=second");
+
+    REQUIRE(params.size() == 1);
+    REQUIRE(params.at("a") == "first");
+}
+
+TEST_CASE("parse_query decodes names and values", "[pathing]") {
+    auto params = parse_query("na%6De=hello+world&path=%2Ftmp");
+
+    REQUIRE(params.at("name") == "hello world");
+    REQUIRE(params.at("path") == "/tmp");
+}
+
+TEST_CASE("parse_query ignores empty pairs", "[pathing]") {
+    auto params = parse_query("&&a=1&&&b=2&&");
+
+    REQUIRE(params.size() == 2);
+    REQUIRE(params.at("a") == "1");
+    REQUIRE(params.at("b") == "2");
+}
