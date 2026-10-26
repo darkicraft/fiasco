@@ -159,6 +159,16 @@ TEST_CASE("json formatter produces valid JSON", "[logging][formatter]") {
     REQUIRE(out.back() == '\n');
 }
 
+TEST_CASE("json formatter timestamp is UTC with milliseconds", "[logging][formatter]") {
+    json_log_formatter fmt;
+
+    log_record r;
+    r.timestamp = std::chrono::system_clock::from_time_t(0) + std::chrono::milliseconds(123);
+
+    auto out = fmt.format(r);
+    REQUIRE(out.find(R"("timestamp":"1970-01-01T00:00:00.123Z")") != std::string::npos);
+}
+
 // ============================================================
 // log_registry + logger (via registry)
 // ============================================================

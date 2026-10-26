@@ -3,7 +3,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
-#include <ctime>
+#include <exception>
+#include <format>
 #include <iomanip>
 #include <sstream>
 
@@ -36,31 +37,21 @@ constexpr const char* level_color(log_level lvl) {
 }
 
 std::string format_timestamp_human(const std::chrono::system_clock::time_point& tp) {
-    auto tt = std::chrono::system_clock::to_time_t(tp);
-    auto ms =
-        std::chrono::duration_cast<std::chrono::milliseconds>(tp.time_since_epoch()).count() % 1000;
+    auto millis = std::chrono::floor<std::chrono::milliseconds>(tp);
 
-    std::tm tm{};
-    localtime_r(&tt, &tm);
-
-    char buf[32];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
-    std::snprintf(buf + 19, sizeof(buf) - 19, ".%03ld", ms);
-    return buf;
+    try {
+        auto local = std::chrono::zoned_time{std::chrono::current_zone(), millis};
+        return std::format("{:%Y-%m-%d %H:%M:%S}", local);
+    } catch (const std::exception&) {
+        // Some platforms (notably libstdc++ on Windows) may not ship a time zone
+        // database. Fall back to UTC rather than terminating the logger thread.
+        return std::format("{:%Y-%m-%d %H:%M:%S}", millis);
+    }
 }
 
 std::string format_timestamp_json(const std::chrono::system_clock::time_point& tp) {
-    auto tt = std::chrono::system_clock::to_time_t(tp);
-    auto ms =
-        std::chrono::duration_cast<std::chrono::milliseconds>(tp.time_since_epoch()).count() % 1000;
-
-    std::tm tm{};
-    gmtime_r(&tt, &tm);
-
-    char buf[32];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &tm);
-    std::snprintf(buf + 19, sizeof(buf) - 19, ".%03ldZ", ms);
-    return buf;
+    auto millis = std::chrono::floor<std::chrono::milliseconds>(tp);
+    return std::format("{:%Y-%m-%dT%H:%M:%SZ}", millis);
 }
 
 std::string escape_json(const std::string& s) {
