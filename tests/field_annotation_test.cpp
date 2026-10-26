@@ -14,45 +14,45 @@ using namespace fiasco::detail;
 namespace fiasco::detail {
 
 // ---- constraint fixtures ---------------------------------------------------
-struct CIntGt  { [[= field{.gt = 5}]]           int v = 0; };
-struct CIntGe  { [[= field{.ge = 5}]]           int v = 0; };
-struct CIntLt  { [[= field{.lt = 5}]]           int v = 0; };
-struct CIntLe  { [[= field{.le = 5}]]           int v = 0; };
-struct CIntMul { [[= field{.multiple_of = 3}]]  int v = 0; };
-struct CFloatGt { [[= field{.gt = 5}]]          double v = 0.0; };
+struct CIntGt  { int v [[= field{.gt = 5}]] = 0; };
+struct CIntGe  { int v [[= field{.ge = 5}]] = 0; };
+struct CIntLt  { int v [[= field{.lt = 5}]] = 0; };
+struct CIntLe  { int v [[= field{.le = 5}]] = 0; };
+struct CIntMul { int v [[= field{.multiple_of = 3}]] = 0; };
+struct CFloatGt { double v [[= field{.gt = 5}]] = 0.0; };
 
-struct CStrMin  { [[= field{.min_length = 3}]] std::string v; };
-struct CStrMax  { [[= field{.max_length = 2}]] std::string v; };
-struct CListMin { [[= field{.min_length = 2}]] std::vector<int> v; };
-struct CListMax { [[= field{.max_length = 2}]] std::vector<int> v; };
+struct CStrMin  { std::string v [[= field{.min_length = 3}]]; };
+struct CStrMax  { std::string v [[= field{.max_length = 2}]]; };
+struct CListMin { std::vector<int> v [[= field{.min_length = 2}]]; };
+struct CListMax { std::vector<int> v [[= field{.max_length = 2}]]; };
 
 // singular bounds
-struct CStrMin1  { [[= field{.min_length = 1}]] std::string v; };
-struct CStrMax1  { [[= field{.max_length = 1}]] std::string v; };
-struct CListMin1 { [[= field{.min_length = 1}]] std::vector<int> v; };
-struct CListMax1 { [[= field{.max_length = 1}]] std::vector<int> v; };
+struct CStrMin1  { std::string v [[= field{.min_length = 1}]]; };
+struct CStrMax1  { std::string v [[= field{.max_length = 1}]]; };
+struct CListMin1 { std::vector<int> v [[= field{.min_length = 1}]]; };
+struct CListMax1 { std::vector<int> v [[= field{.max_length = 1}]]; };
 
-struct COptInt { [[= field{.gt = 5}]] std::optional<int> v = std::nullopt; };
+struct COptInt { std::optional<int> v [[= field{.gt = 5}]] = std::nullopt; };
 
 struct CWithAlias {
-    [[= field{.alias = "last-name"}]] std::string lname = "";
+    std::string lname [[= field{.alias = "last-name"}]] = "";
 };
 
 struct CWithRequiredAlias {
-    [[= field{.alias = "last-name"}]] std::string lname;
+    std::string lname [[= field{.alias = "last-name"}]];
 };
 
 struct CInt32Gt {
-    [[= field{.gt = 5}]] std::int32_t v = 0;
+    std::int32_t v [[= field{.gt = 5}]] = 0;
 };
 
 struct CMapMin {
-    [[= field{.min_length = 2}]] std::map<std::string, int> v;
+    std::map<std::string, int> v [[= field{.min_length = 2}]];
 };
 
 struct CAll {
-    [[= field{.gt = 0, .le = 100}]] int percent = 0;
-    [[= field{.min_length = 2}]]    std::string code = "";
+    int percent [[= field{.gt = 0, .le = 100}]] = 0;
+    std::string code [[= field{.min_length = 2}]] = "";
 };
 
 // ---- helper ----------------------------------------------------------------
