@@ -6,4 +6,5 @@
 #include "fiasco/internal/logging/log_queue.hpp"
 #include "fiasco/internal/logging/log_record.hpp"
 #include "fiasco/internal/logging/log_registry.hpp"
+#include "fiasco/internal/logging/log_sink.hpp"
 #include "fiasco/internal/logging/logger.hpp"

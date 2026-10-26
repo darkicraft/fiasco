@@ -11,12 +11,21 @@
 #include "fiasco/internal/logging/log_formatter.hpp"
 #include "fiasco/internal/logging/log_level.hpp"
 #include "fiasco/internal/logging/log_queue.hpp"
+#include "fiasco/internal/logging/log_sink.hpp"
 #include "fiasco/internal/logging/logger.hpp"
 
 namespace fiasco::detail {
 
 class log_registry {
   public:
+    log_registry();
+    log_registry(bool enabled,
+                 bool access_log,
+                 log_level level,
+                 log_format_type format,
+                 bool use_colors,
+                 fiasco::log_sink sink = {});
+
     static log_registry& instance();
 
     logger& get(const std::string& name);
@@ -41,7 +50,6 @@ class log_registry {
     ~log_registry();
 
   private:
-    log_registry();
     log_registry(const log_registry&) = delete;
     log_registry& operator=(const log_registry&) = delete;
 
@@ -54,7 +62,7 @@ class log_registry {
     std::thread m_consumer_thread;
     std::atomic<bool> m_running{false};
     mutable std::mutex m_mutex;
-    std::ostream* m_sink{nullptr};
+    fiasco::log_sink m_sink;
     log_level m_root_level{log_level::info};
     std::atomic<bool> m_logging_enabled{true};
     std::atomic<bool> m_access_log{true};

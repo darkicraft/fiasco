@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <mutex>
+#include <utility>
 
 namespace fiasco::detail {
 
@@ -11,19 +12,31 @@ log_registry& log_registry::instance() {
 }
 
 log_registry::log_registry()
-    : m_sink(&std::cout) {
+    : log_registry(true, true, log_level::info, log_format_type::human, true, {}) {}
+
+log_registry::log_registry(bool enabled,
+                           bool access_log,
+                           log_level level,
+                           log_format_type format,
+                           bool use_colors,
+                           fiasco::log_sink sink)
+    : m_formatter(make_formatter(format, use_colors)),
+      m_sink(sink ? std::move(sink) : fiasco::make_ostream_log_sink(std::cout)),
+      m_root_level(level),
+      m_logging_enabled(enabled),
+      m_access_log(access_log) {
     m_running = true;
     m_consumer_thread = std::thread(&log_registry::consumer_loop, this);
 }
 
 void log_registry::set_sink(std::ostream& os) {
     std::lock_guard lock(m_mutex);
-    m_sink = &os;
+    m_sink = fiasco::make_ostream_log_sink(os);
 }
 
 void log_registry::reset_sink() {
     std::lock_guard lock(m_mutex);
-    m_sink = &std::cout;
+    m_sink = fiasco::make_ostream_log_sink(std::cout);
 }
 
 void log_registry::flush() {
@@ -96,8 +109,7 @@ void log_registry::consumer_loop() {
 void log_registry::write(const log_record& record) {
     std::lock_guard lock(m_mutex);
     auto formatted = m_formatter->format(record);
-    *m_sink << formatted;
-    m_sink->flush();
+    m_sink(formatted);
 }
 
 }  // namespace fiasco::detail
