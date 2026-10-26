@@ -67,6 +67,17 @@ TEST_CASE("request::header returns empty for missing key", "[request]") {
     REQUIRE(req.header("Nonexistent").empty());
 }
 
+TEST_CASE("request::header is case-insensitive", "[request]") {
+    request req;
+    req.headers["Content-Type"] = "application/json";
+    REQUIRE(req.header("content-type") == "application/json");
+    REQUIRE(req.header("CONTENT-TYPE") == "application/json");
+    REQUIRE(req.has_header("content-type"));
+    REQUIRE_FALSE(req.has_header("Missing"));
+    REQUIRE(req.find_header("Content-Type") != nullptr);
+    REQUIRE(req.find_header("Missing") == nullptr);
+}
+
 TEST_CASE("request::content_type", "[request]") {
     request req;
     req.headers["Content-Type"] = "text/html";

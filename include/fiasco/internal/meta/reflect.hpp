@@ -78,9 +78,14 @@ struct callable_traits {
     }
     static constexpr bool has_argument_names = compute_has_argument_names();
 
+    /// Reflection of the i-th parameter.
+    static consteval std::meta::info parameter(std::size_t i) {
+        return std::meta::parameters_of(reflection())[i];
+    }
+
     /// Name of the i-th parameter, or an empty view if it has none.
     static consteval std::string_view argument_name(std::size_t i) {
-        std::meta::info param = std::meta::parameters_of(reflection())[i];
+        std::meta::info param = parameter(i);
         if (!std::meta::is_type(param) && std::meta::has_identifier(param)) {
             return std::meta::identifier_of(param);
         }

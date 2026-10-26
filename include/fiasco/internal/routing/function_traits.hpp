@@ -4,6 +4,7 @@
 #include <charconv>
 #include <concepts>
 #include <functional>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -23,6 +24,19 @@ namespace fiasco::detail {
 // Note: std::move_only_function::operator() is non-const, so handlers are
 // invoked through a non-const reference (see route_table::match).
 using handler_fn = std::move_only_function<response(request)>;
+
+template <typename T>
+struct is_optional_primitive : std::false_type {};
+
+template <typename T>
+struct is_optional_primitive<std::optional<T>> : std::bool_constant<Primitive<T>> {};
+
+template <typename T>
+concept OptionalPrimitive = is_optional_primitive<std::remove_cvref_t<T>>::value;
+
+/// A scalar source type: either a primitive or an optional primitive.
+template <typename T>
+concept ScalarParam = Primitive<std::remove_cvref_t<T>> || OptionalPrimitive<T>;
 
 template <Primitive T>
 [[nodiscard]] T convert_path_param(std::string_view s) {
@@ -54,6 +68,73 @@ template <Primitive T>
     return {};  // unreachable
 }
 
+inline std::optional<std::string> find_cookie(std::string_view cookie_header,
+                                              std::string_view name) {
+    std::size_t start = 0;
+    while (start < cookie_header.size()) {
+        const auto end = cookie_header.find(';', start);
+        auto part = cookie_header.substr(
+            start, end == std::string_view::npos ? std::string_view::npos : end - start);
+
+        auto first = part.find_first_not_of(" \t");
+        auto last = part.find_last_not_of(" \t");
+        if (first != std::string_view::npos) {
+            part = part.substr(first, last - first + 1);
+            const auto eq = part.find('=');
+            if (eq != std::string_view::npos && part.substr(0, eq) == name) {
+                return std::string(part.substr(eq + 1));
+            }
+        }
+
+        if (end == std::string_view::npos) {
+            break;
+        }
+        start = end + 1;
+    }
+    return std::nullopt;
+}
+
+template <typename T>
+consteval param_in effective_source(param_in source) {
+    using CleanT = std::decay_t<T>;
+    if (source != param_in::infer) {
+        return source;
+    }
+    if constexpr (std::same_as<CleanT, request>) {
+        return param_in::infer;
+    } else if constexpr (ScalarParam<CleanT>) {
+        return param_in::infer;
+    } else if constexpr (FromJson<CleanT>) {
+        return param_in::body;
+    } else {
+        return param_in::infer;
+    }
+}
+
+template <typename T, fiasco::field<> Spec>
+[[nodiscard]] T parse_scalar(std::string_view raw, const char* source, std::string_view key) {
+    if constexpr (OptionalPrimitive<T>) {
+        return T{parse_scalar<typename T::value_type, Spec>(raw, source, key)};
+    } else {
+        T value{};
+        try {
+            value = static_cast<T>(convert_path_param<T>(raw));
+        } catch (const std::exception&) {
+            throw request_validation_error({{.type = std::string(pydantic_parsing_type_name<T>()),
+                                             .loc = {std::string(source), std::string(key)},
+                                             .msg = std::string(pydantic_parsing_message<T>()),
+                                             .input = json_type(std::string(raw))}});
+        }
+
+        std::vector<validation_error> errors;
+        apply_field_constraints<Spec>(value, json_type(std::string(raw)), std::string(key), errors);
+        if (!errors.empty()) {
+            throw request_validation_error(prefix_loc(std::move(errors), source));
+        }
+        return value;
+    }
+}
+
 template <typename T>
 [[nodiscard]] response serialize_return(T&& val) {
     using CleanT = std::decay_t<T>;
@@ -77,14 +158,93 @@ template <typename T>
     return {};  // unreachable
 }
 
-/// Resolve one handler argument, FastAPI-style, by parameter *name*:
-///   1. fiasco::request  -> pass the raw request
-///   2. Primitive        -> a path param if the route captured `name`, else a
-///                          query param
-///   3. FromJson         -> the request body (embedded under `name` when the
-///                          handler has more than one body parameter)
-/// Failures are reported as FastAPI-compatible request validation errors.
-template <typename T>
+template <typename T, fiasco::field<> Spec>
+[[nodiscard]] T resolve_body(const request& req, std::string_view key, std::size_t body_count) {
+    using CleanT = std::decay_t<T>;
+    static_assert(FromJson<CleanT>, "body parameters must be JSON-deserializable");
+
+    if (req.body.empty()) {
+        throw request_validation_error({{.type = "missing",
+                                         .loc = {std::string("body")},
+                                         .msg = "Field required",
+                                         .input = json_type()}});
+    }
+
+    json_type j;
+    try {
+        j = json::parse(req.body);
+    } catch (const json_type::parse_exception& e) {
+        throw request_validation_error({{.type = "json_invalid",
+                                         .loc = {std::string("body"), e.position()},
+                                         .msg = "JSON decode error",
+                                         .input = json_type::object()}});
+    } catch (const json::exception&) {
+        throw request_validation_error({{.type = "json_invalid",
+                                         .loc = {std::string("body"), std::size_t{0}},
+                                         .msg = "JSON decode error",
+                                         .input = json_type::object()}});
+    }
+
+    const auto validate = [&](const CleanT& value, const json_type& raw) {
+        std::vector<validation_error> errors;
+        apply_field_constraints<Spec>(value, raw, std::string(key), errors);
+        if (!errors.empty()) {
+            throw request_validation_error(prefix_loc(std::move(errors), "body"));
+        }
+    };
+
+    if (body_count > 1) {
+        if (!j.contains(std::string(key))) {
+            throw request_validation_error({{.type = "missing",
+                                             .loc = {std::string("body"), std::string(key)},
+                                             .msg = "Field required",
+                                             .input = j}});
+        }
+        json_type sub = j[std::string(key)];
+        CleanT val{};
+        try {
+            from_json(sub, val);
+        } catch (const request_validation_error& e) {
+            throw request_validation_error(
+                prefix_loc(prefix_loc(e.errors(), std::string(key)), "body"));
+        } catch (const std::exception&) {
+            throw request_validation_error(
+                {make_type_error<CleanT>({std::string("body"), std::string(key)}, sub)});
+        }
+        if constexpr (Primitive<CleanT>) {
+            validate(val, sub);
+        } else if constexpr (OptionalPrimitive<CleanT>) {
+            if (val.has_value()) {
+                validate(*val, sub);
+            }
+        }
+        return val;
+    }
+
+    CleanT val{};
+    try {
+        from_json(j, val);
+    } catch (const request_validation_error& e) {
+        throw request_validation_error(prefix_loc(e.errors(), "body"));
+    } catch (const std::exception&) {
+        throw request_validation_error({{.type = std::string(pydantic_type_name<CleanT>()),
+                                         .loc = {std::string("body")},
+                                         .msg = std::string(pydantic_message<CleanT>()),
+                                         .input = j}});
+    }
+    if constexpr (Primitive<CleanT>) {
+        validate(val, j);
+    } else if constexpr (OptionalPrimitive<CleanT>) {
+        if (val.has_value()) {
+            validate(*val, j);
+        }
+    }
+    return val;
+}
+
+/// Resolve one handler argument according to its explicit source marker or,
+/// for unmarked parameters, FastAPI-style inference.
+template <typename T, fiasco::field<> Spec, param_in Source>
 decltype(auto) resolve_arg(const request& req,
                            std::size_t& path_idx,
                            std::string_view name,
@@ -92,101 +252,77 @@ decltype(auto) resolve_arg(const request& req,
     using CleanT = std::decay_t<T>;
 
     if constexpr (std::same_as<CleanT, request>) {
+        (void)Source;
         (void)path_idx;
         (void)name;
         (void)body_count;
         return req;
-    } else if constexpr (Primitive<CleanT>) {
-        const auto parse = [&](std::string_view raw, const char* source) -> CleanT {
-            try {
-                return static_cast<CleanT>(convert_path_param<CleanT>(raw));
-            } catch (const std::exception&) {
-                throw request_validation_error(
-                    {{.type = std::string(pydantic_parsing_type_name<CleanT>()),
-                      .loc = {std::string(source), std::string(name)},
-                      .msg = std::string(pydantic_parsing_message<CleanT>()),
-                      .input = json_type(std::string(raw))}});
+    } else {
+        constexpr bool has_alias = Spec.alias.has;
+        const std::string_view key = has_alias ? Spec.alias.view() : name;
+
+        const auto absent = [&](const char* source) -> CleanT {
+            if constexpr (OptionalPrimitive<CleanT>) {
+                (void)source;
+                return CleanT{};
+            } else {
+                throw request_validation_error({{.type = "missing",
+                                                 .loc = {std::string(source), std::string(key)},
+                                                 .msg = "Field required",
+                                                 .input = json_type()}});
             }
         };
 
-        if (name.empty()) {
-            // Positional path parameter: function pointers expose no reflectable
-            // parameter names, so they fall back to URL order.
-            if (path_idx < req.ordered_path_params.size()) {
-                return parse(req.ordered_path_params[path_idx++], "path");
+        if constexpr (Source == param_in::form || Source == param_in::file) {
+            static_assert(!sizeof(T), "form/file parameters are not implemented");
+        } else if constexpr (Source == param_in::body) {
+            return resolve_body<CleanT, Spec>(req, key, body_count);
+        } else if constexpr (Source == param_in::path) {
+            static_assert(ScalarParam<CleanT>, "path parameters must be scalar types");
+            if (auto it = req.path_params.find(key); it != req.path_params.end()) {
+                return parse_scalar<CleanT, Spec>(it->second, "path", key);
             }
-            throw request_validation_error({{.type = "missing",
-                                             .loc = {std::string("path")},
-                                             .msg = "Field required",
-                                             .input = json_type()}});
-        }
-
-        if (auto it = req.path_params.find(name); it != req.path_params.end()) {
-            return parse(it->second, "path");
-        }
-        if (auto it = req.query_params.find(std::string(name)); it != req.query_params.end()) {
-            return parse(it->second, "query");
-        }
-        throw request_validation_error({{.type = "missing",
-                                         .loc = {std::string("query"), std::string(name)},
-                                         .msg = "Field required",
-                                         .input = json_type()}});
-    } else if constexpr (FromJson<CleanT>) {
-        (void)path_idx;
-        if (req.body.empty()) {
-            throw request_validation_error({{.type = "missing",
-                                             .loc = {std::string("body")},
-                                             .msg = "Field required",
-                                             .input = json_type()}});
-        }
-        json_type j;
-        try {
-            j = json::parse(req.body);
-        } catch (const json_type::parse_exception& e) {
-            throw request_validation_error({{.type = "json_invalid",
-                                             .loc = {std::string("body"), e.position()},
-                                             .msg = "JSON decode error",
-                                             .input = json_type::object()}});
-        } catch (const json::exception&) {
-            throw request_validation_error({{.type = "json_invalid",
-                                             .loc = {std::string("body"), std::size_t{0}},
-                                             .msg = "JSON decode error",
-                                             .input = json_type::object()}});
-        }
-
-        // With multiple body parameters FastAPI embeds each under its name.
-        if (body_count > 1) {
-            if (!j.contains(std::string(name))) {
-                throw request_validation_error({{.type = "missing",
-                                                 .loc = {std::string("body"), std::string(name)},
-                                                 .msg = "Field required",
-                                                 .input = j}});
+            return absent("path");
+        } else if constexpr (Source == param_in::query) {
+            static_assert(ScalarParam<CleanT>, "query parameters must be scalar types");
+            if (auto it = req.query_params.find(std::string(key)); it != req.query_params.end()) {
+                return parse_scalar<CleanT, Spec>(it->second, "query", key);
             }
-            json_type sub = j[std::string(name)];
-            try {
-                CleanT val;
-                from_json(sub, val);
-                return val;
-            } catch (const request_validation_error& e) {
-                throw request_validation_error(
-                    prefix_loc(prefix_loc(e.errors(), std::string(name)), "body"));
-            } catch (const std::exception&) {
-                throw request_validation_error(
-                    {make_type_error<CleanT>({std::string("body"), std::string(name)}, sub)});
+            return absent("query");
+        } else if constexpr (Source == param_in::header) {
+            static_assert(ScalarParam<CleanT>, "header parameters must be scalar types");
+            if (const auto* value = req.find_header(key)) {
+                return parse_scalar<CleanT, Spec>(*value, "header", key);
             }
-        }
+            return absent("header");
+        } else if constexpr (Source == param_in::cookie) {
+            static_assert(ScalarParam<CleanT>, "cookie parameters must be scalar types");
+            if (auto value = find_cookie(req.header("Cookie"), key)) {
+                return parse_scalar<CleanT, Spec>(*value, "cookie", key);
+            }
+            return absent("cookie");
+        } else if constexpr (ScalarParam<CleanT>) {
+            if (name.empty()) {
+                // Positional path parameter: function pointers expose no reflectable
+                // parameter names, so they fall back to URL order.
+                if (path_idx < req.ordered_path_params.size()) {
+                    return parse_scalar<CleanT, Spec>(
+                        req.ordered_path_params[path_idx++], "path", key);
+                }
+                return absent("path");
+            }
 
-        try {
-            CleanT val;
-            from_json(j, val);
-            return val;
-        } catch (const request_validation_error& e) {
-            throw request_validation_error(prefix_loc(e.errors(), "body"));
-        } catch (const std::exception&) {
-            throw request_validation_error({{.type = std::string(pydantic_type_name<CleanT>()),
-                                             .loc = {std::string("body")},
-                                             .msg = std::string(pydantic_message<CleanT>()),
-                                             .input = j}});
+            if (auto it = req.path_params.find(key); it != req.path_params.end()) {
+                return parse_scalar<CleanT, Spec>(it->second, "path", key);
+            }
+            if (auto it = req.query_params.find(std::string(key)); it != req.query_params.end()) {
+                return parse_scalar<CleanT, Spec>(it->second, "query", key);
+            }
+            return absent("query");
+        } else if constexpr (FromJson<CleanT>) {
+            return resolve_body<CleanT, Spec>(req, key, body_count);
+        } else {
+            static_assert(!sizeof(T), "unsupported handler parameter type");
         }
     }
 }
@@ -195,12 +331,6 @@ template <typename T>
 using arg_storage_t =
     std::conditional_t<std::same_as<std::decay_t<T>, request>, const request&, std::decay_t<T>>;
 
-/// A handler parameter that comes from the JSON body: a non-scalar JSON type
-/// (model/container/optional), as opposed to a path/query scalar.
-template <typename T>
-concept BodyParam = FromJson<std::decay_t<T>> && !Primitive<std::decay_t<T>> &&
-                    !std::same_as<std::decay_t<T>, request>;
-
 template <typename F, typename ArgsTuple, size_t... Is>
 response dispatch_impl(F& fn,
                        const request& req,
@@ -208,11 +338,17 @@ response dispatch_impl(F& fn,
                        std::index_sequence<Is...>) {
     using traits = meta::callable_traits<std::decay_t<F>>;
     constexpr std::size_t body_count =
-        ((BodyParam<std::tuple_element_t<Is, ArgsTuple>> ? 1u : 0u) + ... + 0u);
+        ((effective_source<std::tuple_element_t<Is, ArgsTuple>>(
+              meta::source_of(traits::parameter(Is))) == param_in::body
+              ? 1u
+              : 0u) +
+         ... + 0u);
 
     // braced init guarantees left-to-right evaluation; values are owned by the tuple
     std::tuple<arg_storage_t<std::tuple_element_t<Is, ArgsTuple>>...> args{
-        resolve_arg<std::tuple_element_t<Is, ArgsTuple>>(
+        resolve_arg<std::tuple_element_t<Is, ArgsTuple>,
+                    meta::field_of(traits::parameter(Is)),
+                    meta::source_of(traits::parameter(Is))>(
             req, path_idx, traits::argument_name(Is), body_count)...};
 
     if constexpr (std::is_void_v<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>) {

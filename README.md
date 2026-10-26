@@ -63,7 +63,7 @@ cmake --install build
 | Keep-alive, `Connection: close`, and malformed-request handling | ✅ |
 | `SIGINT`/`SIGTERM` graceful shutdown | ✅ |
 | C++20 modules (experimental, opt-in) | ✅ |
-| Explicit parameter sources (`[[= query{}]]`, `[[= path{}]]`, `[[= body{}]]`, …) | 🚧 Planned |
+| Explicit parameter sources (`[[= query{}]]`, `[[= path{}]]`, `[[= body{}]]`, `[[= header{}]]`, `[[= cookie{}]]`) | ✅ |
 | Automatic API docs generation (OpenAPI / Swagger) | 🚧 Planned |
 | Static file serving | 🚧 Planned |
 | HTTPS / TLS | 🚧 Planned |
@@ -139,6 +139,47 @@ first value wins for duplicate keys. A missing required parameter is a `422`
 `missing` error;
 `{"detail":[{"type":"missing","loc":["query","q"],"msg":"Field required",...}]}`.
 
+## Explicit Parameter Sources
+
+Inference is convenient, but a parameter can declare exactly where it comes
+from. Markers use the same constraint syntax as model fields, and `alias`
+changes the wire name:
+
+```cpp
+using fiasco::body;
+using fiasco::cookie;
+using fiasco::header;
+using fiasco::path;
+using fiasco::query;
+
+app.get("/items/{id}",
+        [](int id [[= path{.ge = 1}]],
+           std::string q [[= query{.min_length = 2, .alias = "search"}]],
+           std::string token [[= header{.alias = "X-Token"}]],
+           std::string session [[= cookie{.alias = "session_id"}]]) {
+            // GET /items/7?search=cats
+            // Header: x-token: abc
+            // Cookie: session_id=xyz
+            return fiasco::json{{"id", id}, {"q", q},
+                                {"token", token}, {"session", session}};
+        });
+```
+
+Supported sources:
+
+- `path` and `query` bind scalar parameters, exactly like inference but without
+  guessing.
+- `body` binds a scalar or a model from the JSON body. Multiple body parameters
+  are embedded under their `alias` (or parameter name), as usual.
+- `header` looks up a request header. Header names are case-insensitive.
+- `cookie` reads a cookie from the request's `Cookie` header.
+
+Scalar sources accept `std::optional<T>`; an absent value becomes
+`std::nullopt` instead of a `missing` error.
+
+`form` and `file` markers exist for the future multipart API, but currently
+fail at compile time rather than silently misbehaving.
+
 ## Request Bodies
 
 Any aggregate `struct` is a model automatically. fiasco (de)serialises it
@@ -207,11 +248,11 @@ Attach Pydantic-style constraints with an annotation:
 using fiasco::field;
 
 struct Item {
-    [[= field{.gt = 0, .le = 100}]]   int percent;
-    [[= field{.multiple_of = 3}]]     int boxes;
-    [[= field{.min_length = 2}]]      std::string code;
-    [[= field{.min_length = 1}]]      std::vector<int> tags;
-    [[= field{.alias = "user-name"}]] std::string username;
+    int percent [[= field{.gt = 0, .le = 100}]];
+    int boxes [[= field{.multiple_of = 3}]];
+    std::string code [[= field{.min_length = 2}]];
+    std::vector<int> tags [[= field{.min_length = 1}]];
+    std::string username [[= field{.alias = "user-name"}]];
 };
 ```
 
@@ -241,7 +282,8 @@ failed fast, and nested locations are reported with their full path:
 
 Notes:
 
-- `loc` starts with `"body"`, `"path"`, or `"query"` (as in FastAPI).
+- `loc` starts with `"body"`, `"path"`, `"query"`, `"header"`, or `"cookie"`
+  (as in FastAPI).
 - `input` is the **raw** value as received (the string from the URL for path/query,
   the JSON value for a body).
 - `ctx` carries the constraint parameters and is omitted when Pydantic has none.

@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <optional>
 #include <string>
 
 #include "fiasco/fiasco.hpp"
@@ -20,7 +21,7 @@ struct RequiredInput {
 };
 
 struct ConstrainedInput {
-    [[= field{.gt = 0, .le = 10}]] int a = 0;
+    int a [[= field{.gt = 0, .le = 10}]] = 0;
 };
 
 struct ExtraInput {
@@ -318,4 +319,218 @@ TEST_CASE("integration path scalar + body model is not embedded", "[integration]
                                               std::to_string(body.size()) + "\r\n\r\n" + body);
     REQUIRE(fiasco_test::extract_status(resp) == 200);
     REQUIRE(fiasco_test::extract_body(resp) == "x:30\n");
+}
+
+TEST_CASE("integration explicit path parameter with constraint", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/items/{id}",
+            [](int id [[= fiasco::path{.ge = 5}]]) -> std::string { return std::to_string(id); });
+
+    server.start();
+
+    auto invalid = fiasco_test::send_request(server.port(),
+                                             "GET /items/4 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(invalid) == 422);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("loc":["path","id"])") != std::string::npos);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("type":"greater_than_equal")") !=
+            std::string::npos);
+
+    auto valid = fiasco_test::send_request(server.port(),
+                                           "GET /items/5 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(valid) == 200);
+    REQUIRE(fiasco_test::extract_body(valid) == "5\n");
+}
+
+TEST_CASE("integration explicit query parameter with alias and constraint", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/search",
+            [](std::string term [[= fiasco::query{.min_length = 2, .alias = "q"}]]) -> std::string {
+                return term;
+            });
+
+    server.start();
+
+    auto valid = fiasco_test::send_request(server.port(),
+                                           "GET /search?q=hi HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(valid) == 200);
+    REQUIRE(fiasco_test::extract_body(valid) == "hi\n");
+
+    auto missing =
+        fiasco_test::send_request(server.port(), "GET /search HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(missing) == 422);
+    REQUIRE(fiasco_test::extract_body(missing).find(R"("loc":["query","q"])") != std::string::npos);
+
+    auto too_short = fiasco_test::send_request(
+        server.port(), "GET /search?q=x HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(too_short) == 422);
+    REQUIRE(fiasco_test::extract_body(too_short).find(R"("type":"string_too_short")") !=
+            std::string::npos);
+}
+
+TEST_CASE("integration explicit header parameter is case-insensitive", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/token", [](std::string token [[= fiasco::header{.alias = "X-Token"}]]) -> std::string {
+        return token;
+    });
+
+    server.start();
+
+    auto valid = fiasco_test::send_request(
+        server.port(), "GET /token HTTP/1.1\r\nHost: localhost\r\nx-token: abc\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(valid) == 200);
+    REQUIRE(fiasco_test::extract_body(valid) == "abc\n");
+
+    auto missing =
+        fiasco_test::send_request(server.port(), "GET /token HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(missing) == 422);
+    REQUIRE(fiasco_test::extract_body(missing).find(R"("loc":["header","X-Token"])") !=
+            std::string::npos);
+}
+
+TEST_CASE("integration explicit cookie parameter", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/session",
+            [](std::string session [[= fiasco::cookie{.alias = "session_id"}]]) -> std::string {
+                return session;
+            });
+
+    server.start();
+
+    auto valid = fiasco_test::send_request(server.port(),
+                                           "GET /session HTTP/1.1\r\nHost: localhost\r\n"
+                                           "Cookie: theme=dark; session_id=abc123\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(valid) == 200);
+    REQUIRE(fiasco_test::extract_body(valid) == "abc123\n");
+
+    auto missing = fiasco_test::send_request(server.port(),
+                                             "GET /session HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(missing) == 422);
+    REQUIRE(fiasco_test::extract_body(missing).find(R"("loc":["cookie","session_id"])") !=
+            std::string::npos);
+}
+
+TEST_CASE("integration explicit body parameter", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.post("/sum", [](const fiasco::detail::SumInput& input [[= fiasco::body{}]]) -> std::string {
+        return std::to_string(input.a + input.b);
+    });
+
+    server.start();
+
+    const std::string body = R"({"a":10,"b":20})";
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "POST /sum HTTP/1.1\r\nHost: localhost\r\n"
+                                          "Content-Type: application/json\r\nContent-Length: " +
+                                              std::to_string(body.size()) + "\r\n\r\n" + body);
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "30\n");
+}
+
+TEST_CASE("integration explicit scalar body parameter with constraint", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.post("/double",
+             [](int n [[= fiasco::body{.ge = 1}]]) -> std::string { return std::to_string(n * 2); });
+
+    server.start();
+
+    auto valid = fiasco_test::send_request(server.port(),
+                                           "POST /double HTTP/1.1\r\nHost: localhost\r\n"
+                                           "Content-Type: application/json\r\n"
+                                           "Content-Length: 1\r\n\r\n5");
+    REQUIRE(fiasco_test::extract_status(valid) == 200);
+    REQUIRE(fiasco_test::extract_body(valid) == "10\n");
+
+    auto invalid = fiasco_test::send_request(server.port(),
+                                             "POST /double HTTP/1.1\r\nHost: localhost\r\n"
+                                             "Content-Type: application/json\r\n"
+                                             "Content-Length: 1\r\n\r\n0");
+    REQUIRE(fiasco_test::extract_status(invalid) == 422);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("loc":["body","n"])") != std::string::npos);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("type":"greater_than_equal")") !=
+            std::string::npos);
+}
+
+TEST_CASE("integration explicit multiple body parameters use aliases", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.post("/combine",
+             [](fiasco::detail::SumInput s [[= fiasco::body{.alias = "left"}]],
+                fiasco::detail::ExtraInput o [[= fiasco::body{.alias = "right"}]]) -> std::string {
+                 return std::to_string(s.a + s.b + o.c);
+             });
+
+    server.start();
+
+    const std::string body = R"({"left":{"a":1,"b":2},"right":{"c":3}})";
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "POST /combine HTTP/1.1\r\nHost: localhost\r\n"
+                                          "Content-Type: application/json\r\nContent-Length: " +
+                                              std::to_string(body.size()) + "\r\n\r\n" + body);
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "6\n");
+}
+
+TEST_CASE("integration optional query parameter", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/optional",
+            [](std::optional<int> n) -> std::string { return n ? std::to_string(*n) : "none"; });
+
+    server.start();
+
+    auto missing = fiasco_test::send_request(server.port(),
+                                             "GET /optional HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(missing) == 200);
+    REQUIRE(fiasco_test::extract_body(missing) == "none\n");
+
+    auto present = fiasco_test::send_request(
+        server.port(), "GET /optional?n=7 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(present) == 200);
+    REQUIRE(fiasco_test::extract_body(present) == "7\n");
+}
+
+TEST_CASE("integration explicit optional query parameter with constraint", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/optional", [](std::optional<int> n [[= fiasco::query{.ge = 1}]]) -> std::string {
+        return n ? std::to_string(*n) : "none";
+    });
+
+    server.start();
+
+    auto missing = fiasco_test::send_request(server.port(),
+                                             "GET /optional HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(missing) == 200);
+    REQUIRE(fiasco_test::extract_body(missing) == "none\n");
+
+    auto invalid = fiasco_test::send_request(
+        server.port(), "GET /optional?n=0 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(invalid) == 422);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("loc":["query","n"])") != std::string::npos);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("type":"greater_than_equal")") !=
+            std::string::npos);
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -40,12 +41,44 @@ struct request {
 
     std::string client_address;
 
+    [[nodiscard]] const std::string* find_header(std::string_view key) const {
+        if (auto it = headers.find(std::string(key)); it != headers.end()) {
+            return &it->second;
+        }
+        for (const auto& [name, value] : headers) {
+            if (header_name_equal(name, key)) {
+                return &value;
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] bool has_header(std::string_view key) const {
+        return find_header(key) != nullptr;
+    }
+
     [[nodiscard]] std::string header(const std::string& key) const {
-        auto it = headers.find(key);
-        return (it != headers.end()) ? it->second : "";
+        const auto* value = find_header(key);
+        return value ? *value : "";
     }
 
     [[nodiscard]] std::string content_type() const { return header("Content-Type"); }
+
+  private:
+    static bool header_name_equal(std::string_view a, std::string_view b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (std::size_t i = 0; i < a.size(); ++i) {
+            const auto lower = [](char c) {
+                return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c;
+            };
+            if (lower(a[i]) != lower(b[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 }  // namespace fiasco::detail
