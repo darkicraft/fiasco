@@ -143,6 +143,22 @@ TEST_CASE("servers have independent logging", "[logging][integration]") {
     REQUIRE(out_b.find("/a") == std::string::npos);
 }
 
+TEST_CASE("server logging can be disabled entirely", "[logging][integration]") {
+    LogCapture capture;
+    auto config = test_config(fiasco::make_ostream_log_sink(capture.captured.stream()));
+    config.logging.enabled = false;
+
+    fiasco_test::test_server server{std::move(config)};
+    auto& app = server.app();
+    app.get("/", []() { return "ok"; });
+
+    server.start();
+    fiasco_test::send_request(server.port(), "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    server.stop();
+
+    REQUIRE(capture.str().empty());
+}
+
 TEST_CASE("server logs shutdown message", "[logging][integration]") {
     LogCapture capture;
     fiasco_test::test_server server{

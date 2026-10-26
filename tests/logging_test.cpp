@@ -170,6 +170,18 @@ TEST_CASE("json formatter timestamp is UTC with milliseconds", "[logging][format
     REQUIRE(out.find(R"("timestamp":"1970-01-01T00:00:00.123Z")") != std::string::npos);
 }
 
+TEST_CASE("json formatter escapes message and field contents", "[logging][formatter]") {
+    json_log_formatter fmt;
+
+    log_record r;
+    r.message = "a\"b\\c\nd";
+    r.fields["key\"x"] = "value\\y";
+
+    const auto out = fmt.format(r);
+    REQUIRE(out.find(R"("message":"a\"b\\c\nd")") != std::string::npos);
+    REQUIRE(out.find(R"("key\"x":"value\\y")") != std::string::npos);
+}
+
 // ============================================================
 // log_registry + logger (via registry)
 // ============================================================
@@ -259,4 +271,55 @@ TEST_CASE("registry log output appears via sink", "[logging][registry]") {
     auto out = guard.output();
     REQUIRE(out.find("test message") != std::string::npos);
     REQUIRE(out.find("test_logger") != std::string::npos);
+}
+
+TEST_CASE("registry accepts a custom sink callback", "[logging][registry]") {
+    fiasco_test::thread_safe_sink captured;
+    log_registry reg(true,
+                     true,
+                     log_level::debug,
+                     log_format_type::human,
+                     false,
+                     fiasco::make_ostream_log_sink(captured.stream()));
+
+    reg.get("custom").info("through callback");
+    reg.flush();
+
+    REQUIRE(captured.str().find("through callback") != std::string::npos);
+}
+
+TEST_CASE("registry can start disabled", "[logging][registry]") {
+    fiasco_test::thread_safe_sink captured;
+    log_registry reg(false,
+                     false,
+                     log_level::debug,
+                     log_format_type::human,
+                     false,
+                     fiasco::make_ostream_log_sink(captured.stream()));
+
+    REQUIRE_FALSE(reg.logging_enabled());
+    REQUIRE_FALSE(reg.access_log_enabled());
+
+    reg.get("off").error("must not appear");
+    reg.flush();
+
+    REQUIRE(captured.str().empty());
+}
+
+TEST_CASE("registry applies the configured formatter", "[logging][registry]") {
+    fiasco_test::thread_safe_sink captured;
+    log_registry reg(true,
+                     true,
+                     log_level::debug,
+                     log_format_type::json,
+                     false,
+                     fiasco::make_ostream_log_sink(captured.stream()));
+
+    reg.get("json").info("formatted");
+    reg.flush();
+
+    const auto out = captured.str();
+    REQUIRE(out.find(R"("level":"info")") != std::string::npos);
+    REQUIRE(out.find(R"("logger":"json")") != std::string::npos);
+    REQUIRE(out.find(R"("message":"formatted")") != std::string::npos);
 }
