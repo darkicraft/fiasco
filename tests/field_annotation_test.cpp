@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -34,6 +36,18 @@ struct COptInt { [[= field{.gt = 5}]] std::optional<int> v = std::nullopt; };
 
 struct CWithAlias {
     [[= field{.alias = "last-name"}]] std::string lname = "";
+};
+
+struct CWithRequiredAlias {
+    [[= field{.alias = "last-name"}]] std::string lname;
+};
+
+struct CInt32Gt {
+    [[= field{.gt = 5}]] std::int32_t v = 0;
+};
+
+struct CMapMin {
+    [[= field{.min_length = 2}]] std::map<std::string, int> v;
 };
 
 struct CAll {
@@ -151,6 +165,34 @@ TEST_CASE("a valid value satisfying constraints passes", "[field]") {
     auto v = j.get<CAll>();
     REQUIRE(v.percent == 50);
     REQUIRE(v.code == "abc");
+}
+
+TEST_CASE("field inclusive bounds accept the exact boundary", "[field]") {
+    REQUIRE(obj_with("v", json_type(5)).get<CIntGe>().v == 5);
+    REQUIRE(obj_with("v", json_type(5)).get<CIntLe>().v == 5);
+    REQUIRE(obj_with("v", json_type("abc")).get<CStrMin>().v == "abc");
+    REQUIRE(obj_with("v", json_type("ab")).get<CStrMax>().v == "ab");
+    REQUIRE(obj_with("v", json_type::array({json_type(1), json_type(2)})).get<CListMin>().v.size() ==
+            2);
+}
+
+TEST_CASE("field constraints work with fixed-width integer fields", "[field]") {
+    REQUIRE(must_fail<CInt32Gt>(obj_with("v", json_type(5))) ==
+            R"({"detail":[{"type":"greater_than","loc":["v"],"msg":"Input should be greater than 5","input":5,"ctx":{"gt":5}}]})");
+    REQUIRE(obj_with("v", json_type(6)).get<CInt32Gt>().v == 6);
+}
+
+TEST_CASE("field min_length works on maps", "[field]") {
+    json_type one = json_type::object();
+    one["only"] = json_type(1);
+    REQUIRE(must_fail<CMapMin>(obj_with("v", one)) ==
+            R"({"detail":[{"type":"too_short","loc":["v"],"msg":"Dictionary should have at least 2 items after validation, not 1","input":{"only":1},"ctx":{"field_type":"Dictionary","min_length":2,"actual_length":1}}]})");
+}
+
+TEST_CASE("field alias preserves requiredness and error location", "[field]") {
+    json_type j = obj_with("lname", json_type("Smith"));
+    REQUIRE(must_fail<CWithRequiredAlias>(j) ==
+            R"({"detail":[{"type":"missing","loc":["last-name"],"msg":"Field required","input":{"lname":"Smith"}}]})");
 }
 
 TEST_CASE("all constraint failures are collected", "[field]") {
