@@ -2,6 +2,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -221,6 +223,136 @@ TEST_CASE("reflection model get<T> from json_type", "[model]") {
     REQUIRE(v2.i == 1);
     REQUIRE(v2.s == "get_test");
     REQUIRE(v2.b == true);
+}
+
+// ============================================================
+// Fixed-width fields
+// ============================================================
+
+struct FixedWidths {
+    std::int32_t i32 = 0;
+    std::uint32_t u32 = 0;
+    std::int8_t i8 = 0;
+    std::uint8_t u8 = 0;
+};
+
+TEST_CASE("reflection model fixed-width integer fields", "[model]") {
+    FixedWidths v{-5, 4000000000u, -12, 200};
+
+    json_type j = v;
+    REQUIRE(j["i32"].get<std::int32_t>() == -5);
+    REQUIRE(j["u32"].get<std::uint32_t>() == 4000000000u);
+    REQUIRE(j["i8"].get<std::int8_t>() == -12);
+    REQUIRE(j["u8"].get<std::uint8_t>() == 200);
+
+    auto back = j.get<FixedWidths>();
+    REQUIRE(back.i32 == -5);
+    REQUIRE(back.u32 == 4000000000u);
+    REQUIRE(back.i8 == -12);
+    REQUIRE(back.u8 == 200);
+}
+
+TEST_CASE("reflection model fixed-width integer ranges are checked", "[model]") {
+    json_type j = json_type::object();
+    j["i32"] = json_type(-5);
+    j["u32"] = json_type(-1);
+    j["i8"] = json_type(200);
+    j["u8"] = json_type(300);
+
+    try {
+        (void)j.get<FixedWidths>();
+        FAIL("expected request_validation_error");
+    } catch (const request_validation_error& e) {
+        REQUIRE(e.errors().size() == 3);
+    }
+}
+
+// ============================================================
+// Nested containers and error locations
+// ============================================================
+
+struct BoundaryInner {
+    int value;
+};
+
+struct BoundaryOuter {
+    BoundaryInner inner;
+};
+
+struct OptionalInnerHolder {
+    std::optional<BoundaryInner> inner = std::nullopt;
+};
+
+struct ModelCollections {
+    std::vector<BoundaryInner> items;
+    std::map<std::string, BoundaryInner> by_name;
+};
+
+TEST_CASE("reflection model nested error reports the full location", "[model]") {
+    json_type j = json_type::object();
+    j["inner"] = json_type::object();
+    j["inner"]["value"] = json_type("bad");
+
+    try {
+        (void)j.get<BoundaryOuter>();
+        FAIL("expected request_validation_error");
+    } catch (const request_validation_error& e) {
+        const auto detail = to_fastapi_error_json(e.errors());
+        REQUIRE_THAT(detail, ContainsSubstring(R"("loc":["inner","value"])"));
+    }
+}
+
+TEST_CASE("reflection model optional nested model round-trips", "[model]") {
+    OptionalInnerHolder present{BoundaryInner{7}};
+    json_type j = present;
+    REQUIRE(j["inner"]["value"].get<int>() == 7);
+
+    auto back = j.get<OptionalInnerHolder>();
+    REQUIRE(back.inner.has_value());
+    REQUIRE(back.inner->value == 7);
+
+    OptionalInnerHolder absent{};
+    json_type absent_json = absent;
+    REQUIRE(absent_json["inner"].is_null());
+    REQUIRE_FALSE(absent_json.get<OptionalInnerHolder>().inner.has_value());
+}
+
+TEST_CASE("reflection model collections of nested models round-trip", "[model]") {
+    ModelCollections v{{BoundaryInner{1}, BoundaryInner{2}},
+                       {{"a", BoundaryInner{3}}, {"b", BoundaryInner{4}}}};
+
+    json_type j = v;
+    REQUIRE(j["items"].size() == 2);
+    REQUIRE(j["by_name"]["b"]["value"].get<int>() == 4);
+
+    auto back = j.get<ModelCollections>();
+    REQUIRE(back.items.size() == 2);
+    REQUIRE(back.items[1].value == 2);
+    REQUIRE(back.by_name.at("a").value == 3);
+}
+
+TEST_CASE("reflection model reports collection element paths", "[model]") {
+    json_type j = json_type::object();
+    j["items"] = json_type::array(
+        {json_type(BoundaryInner{1}), json_type::parse(R"({"value":"bad"})")});
+    j["by_name"] = json_type::object();
+
+    try {
+        (void)j.get<ModelCollections>();
+        FAIL("expected request_validation_error");
+    } catch (const request_validation_error& e) {
+        const auto detail = to_fastapi_error_json(e.errors());
+        REQUIRE_THAT(detail, ContainsSubstring(R"("loc":["items",1,"value"])"));
+    }
+}
+
+TEST_CASE("reflection model ignores unknown fields", "[model]") {
+    json_type j = json_type::object();
+    j["value"] = json_type(9);
+    j["ignored"] = json_type("extra");
+
+    const auto v = j.get<BoundaryInner>();
+    REQUIRE(v.value == 9);
 }
 
 }  // namespace fiasco::detail
