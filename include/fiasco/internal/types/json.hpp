@@ -4,9 +4,11 @@
 #include <cmath>
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <meta>
 #include <optional>
@@ -52,12 +54,8 @@ class json_type {
     json_type();
     json_type(std::nullptr_t);
     json_type(bool);
-    json_type(int);
-    json_type(long);
-    json_type(long long);
-    json_type(unsigned long);
-    json_type(unsigned long long);
-    json_type(float);
+    json_type(std::int64_t);
+    json_type(std::uint64_t);
     json_type(double);
     json_type(const std::string&);
     json_type(const char*);
@@ -68,7 +66,13 @@ class json_type {
     static json_type array(std::initializer_list<json_type> values);
     static json_type object();
 
+    template <typename T>
+        requires((std::integral<T> || std::floating_point<T>) && !std::same_as<T, bool>)
+    json_type(T val)
+        : json_type(canonical_arithmetic(val)) {}
+
     template <JsonSerializable T>
+        requires(!std::integral<T> && !std::floating_point<T>)
     json_type(const T& val)
         : json_type() {
         to_json(*this, val);
@@ -129,6 +133,19 @@ class json_type {
   private:
     using path_segment = std::variant<std::string, std::size_t>;
 
+    template <typename T>
+    static constexpr auto canonical_arithmetic(T val) {
+        if constexpr (std::integral<T>) {
+            if constexpr (std::signed_integral<T>) {
+                return static_cast<std::int64_t>(val);
+            } else {
+                return static_cast<std::uint64_t>(val);
+            }
+        } else {
+            return static_cast<double>(val);
+        }
+    }
+
     struct impl;
     std::shared_ptr<impl> m_data;
     std::vector<path_segment> m_path;
@@ -143,26 +160,24 @@ struct json_entry {
 // ---- Built-in primitives -------------------------------------------------
 void from_json(const json_type&, std::nullptr_t&);
 void from_json(const json_type&, bool&);
-void from_json(const json_type&, int&);
-void from_json(const json_type&, long&);
-void from_json(const json_type&, long long&);
-void from_json(const json_type&, unsigned long&);
-void from_json(const json_type&, unsigned long long&);
-void from_json(const json_type&, float&);
+void from_json(const json_type&, std::int64_t&);
+void from_json(const json_type&, std::uint64_t&);
 void from_json(const json_type&, double&);
 void from_json(const json_type&, std::string&);
 
 void to_json(json_type&, std::nullptr_t);
 void to_json(json_type&, bool);
-void to_json(json_type&, int);
-void to_json(json_type&, long);
-void to_json(json_type&, long long);
-void to_json(json_type&, unsigned long);
-void to_json(json_type&, unsigned long long);
-void to_json(json_type&, float);
+void to_json(json_type&, std::int64_t);
+void to_json(json_type&, std::uint64_t);
 void to_json(json_type&, double);
 void to_json(json_type&, const std::string&);
 void to_json(json_type&, const char*);
+
+template <typename T>
+    requires((std::integral<T> || std::floating_point<T>) && !std::same_as<T, bool>)
+void to_json(json_type& j, T val) {
+    j = json_type(val);
+}
 
 // ---- json_type self ------------------------------------------------------
 template <typename T>
@@ -211,7 +226,8 @@ class request_validation_error : public std::exception {
             if (const auto* name = std::get_if<std::string>(&segment)) {
                 loc.push_back(json_type(*name));
             } else {
-                loc.push_back(json_type(static_cast<long long>(std::get<std::size_t>(segment))));
+                loc.push_back(
+                    json_type(static_cast<std::uint64_t>(std::get<std::size_t>(segment))));
             }
         }
         entry["loc"] = loc;
@@ -357,6 +373,39 @@ template <typename T>
         .loc = std::move(loc),
         .msg = std::string(parsing ? pydantic_parsing_message<D>() : pydantic_message<D>()),
         .input = value};
+}
+
+template <typename T>
+    requires((std::integral<T> || std::floating_point<T>) && !std::same_as<T, bool>)
+void from_json(const json_type& j, T& val) {
+    if constexpr (std::integral<T>) {
+        if constexpr (std::signed_integral<T>) {
+            std::int64_t parsed{};
+            from_json(j, parsed);
+            if (parsed < std::numeric_limits<T>::min() ||
+                parsed > std::numeric_limits<T>::max()) {
+                throw request_validation_error({make_type_error<T>({}, j)});
+            }
+            val = static_cast<T>(parsed);
+        } else {
+            std::uint64_t parsed{};
+            from_json(j, parsed);
+            if (parsed > std::numeric_limits<T>::max()) {
+                throw request_validation_error({make_type_error<T>({}, j)});
+            }
+            val = static_cast<T>(parsed);
+        }
+    } else {
+        double parsed{};
+        from_json(j, parsed);
+        if constexpr (std::same_as<T, float>) {
+            if (std::isfinite(parsed) && (parsed > std::numeric_limits<float>::max() ||
+                                          parsed < -std::numeric_limits<float>::max())) {
+                throw request_validation_error({make_type_error<T>({}, j)});
+            }
+        }
+        val = static_cast<T>(parsed);
+    }
 }
 
 template <JsonSequence T>
@@ -517,7 +566,7 @@ constexpr bool is_integral_value(double v) {
     if (v < -1.0e18 || v > 1.0e18) {
         return false;
     }
-    return static_cast<double>(static_cast<long long>(v)) == v;
+    return static_cast<double>(static_cast<std::int64_t>(v)) == v;
 }
 
 constexpr const char* plural(std::size_t n, const char* one, const char* many) {
@@ -530,7 +579,7 @@ template <class D>
 [[nodiscard]] json_type numeric_ctx(const char* name, double bound) {
     json_type ctx = json_type::object();
     if constexpr (std::integral<std::remove_cvref_t<D>>) {
-        ctx[name] = json_type(static_cast<long long>(bound));
+        ctx[name] = json_type(static_cast<std::int64_t>(bound));
     } else {
         ctx[name] = json_type(bound);
     }
@@ -585,8 +634,8 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
         if (Spec.multiple_of.has) {
             bool ok = false;
             if constexpr (std::integral<U>) {
-                const auto m = static_cast<long long>(Spec.multiple_of.value);
-                ok = m != 0 && static_cast<long long>(value) % m == 0;
+                const auto m = static_cast<std::int64_t>(Spec.multiple_of.value);
+                ok = m != 0 && static_cast<std::int64_t>(value) % m == 0;
             } else {
                 const double m = Spec.multiple_of.value;
                 ok = m != 0.0 && std::fmod(v, m) == 0.0;

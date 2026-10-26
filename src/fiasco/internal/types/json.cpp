@@ -26,34 +26,14 @@ json_type::json_type(bool b)
     m_data->m_json = b;
 }
 
-json_type::json_type(int i)
+json_type::json_type(std::int64_t i)
     : m_data(std::make_shared<impl>()) {
     m_data->m_json = i;
 }
 
-json_type::json_type(long l)
+json_type::json_type(std::uint64_t u)
     : m_data(std::make_shared<impl>()) {
-    m_data->m_json = l;
-}
-
-json_type::json_type(long long ll)
-    : m_data(std::make_shared<impl>()) {
-    m_data->m_json = ll;
-}
-
-json_type::json_type(unsigned long ul)
-    : m_data(std::make_shared<impl>()) {
-    m_data->m_json = ul;
-}
-
-json_type::json_type(unsigned long long ull)
-    : m_data(std::make_shared<impl>()) {
-    m_data->m_json = ull;
-}
-
-json_type::json_type(float f)
-    : m_data(std::make_shared<impl>()) {
-    m_data->m_json = f;
+    m_data->m_json = u;
 }
 
 json_type::json_type(double d)
@@ -426,24 +406,11 @@ void from_json(const json_type& j, bool& val) {
         {{.type = "bool_type", .loc = {}, .msg = "Input should be a valid boolean", .input = j}});
 }
 
-void from_json(const json_type& j, int& val) {
+void from_json(const json_type& j, std::int64_t& val) {
     read_integral(j, val);
 }
-void from_json(const json_type& j, long& val) {
+void from_json(const json_type& j, std::uint64_t& val) {
     read_integral(j, val);
-}
-void from_json(const json_type& j, long long& val) {
-    read_integral(j, val);
-}
-void from_json(const json_type& j, unsigned long& val) {
-    read_integral(j, val);
-}
-void from_json(const json_type& j, unsigned long long& val) {
-    read_integral(j, val);
-}
-
-void from_json(const json_type& j, float& val) {
-    read_floating(j, val);
 }
 void from_json(const json_type& j, double& val) {
     read_floating(j, val);
@@ -467,27 +434,11 @@ void to_json(json_type& j, bool val) {
     *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
-void to_json(json_type& j, int val) {
+void to_json(json_type& j, std::int64_t val) {
     *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
-void to_json(json_type& j, long val) {
-    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
-}
-
-void to_json(json_type& j, long long val) {
-    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
-}
-
-void to_json(json_type& j, unsigned long val) {
-    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
-}
-
-void to_json(json_type& j, unsigned long long val) {
-    *static_cast<nlohmann::ordered_json*>(j.data()) = val;
-}
-
-void to_json(json_type& j, float val) {
+void to_json(json_type& j, std::uint64_t val) {
     *static_cast<nlohmann::ordered_json*>(j.data()) = val;
 }
 
