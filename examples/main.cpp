@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
 #include <map>
 #include <numeric>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // --- Request Body ------------------------------------------------------------
@@ -157,8 +159,25 @@ std::vector<int> factorize(int n) {
     return f;
 }
 
-int main() {
+int main(int argc, char** argv) {
     fiasco::server app;
+
+    if (const char* env = std::getenv("FIASCO_LOG"); env && std::string_view{env} == "off") {
+        app.enable_logging(false);
+    }
+
+    for (int i = 1; i < argc; ++i) {
+        std::string_view arg = argv[i];
+        if (arg == "--no-log") {
+            app.enable_logging(false);
+        } else if (arg == "--log") {
+            app.enable_logging(true);
+        } else if (arg == "--no-access-log") {
+            app.enable_access_log(false);
+        } else if (arg == "--access-log") {
+            app.enable_access_log(true);
+        }
+    }
 
     app.post("/{seed}/{multiplier}", [](int seed, int multiplier, request_body body) -> response {
         double scale = body.filters.matrix_scale.value_or(1.0);
