@@ -7,10 +7,14 @@
 
 namespace fiasco::detail {
 
-logger::logger(std::string name, log_queue& queue, log_level level)
+logger::logger(std::string name,
+               log_queue& queue,
+               log_level level,
+               std::atomic<bool>& enabled)
     : m_name(std::move(name)),
       m_queue(&queue),
-      m_level(level) {}
+      m_level(level),
+      m_enabled(&enabled) {}
 
 void logger::set_level(log_level lvl) {
     m_level = lvl;
@@ -27,7 +31,7 @@ const std::string& logger::name() const {
 void logger::log(log_level lvl,
                  std::string msg,
                  std::unordered_map<std::string, std::string> fields) {
-    if (lvl < m_level) {
+    if (!m_enabled->load(std::memory_order_relaxed) || lvl < m_level) {
         return;
     }
     log_record record;

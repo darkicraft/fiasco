@@ -18,6 +18,7 @@ struct RegistryGuard {
 
     ~RegistryGuard() {
         reg->flush();  // drain before the sink is torn down
+        reg->enable_logging(true);
         reg->reset_sink();
         reg->set_level(log_level::info);
     }
@@ -215,6 +216,21 @@ TEST_CASE("logger name is preserved", "[logging][logger]") {
     RegistryGuard guard;
     auto& log = guard.reg->get("my.logger");
     REQUIRE(log.name() == "my.logger");
+}
+
+TEST_CASE("registry logging toggle", "[logging][registry]") {
+    RegistryGuard guard;
+    guard.reg->set_level(log_level::debug);
+
+    guard.reg->enable_logging(false);
+    REQUIRE_FALSE(guard.reg->logging_enabled());
+
+    guard.reg->get("off").error("must not appear");
+    REQUIRE(guard.output().find("must not appear") == std::string::npos);
+
+    guard.reg->enable_logging(true);
+    guard.reg->get("on").error("visible again");
+    REQUIRE(guard.output().find("visible again") != std::string::npos);
 }
 
 TEST_CASE("registry access log toggle", "[logging][registry]") {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <unordered_map>
 
@@ -28,7 +29,10 @@ class logger {
   private:
     friend class log_registry;
 
-    logger(std::string name, log_queue& queue, log_level level);
+    logger(std::string name,
+           log_queue& queue,
+           log_level level,
+           std::atomic<bool>& enabled);
 
     void log(log_level lvl,
              std::string msg,
@@ -37,6 +41,7 @@ class logger {
     std::string m_name;
     log_queue* m_queue;
     log_level m_level;
+    std::atomic<bool>* m_enabled;
 };
 
 }  // namespace fiasco::detail

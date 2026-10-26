@@ -34,6 +34,11 @@ class server {
         return *this;
     }
 
+    server& enable_logging(bool en) {
+        log_registry::instance().enable_logging(en);
+        return *this;
+    }
+
     server& enable_access_log(bool en) {
         log_registry::instance().enable_access_log(en);
         return *this;
@@ -116,7 +121,7 @@ class server {
                     const response& res,
                     std::chrono::steady_clock::time_point start) {
         auto& reg = log_registry::instance();
-        if (!reg.access_log_enabled()) {
+        if (!reg.access_log_enabled() || !reg.logging_enabled()) {
             return;
         }
         auto end = std::chrono::steady_clock::now();
@@ -127,12 +132,17 @@ class server {
     }
 
     response dispatch(request req) {
-        auto start = std::chrono::steady_clock::now();
+        const auto& reg = log_registry::instance();
+        const bool access_logging = reg.access_log_enabled() && reg.logging_enabled();
+        auto start = access_logging ? std::chrono::steady_clock::now()
+                                    : std::chrono::steady_clock::time_point{};
 
         access_log alog;
-        alog.client = req.client_address;
-        alog.method = req.method;
-        alog.path = req.path;
+        if (access_logging) {
+            alog.client = req.client_address;
+            alog.method = req.method;
+            alog.path = req.path;
+        }
 
         auto match = m_router.match(req.method, req.path);
         response res;
@@ -165,7 +175,9 @@ class server {
             }
         }
 
-        log_access(std::move(alog), res, start);
+        if (access_logging) {
+            log_access(std::move(alog), res, start);
+        }
         return res;
     }
 };

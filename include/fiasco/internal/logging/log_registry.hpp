@@ -23,6 +23,8 @@ class log_registry {
 
     void set_level(log_level lvl);
     void set_format(log_format_type type, bool use_colors = true);
+    void enable_logging(bool en);
+    bool logging_enabled() const;
     void enable_access_log(bool en);
     bool access_log_enabled() const;
 
@@ -54,6 +56,7 @@ class log_registry {
     mutable std::mutex m_mutex;
     std::ostream* m_sink{nullptr};
     log_level m_root_level{log_level::info};
+    std::atomic<bool> m_logging_enabled{true};
     std::atomic<bool> m_access_log{true};
 };
 

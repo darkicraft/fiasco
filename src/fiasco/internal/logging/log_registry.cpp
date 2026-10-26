@@ -46,7 +46,8 @@ logger& log_registry::get(const std::string& name) {
     if (it != m_loggers.end()) {
         return *it->second;
     }
-    auto ptr = std::unique_ptr<logger>(new logger(name, m_queue, m_root_level));
+    auto ptr = std::unique_ptr<logger>(
+        new logger(name, m_queue, m_root_level, m_logging_enabled));
     auto& ref = *ptr;
     m_loggers[name] = std::move(ptr);
     return ref;
@@ -65,12 +66,20 @@ void log_registry::set_format(log_format_type type, bool use_colors) {
     m_formatter = make_formatter(type, use_colors);
 }
 
+void log_registry::enable_logging(bool en) {
+    m_logging_enabled.store(en, std::memory_order_relaxed);
+}
+
+bool log_registry::logging_enabled() const {
+    return m_logging_enabled.load(std::memory_order_relaxed);
+}
+
 void log_registry::enable_access_log(bool en) {
-    m_access_log = en;
+    m_access_log.store(en, std::memory_order_relaxed);
 }
 
 bool log_registry::access_log_enabled() const {
-    return m_access_log;
+    return m_access_log.load(std::memory_order_relaxed);
 }
 
 void log_registry::consumer_loop() {
