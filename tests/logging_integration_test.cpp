@@ -201,6 +201,37 @@ TEST_CASE("access log can be disabled", "[logging][integration]") {
     REQUIRE(out.find("fiasco.access") == std::string::npos);
 }
 
+TEST_CASE("servers have independent logging", "[logging][integration]") {
+    LogCapture capture_a;
+    LogCapture capture_b;
+    auto port_a = find_free_port();
+    auto port_b = find_free_port();
+
+    fiasco::server app_a{
+        test_config(port_a, fiasco::make_ostream_log_sink(capture_a.captured.stream()))};
+    fiasco::server app_b{
+        test_config(port_b, fiasco::make_ostream_log_sink(capture_b.captured.stream()))};
+    app_a.get("/a", []() { return "a"; });
+    app_b.get("/b", []() { return "b"; });
+
+    std::thread thread_a([&] { app_a.run(); });
+    std::thread thread_b([&] { app_b.run(); });
+    wait_for_server(port_a);
+    wait_for_server(port_b);
+    ServerGuard guard_a{app_a, thread_a};
+    ServerGuard guard_b{app_b, thread_b};
+
+    send_and_receive(port_a, "GET /a HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    send_and_receive(port_b, "GET /b HTTP/1.1\r\nHost: localhost\r\n\r\n");
+
+    auto out_a = captured_logs(app_a, capture_a);
+    auto out_b = captured_logs(app_b, capture_b);
+    REQUIRE(out_a.find("/a") != std::string::npos);
+    REQUIRE(out_a.find("/b") == std::string::npos);
+    REQUIRE(out_b.find("/b") != std::string::npos);
+    REQUIRE(out_b.find("/a") == std::string::npos);
+}
+
 TEST_CASE("server logs shutdown message", "[logging][integration]") {
     LogCapture capture;
     auto port = find_free_port();
