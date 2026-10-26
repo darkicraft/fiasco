@@ -45,6 +45,18 @@ TEST_CASE("server closes the connection when requested", "[http][connection]") {
     REQUIRE(connection.wait_for_eof());
 }
 
+TEST_CASE("server closes the connection on malformed requests", "[http][malformed]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    server.start();
+
+    fiasco_test::http_connection connection(server.port());
+    connection.send("BOGUS / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+
+    REQUIRE(connection.wait_for_eof());
+}
+
 TEST_CASE("server closes the connection when the response says close", "[http][connection]") {
     fiasco_test::test_server server{
         fiasco::server_config{.logging = {.enabled = false}},
