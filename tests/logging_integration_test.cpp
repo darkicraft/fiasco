@@ -1,93 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <array>
-#include <chrono>
 #include <string>
-#include <thread>
 #include <utility>
 
-#include <asio.hpp>
-
 #include "fiasco/fiasco.hpp"
+#include "support/http_client.hpp"
+#include "support/test_server.hpp"
 #include "thread_safe_sink.hpp"
-
-using asio::ip::tcp;
-using namespace fiasco::detail;
-
-// ---- helpers (from integration_test.cpp) ------------------------
-
-static uint16_t find_free_port() {
-    asio::io_context ioc;
-    tcp::acceptor acceptor(ioc, tcp::endpoint(tcp::v4(), 0));
-    uint16_t port = acceptor.local_endpoint().port();
-    acceptor.close();
-    return port;
-}
-
-static void wait_for_server(uint16_t port) {
-    for (int i = 0; i < 50; ++i) {
-        try {
-            asio::io_context ioc;
-            tcp::socket socket(ioc);
-            socket.connect(tcp::endpoint(asio::ip::address_v4::loopback(), port));
-            socket.close();
-            return;
-        } catch (...) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        }
-    }
-}
-
-struct ServerGuard {
-    fiasco::server& app;
-    std::thread& t;
-    ~ServerGuard() {
-        app.stop();
-        if (t.joinable()) {
-            t.join();
-        }
-    }
-};
-
-static std::string send_and_receive(uint16_t port, const std::string& raw) {
-    asio::io_context ioc;
-    tcp::socket socket(ioc);
-    socket.connect(tcp::endpoint(asio::ip::address_v4::loopback(), port));
-
-    asio::write(socket, asio::buffer(raw));
-
-    std::string response;
-    std::array<char, 4096> buf;
-    asio::error_code ec;
-
-    while (response.find("\r\n\r\n") == std::string::npos) {
-        size_t n = socket.read_some(asio::buffer(buf), ec);
-        if (ec) {
-            break;
-        }
-        response.append(buf.data(), n);
-    }
-
-    auto header_end = response.find("\r\n\r\n");
-    auto headers = response.substr(0, header_end);
-    size_t content_length = 0;
-    auto cl = headers.find("Content-Length: ");
-    if (cl != std::string::npos) {
-        auto start = cl + 16;
-        auto end = headers.find("\r\n", start);
-        content_length = std::stoul(headers.substr(start, end - start));
-    }
-
-    while (response.size() < header_end + 4 + content_length) {
-        size_t n = socket.read_some(asio::buffer(buf), ec);
-        if (ec) {
-            break;
-        }
-        response.append(buf.data(), n);
-    }
-
-    return response;
-}
 
 // ---- Log capture helper ----------------------------------------
 
@@ -97,9 +16,8 @@ struct LogCapture {
     std::string str() const { return captured.str(); }
 };
 
-static fiasco::server_config test_config(uint16_t port, fiasco::log_sink sink, bool access = true) {
+static fiasco::server_config test_config(fiasco::log_sink sink, bool access = true) {
     return {
-        .network = {.host = "127.0.0.1", .port = port},
         .logging = {.access = access, .sink = std::move(sink)},
     };
 }
@@ -115,13 +33,12 @@ static std::string captured_logs(fiasco::server& app, LogCapture& capture) {
 
 TEST_CASE("server logs startup messages", "[logging][integration]") {
     LogCapture capture;
-    auto port = find_free_port();
-    fiasco::server app{test_config(port, fiasco::make_ostream_log_sink(capture.captured.stream()))};
+    fiasco_test::test_server server{
+        test_config(fiasco::make_ostream_log_sink(capture.captured.stream()))};
+    auto& app = server.app();
     app.get("/", []() { return "ok"; });
 
-    std::thread t([&] { app.run(); });
-    wait_for_server(port);
-    ServerGuard guard{app, t};
+    server.start();
 
     auto out = captured_logs(app, capture);
     REQUIRE(out.find("starting server") != std::string::npos);
@@ -130,15 +47,15 @@ TEST_CASE("server logs startup messages", "[logging][integration]") {
 
 TEST_CASE("server logs access line on GET", "[logging][integration]") {
     LogCapture capture;
-    auto port = find_free_port();
-    fiasco::server app{test_config(port, fiasco::make_ostream_log_sink(capture.captured.stream()))};
+    fiasco_test::test_server server{
+        test_config(fiasco::make_ostream_log_sink(capture.captured.stream()))};
+    auto& app = server.app();
     app.get("/hello", []() { return "world"; });
 
-    std::thread t([&] { app.run(); });
-    wait_for_server(port);
-    ServerGuard guard{app, t};
+    server.start();
 
-    auto resp = send_and_receive(port, "GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    auto resp =
+        fiasco_test::send_request(server.port(), "GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(resp.find("200") != std::string::npos);
 
     auto out = captured_logs(app, capture);
@@ -149,15 +66,15 @@ TEST_CASE("server logs access line on GET", "[logging][integration]") {
 
 TEST_CASE("server logs 404 access line", "[logging][integration]") {
     LogCapture capture;
-    auto port = find_free_port();
-    fiasco::server app{test_config(port, fiasco::make_ostream_log_sink(capture.captured.stream()))};
+    fiasco_test::test_server server{
+        test_config(fiasco::make_ostream_log_sink(capture.captured.stream()))};
+    auto& app = server.app();
     app.get("/exists", []() { return "ok"; });
 
-    std::thread t([&] { app.run(); });
-    wait_for_server(port);
-    ServerGuard guard{app, t};
+    server.start();
 
-    auto resp = send_and_receive(port, "GET /nonexistent HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /nonexistent HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(resp.find("404") != std::string::npos);
 
     auto out = captured_logs(app, capture);
@@ -166,16 +83,15 @@ TEST_CASE("server logs 404 access line", "[logging][integration]") {
 
 TEST_CASE("server logs 405 access line", "[logging][integration]") {
     LogCapture capture;
-    auto port = find_free_port();
-    fiasco::server app{test_config(port, fiasco::make_ostream_log_sink(capture.captured.stream()))};
+    fiasco_test::test_server server{
+        test_config(fiasco::make_ostream_log_sink(capture.captured.stream()))};
+    auto& app = server.app();
     app.get("/resource", []() { return "ok"; });
 
-    std::thread t([&] { app.run(); });
-    wait_for_server(port);
-    ServerGuard guard{app, t};
+    server.start();
 
-    auto resp = send_and_receive(
-        port, "POST /resource HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
+    auto resp = fiasco_test::send_request(
+        server.port(), "POST /resource HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
     REQUIRE(resp.find("405") != std::string::npos);
 
     auto out = captured_logs(app, capture);
@@ -184,16 +100,15 @@ TEST_CASE("server logs 405 access line", "[logging][integration]") {
 
 TEST_CASE("access log can be disabled", "[logging][integration]") {
     LogCapture capture;
-    auto port = find_free_port();
-    fiasco::server app{test_config(
-        port, fiasco::make_ostream_log_sink(capture.captured.stream()), false)};
+    fiasco_test::test_server server{
+        test_config(fiasco::make_ostream_log_sink(capture.captured.stream()), false)};
+    auto& app = server.app();
     app.get("/", []() { return "ok"; });
 
-    std::thread t([&] { app.run(); });
-    wait_for_server(port);
-    ServerGuard guard{app, t};
+    server.start();
 
-    auto resp = send_and_receive(port, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    auto resp =
+        fiasco_test::send_request(server.port(), "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(resp.find("200") != std::string::npos);
 
     auto out = captured_logs(app, capture);
@@ -204,25 +119,21 @@ TEST_CASE("access log can be disabled", "[logging][integration]") {
 TEST_CASE("servers have independent logging", "[logging][integration]") {
     LogCapture capture_a;
     LogCapture capture_b;
-    auto port_a = find_free_port();
-    auto port_b = find_free_port();
 
-    fiasco::server app_a{
-        test_config(port_a, fiasco::make_ostream_log_sink(capture_a.captured.stream()))};
-    fiasco::server app_b{
-        test_config(port_b, fiasco::make_ostream_log_sink(capture_b.captured.stream()))};
+    fiasco_test::test_server server_a{
+        test_config(fiasco::make_ostream_log_sink(capture_a.captured.stream()))};
+    fiasco_test::test_server server_b{
+        test_config(fiasco::make_ostream_log_sink(capture_b.captured.stream()))};
+    auto& app_a = server_a.app();
+    auto& app_b = server_b.app();
     app_a.get("/a", []() { return "a"; });
     app_b.get("/b", []() { return "b"; });
 
-    std::thread thread_a([&] { app_a.run(); });
-    std::thread thread_b([&] { app_b.run(); });
-    wait_for_server(port_a);
-    wait_for_server(port_b);
-    ServerGuard guard_a{app_a, thread_a};
-    ServerGuard guard_b{app_b, thread_b};
+    server_a.start();
+    server_b.start();
 
-    send_and_receive(port_a, "GET /a HTTP/1.1\r\nHost: localhost\r\n\r\n");
-    send_and_receive(port_b, "GET /b HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    fiasco_test::send_request(server_a.port(), "GET /a HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    fiasco_test::send_request(server_b.port(), "GET /b HTTP/1.1\r\nHost: localhost\r\n\r\n");
 
     auto out_a = captured_logs(app_a, capture_a);
     auto out_b = captured_logs(app_b, capture_b);
@@ -234,15 +145,13 @@ TEST_CASE("servers have independent logging", "[logging][integration]") {
 
 TEST_CASE("server logs shutdown message", "[logging][integration]") {
     LogCapture capture;
-    auto port = find_free_port();
-    fiasco::server app{test_config(port, fiasco::make_ostream_log_sink(capture.captured.stream()))};
+    fiasco_test::test_server server{
+        test_config(fiasco::make_ostream_log_sink(capture.captured.stream()))};
+    auto& app = server.app();
     app.get("/", []() { return "ok"; });
 
-    std::thread t([&] { app.run(); });
-    wait_for_server(port);
-
-    app.stop();
-    t.join();
+    server.start();
+    server.stop();
 
     auto out = captured_logs(app, capture);
     REQUIRE(out.find("server stopped") != std::string::npos);
