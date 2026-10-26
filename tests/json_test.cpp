@@ -1,6 +1,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -38,6 +39,22 @@ static_assert(!JsonSerializable<NotAnAggregate>);
 static_assert(!JsonDeserializable<NotAnAggregate>);
 static_assert(JsonSerializable<WithToJson>);                  // ADL to_json found
 static_assert(JsonSerializable<int>);                         // primitive overload
+static_assert(JsonSerializable<std::int8_t>);                 // fixed-width overloads
+static_assert(JsonSerializable<std::uint8_t>);
+static_assert(JsonSerializable<std::int16_t>);
+static_assert(JsonSerializable<std::uint16_t>);
+static_assert(JsonSerializable<std::int32_t>);
+static_assert(JsonSerializable<std::uint32_t>);
+static_assert(JsonSerializable<std::int64_t>);
+static_assert(JsonSerializable<std::uint64_t>);
+static_assert(JsonDeserializable<std::int8_t>);
+static_assert(JsonDeserializable<std::uint8_t>);
+static_assert(JsonDeserializable<std::int16_t>);
+static_assert(JsonDeserializable<std::uint16_t>);
+static_assert(JsonDeserializable<std::int32_t>);
+static_assert(JsonDeserializable<std::uint32_t>);
+static_assert(JsonDeserializable<std::int64_t>);
+static_assert(JsonDeserializable<std::uint64_t>);
 static_assert(JsonSerializable<std::vector<int>>);            // JsonSequence
 static_assert(JsonSerializable<std::map<std::string, int>>);  // JsonMap
 static_assert(JsonSerializable<std::optional<int>>);          // JsonOptional
@@ -80,6 +97,41 @@ TEST_CASE("json_type unsigned construction", "[json]") {
     json_type j(42ul);
     REQUIRE(j.is_number());
     REQUIRE(j.get<unsigned long>() == 42);
+}
+
+TEST_CASE("json_type fixed-width integer range checks", "[json]") {
+    json_type too_large(300);
+    REQUIRE_THROWS(too_large.get<std::int8_t>());
+    REQUIRE_THROWS(too_large.get<std::uint8_t>());
+
+    json_type negative(-1);
+    REQUIRE_THROWS(negative.get<std::uint8_t>());
+}
+
+TEST_CASE("json_type fixed-width integer construction", "[json]") {
+    json_type i8(std::int8_t{-12});
+    REQUIRE(i8.get<std::int8_t>() == -12);
+
+    json_type u8(std::uint8_t{200});
+    REQUIRE(u8.get<std::uint8_t>() == 200);
+
+    json_type i16(std::int16_t{-1234});
+    REQUIRE(i16.get<std::int16_t>() == -1234);
+
+    json_type u16(std::uint16_t{65000});
+    REQUIRE(u16.get<std::uint16_t>() == 65000);
+
+    json_type i32(std::int32_t{-123456});
+    REQUIRE(i32.get<std::int32_t>() == -123456);
+
+    json_type u32(std::uint32_t{4294967295u});
+    REQUIRE(u32.get<std::uint32_t>() == 4294967295u);
+
+    json_type i64(std::int64_t{2147483648LL});
+    REQUIRE(i64.get<std::int64_t>() == 2147483648LL);
+
+    json_type u64(std::uint64_t{18446744073709551615ULL});
+    REQUIRE(u64.get<std::uint64_t>() == 18446744073709551615ULL);
 }
 
 TEST_CASE("json_type float construction", "[json]") {
