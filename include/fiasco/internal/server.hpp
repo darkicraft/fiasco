@@ -1,9 +1,11 @@
 #pragma once
 
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
@@ -109,19 +111,36 @@ class server {
         tcp_server* running = nullptr;
         {
             std::lock_guard<std::mutex> lock(m_server_mutex);
+            m_run_finished = false;
             m_server = std::make_unique<tcp_server>(
                 port, host, [this](request req) { return dispatch(std::move(req)); }, workers);
             running = m_server.get();
+            m_server_cv.notify_all();
         }
         running->run();
         {
             std::lock_guard<std::mutex> lock(m_server_mutex);
             m_server.reset();
+            m_run_finished = true;
+            m_server_cv.notify_all();
         }
         m_logging.get("fiasco").info("server stopped");
     }
 
     void flush_logs() { m_logging.flush(); }
+
+    [[nodiscard]] std::uint16_t port() const {
+        std::lock_guard lock(m_server_mutex);
+        return m_server ? m_server->port() : 0;
+    }
+
+    void wait_until_started() {
+        std::unique_lock lock(m_server_mutex);
+        m_server_cv.wait(lock, [this] { return m_server != nullptr || m_run_finished; });
+        if (!m_server) {
+            throw std::runtime_error("server did not start");
+        }
+    }
 
     void stop() {
         std::lock_guard<std::mutex> lock(m_server_mutex);
@@ -134,8 +153,10 @@ class server {
     fiasco::server_config m_config;
     log_registry m_logging;
     router m_router;
-    std::mutex m_server_mutex;
+    mutable std::mutex m_server_mutex;
+    std::condition_variable m_server_cv;
     std::unique_ptr<tcp_server> m_server;
+    bool m_run_finished = false;
 
     void log_access(access_log alog,
                     const response& res,

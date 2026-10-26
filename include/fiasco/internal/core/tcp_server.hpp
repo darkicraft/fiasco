@@ -23,6 +23,7 @@ class tcp_server {
 
     void run();
     void stop() noexcept;
+    [[nodiscard]] uint16_t port() const;
 
     ~tcp_server();
 

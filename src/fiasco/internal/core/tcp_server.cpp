@@ -99,6 +99,10 @@ tcp_server::tcp_server(uint16_t port,
                        unsigned int num_threads)
     : p_impl(std::make_unique<impl>(port, host, std::move(handler), num_threads)) {}
 
+uint16_t tcp_server::port() const {
+    return p_impl->m_acceptor.local_endpoint().port();
+}
+
 void tcp_server::run() {
     accept();
     std::vector<std::thread> threads;
