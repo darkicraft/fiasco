@@ -6,5 +6,6 @@ export module fiasco.server;
 export import fiasco.common;
 
 export namespace fiasco {
+    using http_error = detail::http_error;
     using server = detail::server;
 }

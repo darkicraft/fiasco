@@ -87,3 +87,8 @@ catch_discover_tests(fiasco_test_logging)
 add_executable(fiasco_test_logging_integration logging_integration_test.cpp)
 target_link_libraries(fiasco_test_logging_integration PRIVATE Catch2::Catch2WithMain fiasco)
 catch_discover_tests(fiasco_test_logging_integration)
+
+# ---- error_handling_test ----
+add_executable(fiasco_test_error_handling error_handling_test.cpp)
+target_link_libraries(fiasco_test_error_handling PRIVATE Catch2::Catch2WithMain fiasco)
+catch_discover_tests(fiasco_test_error_handling)

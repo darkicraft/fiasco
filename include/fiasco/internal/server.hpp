@@ -1,16 +1,21 @@
 #pragma once
 
 #include <chrono>
+#include <concepts>
 #include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <typeindex>
+#include <unordered_map>
 #include <utility>
 
 #include "fiasco/internal/core/tcp_server.hpp"
+#include "fiasco/internal/http/http_error.hpp"
 #include "fiasco/internal/http/request.hpp"
 #include "fiasco/internal/http/response.hpp"
 #include "fiasco/internal/json.hpp"
@@ -48,7 +53,24 @@ namespace fiasco::detail {
 
 class server {
   public:
+    using exception_handler = std::move_only_function<response(std::exception_ptr)>;
+
     void print_routes() const { m_router.print_routes(); }
+
+    template <std::derived_from<std::exception> E, typename F>
+    void add_exception_handler(F&& handler) {
+        m_exception_handlers.insert_or_assign(
+            std::type_index(typeid(E)),
+            [fn = std::forward<F>(handler)](std::exception_ptr error) mutable -> response {
+                try {
+                    std::rethrow_exception(error);
+                } catch (const E& e) {
+                    return fn(e);
+                } catch (...) {
+                    std::rethrow_exception(error);
+                }
+            });
+    }
 
     explicit server(fiasco::server_config config = {})
         : m_config(std::move(config)),
@@ -153,10 +175,56 @@ class server {
     fiasco::server_config m_config;
     log_registry m_logging;
     router m_router;
+    std::unordered_map<std::type_index, exception_handler> m_exception_handlers;
     mutable std::mutex m_server_mutex;
     std::condition_variable m_server_cv;
     std::unique_ptr<tcp_server> m_server;
     bool m_run_finished = false;
+
+    [[nodiscard]] static response make_http_error_response(const http_error& error) {
+        json_type body = json_type::object();
+        body["detail"] = error.detail();
+        response res = response::json(body.dump(), error.status_code());
+        for (const auto& [name, value] : error.headers()) {
+            res.headers[name] = value;
+        }
+        return res;
+    }
+
+    [[nodiscard]] response translate_exception(std::exception_ptr error) {
+        try {
+            std::rethrow_exception(error);
+        } catch (const request_validation_error& e) {
+            return response::json(to_fastapi_error_json(e.errors()), 422);
+        } catch (const http_error& e) {
+            if (auto it = m_exception_handlers.find(std::type_index(typeid(e)));
+                it != m_exception_handlers.end()) {
+                return invoke_exception_handler(it->second, error);
+            }
+            return make_http_error_response(e);
+        } catch (const json::exception& e) {
+            return response::error(e.what(), 422);
+        } catch (const std::exception& e) {
+            if (auto it = m_exception_handlers.find(std::type_index(typeid(e)));
+                it != m_exception_handlers.end()) {
+                return invoke_exception_handler(it->second, error);
+            }
+            return response::error(e.what(), 500);
+        } catch (...) {
+            return response::error("Internal Server Error", 500);
+        }
+    }
+
+    [[nodiscard]] static response invoke_exception_handler(exception_handler& handler,
+                                                           std::exception_ptr error) {
+        try {
+            return handler(error);
+        } catch (const std::exception& e) {
+            return response::error(e.what(), 500);
+        } catch (...) {
+            return response::error("Internal Server Error", 500);
+        }
+    }
 
     void log_access(access_log alog,
                     const response& res,
@@ -172,8 +240,7 @@ class server {
     }
 
     response dispatch(request req) {
-        const bool access_logging =
-            m_logging.access_log_enabled() && m_logging.logging_enabled();
+        const bool access_logging = m_logging.access_log_enabled() && m_logging.logging_enabled();
         auto start = access_logging ? std::chrono::steady_clock::now()
                                     : std::chrono::steady_clock::time_point{};
 
@@ -204,14 +271,8 @@ class server {
 
             try {
                 res = (*match.handler)(std::move(req));
-            } catch (const request_validation_error& e) {
-                res = response::json(to_fastapi_error_json(e.errors()), 422);
-            } catch (const json::exception& e) {
-                res = response::error(e.what(), 422);
-            } catch (const std::exception& e) {
-                res = response::error(e.what(), 500);
             } catch (...) {
-                res = response::error("Internal Server Error", 500);
+                res = translate_exception(std::current_exception());
             }
         }
 

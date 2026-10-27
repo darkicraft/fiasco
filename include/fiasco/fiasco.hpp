@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fiasco/internal/http/http_error.hpp"
 #include "fiasco/internal/http/response.hpp"
 
 #include "fiasco/internal/json.hpp"
@@ -9,6 +10,7 @@
 
 namespace fiasco {
 
+using http_error = detail::http_error;
 using json = detail::json;
 using response = detail::response;
 using router = detail::router;
