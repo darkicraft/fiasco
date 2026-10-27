@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <tuple>
+#include <type_traits>
 #include <typeindex>
 #include <unordered_map>
 #include <utility>
@@ -20,6 +22,7 @@
 #include "fiasco/internal/http/response.hpp"
 #include "fiasco/internal/json.hpp"
 #include "fiasco/internal/logging.hpp"
+#include "fiasco/internal/meta/reflect.hpp"
 #include "fiasco/internal/router.hpp"
 
 namespace fiasco {
@@ -57,19 +60,20 @@ class server {
 
     void print_routes() const { m_router.print_routes(); }
 
+    template <typename F>
+    void add_exception_handler(F&& handler) {
+        using traits = meta::callable_traits<std::decay_t<F>>;
+        static_assert(traits::arity == 1,
+                      "an exception handler must take exactly one exception parameter");
+        using E = std::remove_cvref_t<std::tuple_element_t<0, typename traits::args_tuple>>;
+        static_assert(std::derived_from<E, std::exception>,
+                      "the exception handler parameter must derive from std::exception");
+        add_exception_handler_impl<E>(std::forward<F>(handler));
+    }
+
     template <std::derived_from<std::exception> E, typename F>
     void add_exception_handler(F&& handler) {
-        m_exception_handlers.insert_or_assign(
-            std::type_index(typeid(E)),
-            [fn = std::forward<F>(handler)](std::exception_ptr error) mutable -> response {
-                try {
-                    std::rethrow_exception(error);
-                } catch (const E& e) {
-                    return fn(e);
-                } catch (...) {
-                    std::rethrow_exception(error);
-                }
-            });
+        add_exception_handler_impl<E>(std::forward<F>(handler));
     }
 
     explicit server(fiasco::server_config config = {})
@@ -180,6 +184,21 @@ class server {
     std::condition_variable m_server_cv;
     std::unique_ptr<tcp_server> m_server;
     bool m_run_finished = false;
+
+    template <std::derived_from<std::exception> E, typename F>
+    void add_exception_handler_impl(F&& handler) {
+        m_exception_handlers.insert_or_assign(
+            std::type_index(typeid(E)),
+            [fn = std::forward<F>(handler)](std::exception_ptr error) mutable -> response {
+                try {
+                    std::rethrow_exception(error);
+                } catch (const E& e) {
+                    return fn(e);
+                } catch (...) {
+                    std::rethrow_exception(error);
+                }
+            });
+    }
 
     [[nodiscard]] static response make_http_error_response(const http_error& error) {
         json_type body = json_type::object();

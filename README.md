@@ -361,15 +361,15 @@ struct Conflict : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
 
-app.add_exception_handler<Conflict>(
-    [](const Conflict& error) {
-        return fiasco::response::error(error.what(), 409);
-    });
+app.add_exception_handler([](const Conflict& error) {
+    return fiasco::response::error(error.what(), 409);
+});
 ```
 
-Handlers match the exact dynamic exception type. `request_validation_error`
-still maps to `422`, `json::exception` to `422`, and unhandled exceptions to
-`500`.
+The exception type is inferred from the handler parameter. Handlers match the
+exact dynamic exception type; `add_exception_handler<E>(...)` remains available
+when the type needs to be stated explicitly. `request_validation_error` still
+maps to `422`, `json::exception` to `422`, and unhandled exceptions to `500`.
 
 ## Response Types
 

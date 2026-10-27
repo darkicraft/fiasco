@@ -52,7 +52,7 @@ struct conflict_error : std::runtime_error {
 int main() {
     fiasco::server app;
 
-    app.add_exception_handler<conflict_error>([](const conflict_error& error) {
+    app.add_exception_handler([](const conflict_error& error) {
         return fiasco::response::error(error.what(), 409);
     });
 
