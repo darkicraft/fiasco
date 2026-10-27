@@ -12,6 +12,7 @@ namespace fiasco {
 
 using http_error = detail::http_error;
 using json = detail::json;
+using request = detail::request;
 using response = detail::response;
 using router = detail::router;
 using server = detail::server;
