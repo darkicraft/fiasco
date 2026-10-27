@@ -64,6 +64,9 @@ cmake --install build
 | `SIGINT`/`SIGTERM` graceful shutdown | ✅ |
 | C++20 modules (experimental, opt-in) | ✅ |
 | Explicit parameter sources (`[[= query{}]]`, `[[= path{}]]`, `[[= body{}]]`, `[[= header{}]]`, `[[= cookie{}]]`) | ✅ |
+| Synchronous dependency injection with per-request caching (`[[= depends{^^fn}]]`) | ✅ |
+| `http_error` and custom exception handlers | ✅ |
+| Coroutine/async handlers | 🚧 Planned |
 | Automatic API docs generation (OpenAPI / Swagger) | 🚧 Planned |
 | Static file serving | 🚧 Planned |
 | HTTPS / TLS | 🚧 Planned |
@@ -180,6 +183,54 @@ Scalar sources accept `std::optional<T>`; an absent value becomes
 `form` and `file` markers exist for the future multipart API, but currently
 fail at compile time rather than silently misbehaving.
 
+## Dependencies
+
+A parameter can be supplied by another function with `depends{^^fn}`. The
+dependency is resolved before the handler runs, and its parameters use the same
+binding rules as handler parameters:
+
+```cpp
+struct DbSession {
+    explicit DbSession(const fiasco::request&);
+    ~DbSession();                       // cleanup after the handler
+    DbSession(DbSession&&) = default;
+    DbSession& operator=(DbSession&&) = default;
+};
+
+DbSession get_db(const fiasco::request& req) {
+    return DbSession{req};
+}
+
+struct User {
+    std::string name;
+};
+
+User get_current_user(
+    DbSession& db [[= fiasco::depends{^^get_db}]],
+    std::string token [[= fiasco::header{.alias = "Authorization"}]]) {
+    return User{token};
+}
+
+app.get("/me",
+        [](User user [[= fiasco::depends{^^get_current_user}]]) {
+            return user;
+        });
+```
+
+Dependencies are cached per request. If both the handler and another
+dependency request `get_db`, it runs once and the same value is reused.
+
+Provider results are cached by value, so take resources by reference:
+
+```cpp
+[](DbSession& db [[= depends{^^get_db}]]) { ... }
+```
+
+RAII is the replacement for FastAPI's `yield` dependencies: the value lives
+until the handler returns, then its destructor performs cleanup. Dependencies
+are synchronous for now; async providers, body parameters inside dependencies,
+and runtime captured state are deferred.
+
 ## Request Bodies
 
 Any aggregate `struct` is a model automatically. fiasco (de)serialises it
@@ -287,6 +338,38 @@ Notes:
 - `input` is the **raw** value as received (the string from the URL for path/query,
   the JSON value for a body).
 - `ctx` carries the constraint parameters and is omitted when Pydantic has none.
+
+## Errors and Exception Handlers
+
+Throw `fiasco::http_error` from a handler or dependency to return an HTTP error
+directly:
+
+```cpp
+throw fiasco::http_error(
+    401,
+    "Not authenticated",
+    {{"WWW-Authenticate", "Bearer"}});
+```
+
+This produces `{"detail": "Not authenticated"}` with status `401` and the
+supplied headers.
+
+Domain exceptions can be translated with a custom handler:
+
+```cpp
+struct Conflict : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+app.add_exception_handler<Conflict>(
+    [](const Conflict& error) {
+        return fiasco::response::error(error.what(), 409);
+    });
+```
+
+Handlers match the exact dynamic exception type. `request_validation_error`
+still maps to `422`, `json::exception` to `422`, and unhandled exceptions to
+`500`.
 
 ## Response Types
 
