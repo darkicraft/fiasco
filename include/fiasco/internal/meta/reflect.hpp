@@ -46,10 +46,24 @@ consteval std::meta::info parameter_type(std::meta::info param) {
     return std::meta::is_type(param) ? param : std::meta::type_of(param);
 }
 
+template <std::size_t... Is>
+consteval std::meta::info arguments_type_impl_for(std::meta::info callable,
+                                                  std::index_sequence<Is...>) {
+    return std::meta::substitute(^^std::tuple,
+                                 {parameter_type(std::meta::parameters_of(callable)[Is])...});
+}
+
 template <class F, std::size_t... Is>
 consteval std::meta::info arguments_type_impl(std::index_sequence<Is...>) {
-    return std::meta::substitute(
-        ^^std::tuple, {parameter_type(std::meta::parameters_of(callable_reflection<F>())[Is])...});
+    return arguments_type_impl_for(callable_reflection<F>(), std::index_sequence<Is...>{});
+}
+
+/// Name of a reflected function parameter, or an empty view if it has none.
+consteval std::string_view parameter_name(std::meta::info param) {
+    if (!std::meta::is_type(param) && std::meta::has_identifier(param)) {
+        return std::meta::identifier_of(param);
+    }
+    return {};
 }
 
 /// Introspection of a callable type, computed with reflection instead of

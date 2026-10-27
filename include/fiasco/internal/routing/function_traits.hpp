@@ -16,6 +16,7 @@
 #include "fiasco/internal/json.hpp"
 #include "fiasco/internal/meta/reflect.hpp"
 #include "fiasco/internal/routing/concepts.hpp"
+#include "fiasco/internal/routing/dependency.hpp"
 
 namespace fiasco::detail {
 
@@ -242,20 +243,89 @@ template <typename T, fiasco::field<> Spec>
     return val;
 }
 
-/// Resolve one handler argument according to its explicit source marker or,
-/// for unmarked parameters, FastAPI-style inference.
-template <typename T, fiasco::field<> Spec, param_in Source>
+template <typename T,
+          fiasco::field<> Spec,
+          param_in Source,
+          std::meta::info Provider,
+          typename Cache>
 decltype(auto) resolve_arg(const request& req,
                            std::size_t& path_idx,
                            std::string_view name,
-                           std::size_t body_count) {
+                           std::size_t body_count,
+                           Cache& cache);
+
+template <std::meta::info Provider, typename Cache, std::size_t... Is>
+auto invoke_dependency(const request& req,
+                       std::size_t& path_idx,
+                       std::size_t body_count,
+                       Cache& cache,
+                       std::index_sequence<Is...>) {
+    using traits = dependency_traits<Provider>;
+    constexpr bool uses_body =
+        ((effective_source<std::tuple_element_t<Is, typename traits::args_tuple>>(
+              meta::source_of(std::meta::parameters_of(Provider)[Is])) == param_in::body) ||
+         ...);
+    static_assert(!uses_body, "body parameters in dependencies are not supported yet");
+
+    return [:Provider:](resolve_arg<std::tuple_element_t<Is, typename traits::args_tuple>,
+                                    meta::field_of(std::meta::parameters_of(Provider)[Is]),
+                                    meta::source_of(std::meta::parameters_of(Provider)[Is]),
+                                    meta::depends_of(std::meta::parameters_of(Provider)[Is])>(
+        req,
+        path_idx,
+        meta::parameter_name(std::meta::parameters_of(Provider)[Is]),
+        body_count,
+        cache)...);
+}
+
+template <typename T, std::meta::info Provider, typename Cache>
+decltype(auto) resolve_dependency(const request& req,
+                                  std::size_t& path_idx,
+                                  std::size_t body_count,
+                                  Cache& cache) {
+    using result_type = typename dependency_slot<Provider>::result_type;
+    static_assert(std::same_as<std::remove_cvref_t<T>, result_type>,
+                  "dependency return type does not match the handler parameter type");
+    static_assert(std::is_lvalue_reference_v<T> || std::copy_constructible<result_type>,
+                  "cached dependencies must be taken by reference unless they are copyable");
+
+    auto& slot = std::get<dependency_slot<Provider>>(cache.slots);
+    if (!slot.value) {
+        slot.value.emplace(invoke_dependency<Provider>(
+            req,
+            path_idx,
+            body_count,
+            cache,
+            std::make_index_sequence<dependency_traits<Provider>::arity>{}));
+    }
+    return static_cast<T>(*slot.value);
+}
+
+/// Resolve one handler argument according to its explicit source marker or,
+/// for unmarked parameters, FastAPI-style inference.
+template <typename T,
+          fiasco::field<> Spec,
+          param_in Source,
+          std::meta::info Provider,
+          typename Cache>
+decltype(auto) resolve_arg(const request& req,
+                           std::size_t& path_idx,
+                           std::string_view name,
+                           std::size_t body_count,
+                           Cache& cache) {
     using CleanT = std::decay_t<T>;
 
-    if constexpr (std::same_as<CleanT, request>) {
+    if constexpr (Provider != std::meta::info{}) {
+        (void)Spec;
+        (void)Source;
+        (void)name;
+        return resolve_dependency<T, Provider>(req, path_idx, body_count, cache);
+    } else if constexpr (std::same_as<CleanT, request>) {
         (void)Source;
         (void)path_idx;
         (void)name;
         (void)body_count;
+        (void)cache;
         return req;
     } else {
         constexpr bool has_alias = Spec.alias.has;
@@ -331,11 +401,12 @@ template <typename T>
 using arg_storage_t =
     std::conditional_t<std::same_as<std::decay_t<T>, request>, const request&, std::decay_t<T>>;
 
-template <typename F, typename ArgsTuple, size_t... Is>
-response dispatch_impl(F& fn,
-                       const request& req,
-                       std::size_t& path_idx,
-                       std::index_sequence<Is...>) {
+template <typename T, std::meta::info Provider>
+using parameter_storage_t = std::conditional_t<Provider != std::meta::info{}, T, arg_storage_t<T>>;
+
+template <typename F, typename ArgsTuple, typename Cache, size_t... Is>
+response dispatch_impl(
+    F& fn, const request& req, std::size_t& path_idx, Cache& cache, std::index_sequence<Is...>) {
     using traits = meta::callable_traits<std::decay_t<F>>;
     constexpr std::size_t body_count =
         ((effective_source<std::tuple_element_t<Is, ArgsTuple>>(
@@ -344,12 +415,15 @@ response dispatch_impl(F& fn,
               : 0u) +
          ... + 0u);
 
-    // braced init guarantees left-to-right evaluation; values are owned by the tuple
-    std::tuple<arg_storage_t<std::tuple_element_t<Is, ArgsTuple>>...> args{
-        resolve_arg<std::tuple_element_t<Is, ArgsTuple>,
-                    meta::field_of(traits::parameter(Is)),
-                    meta::source_of(traits::parameter(Is))>(
-            req, path_idx, traits::argument_name(Is), body_count)...};
+    // braced init guarantees left-to-right evaluation; regular values are owned by the
+    // tuple, while dependency references point into the per-request cache.
+    std::tuple<parameter_storage_t<std::tuple_element_t<Is, ArgsTuple>,
+                                   meta::depends_of(traits::parameter(Is))>...>
+        args{resolve_arg<std::tuple_element_t<Is, ArgsTuple>,
+                         meta::field_of(traits::parameter(Is)),
+                         meta::source_of(traits::parameter(Is)),
+                         meta::depends_of(traits::parameter(Is))>(
+            req, path_idx, traits::argument_name(Is), body_count, cache)...};
 
     if constexpr (std::is_void_v<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>) {
         fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
@@ -364,11 +438,14 @@ template <typename F>
 [[nodiscard]] handler_fn make_handler(F&& f) {
     using traits = meta::callable_traits<std::decay_t<F>>;
     using args_tuple = traits::args_tuple;
+    static constexpr auto providers = meta::providers_for<traits::reflection()>();
+    using cache_type = dependency_cache<providers>;
 
     return [fn = std::forward<F>(f)](request req) mutable -> response {
+        cache_type cache;
         std::size_t path_idx = 0;
         return dispatch_impl<decltype(fn), args_tuple>(
-            fn, req, path_idx, std::make_index_sequence<traits::arity>{});
+            fn, req, path_idx, cache, std::make_index_sequence<traits::arity>{});
     };
 }
 

@@ -28,6 +28,47 @@ struct ExtraInput {
     int c = 0;
 };
 
+inline int dependency_calls = 0;
+
+int dependency_value() {
+    ++dependency_calls;
+    return 40;
+}
+
+int nested_dependency(int base [[= depends{^^dependency_value}]]) {
+    return base + 2;
+}
+
+int header_dependency(std::string token [[= fiasco::header{.alias = "X-Dep"}]]) {
+    return static_cast<int>(token.size());
+}
+
+int query_dependency(int n [[= fiasco::query{.ge = 1, .alias = "n"}]]) {
+    return n;
+}
+
+struct cleanup_resource {
+    static inline int constructions = 0;
+    static inline int destructions = 0;
+
+    cleanup_resource() { ++constructions; }
+    cleanup_resource(cleanup_resource&&) noexcept { ++constructions; }
+    cleanup_resource(const cleanup_resource&) = delete;
+    cleanup_resource& operator=(const cleanup_resource&) = delete;
+    ~cleanup_resource() { ++destructions; }
+};
+
+cleanup_resource make_cleanup_resource() {
+    return {};
+}
+
+int auth_dependency(const request& req) {
+    if (!req.has_header("Authorization")) {
+        throw fiasco::http_error(401, "Missing authorization");
+    }
+    return 1;
+}
+
 }  // namespace fiasco::detail
 
 // -------------------------------------------------------------------
@@ -533,4 +574,164 @@ TEST_CASE("integration explicit optional query parameter with constraint", "[int
     REQUIRE(fiasco_test::extract_body(invalid).find(R"("loc":["query","n"])") != std::string::npos);
     REQUIRE(fiasco_test::extract_body(invalid).find(R"("type":"greater_than_equal")") !=
             std::string::npos);
+}
+
+TEST_CASE("integration dependency value", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/dependency",
+            [](int value [[= fiasco::depends{^^fiasco::detail::dependency_value}]]) -> std::string {
+                return std::to_string(value);
+            });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /dependency HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "40\n");
+}
+
+TEST_CASE("integration dependency cache reuses nested providers", "[integration]") {
+    fiasco::detail::dependency_calls = 0;
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get(
+        "/dependency",
+        [](int base [[= fiasco::depends{^^fiasco::detail::dependency_value}]],
+           int nested [[= fiasco::depends{^^fiasco::detail::nested_dependency}]]) -> std::string {
+            return std::to_string(base) + ":" + std::to_string(nested);
+        });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /dependency HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "40:42\n");
+    REQUIRE(fiasco::detail::dependency_calls == 1);
+
+    // The cache is per request, not global.
+    auto second = fiasco_test::send_request(server.port(),
+                                            "GET /dependency HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(second) == 200);
+    REQUIRE(fiasco_test::extract_body(second) == "40:42\n");
+    REQUIRE(fiasco::detail::dependency_calls == 2);
+}
+
+TEST_CASE("integration dependency parameters use request annotations", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/dependency",
+            [](int size [[= fiasco::depends{^^fiasco::detail::header_dependency}]]) -> std::string {
+                return std::to_string(size);
+            });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(
+        server.port(), "GET /dependency HTTP/1.1\r\nHost: localhost\r\nX-Dep: abcd\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "4\n");
+}
+
+TEST_CASE("integration dependency RAII cleanup", "[integration]") {
+    fiasco::detail::cleanup_resource::constructions = 0;
+    fiasco::detail::cleanup_resource::destructions = 0;
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/cleanup",
+            [](fiasco::detail::cleanup_resource& resource
+                   [[= fiasco::depends{^^fiasco::detail::make_cleanup_resource}]]) -> std::string {
+                (void)resource;
+                return "ok";
+            });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /cleanup HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco::detail::cleanup_resource::constructions ==
+            fiasco::detail::cleanup_resource::destructions);
+}
+
+TEST_CASE("integration dependency can short-circuit with http_error", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/protected",
+            [](int user [[= fiasco::depends{^^fiasco::detail::auth_dependency}]]) -> std::string {
+                return std::to_string(user);
+            });
+
+    server.start();
+
+    auto missing = fiasco_test::send_request(server.port(),
+                                             "GET /protected HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(missing) == 401);
+    REQUIRE(fiasco_test::extract_body(missing).find(R"("detail":"Missing authorization")") !=
+            std::string::npos);
+
+    auto present = fiasco_test::send_request(
+        server.port(), "GET /protected HTTP/1.1\r\nHost: localhost\r\nAuthorization: yes\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(present) == 200);
+    REQUIRE(fiasco_test::extract_body(present) == "1\n");
+}
+
+TEST_CASE("integration dependency RAII cleanup when the handler throws", "[integration]") {
+    fiasco::detail::cleanup_resource::constructions = 0;
+    fiasco::detail::cleanup_resource::destructions = 0;
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/cleanup-throw",
+            [](fiasco::detail::cleanup_resource& resource
+                   [[= fiasco::depends{^^fiasco::detail::make_cleanup_resource}]]) -> std::string {
+                (void)resource;
+                throw std::runtime_error("handler failed");
+            });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /cleanup-throw HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 500);
+    REQUIRE(fiasco::detail::cleanup_resource::constructions ==
+            fiasco::detail::cleanup_resource::destructions);
+}
+
+TEST_CASE("integration dependency parameters use constraints", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/dependency",
+            [](int n [[= fiasco::depends{^^fiasco::detail::query_dependency}]]) -> std::string {
+                return std::to_string(n);
+            });
+
+    server.start();
+
+    auto invalid = fiasco_test::send_request(
+        server.port(), "GET /dependency?n=0 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(invalid) == 422);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("loc":["query","n"])") != std::string::npos);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("type":"greater_than_equal")") !=
+            std::string::npos);
+
+    auto valid = fiasco_test::send_request(
+        server.port(), "GET /dependency?n=5 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(valid) == 200);
+    REQUIRE(fiasco_test::extract_body(valid) == "5\n");
 }

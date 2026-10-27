@@ -11,8 +11,10 @@
 //           [](long id [[= path{.ge = 1}]],
 //              std::optional<int> page [[= query{}]]) { ... });
 //
+//   app.get("/me", [](User user [[= depends{^^get_current_user}]]) { ... });
+//
 // Markers are TYPES (`field<source>` + aliases), so `field{...}`/`path{...}`
-// are syntactically uniform.
+// are syntactically uniform. `depends` stores the reflected provider function.
 //
 // GCC 16.2 constraints that shape the payload (all verified):
 //   * An annotation value must be *structural*. `std::optional<T>` (private
@@ -51,6 +53,12 @@ using header = field<param_in::header>;
 using cookie = field<param_in::cookie>;
 using form = field<param_in::form>;
 using file = field<param_in::file>;
+
+/// A handler or dependency parameter supplied by another callable. `fn` is the
+/// reflected function entity, e.g. `[[= depends{^^get_current_user}]]`.
+struct depends {
+    std::meta::info fn{};
+};
 
 }  // namespace fiasco
 
@@ -110,6 +118,16 @@ consteval fiasco::field<> read_field(std::meta::info item) {
 }
 
 }  // namespace detail
+
+/// The dependency function attached to a parameter, or a null reflection if
+/// the parameter is not annotated with `depends`.
+consteval std::meta::info depends_of(std::meta::info item) {
+    const auto annotations = std::meta::annotations_of_with_type(item, ^^fiasco::depends);
+    if (annotations.empty()) {
+        return {};
+    }
+    return std::meta::extract<fiasco::depends>(annotations[0]).fn;
+}
 
 /// The `field` metadata attached to a member or parameter, normalised to the
 /// inferred form (`field<>`), or a default-constructed `field<>` if none.
