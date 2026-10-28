@@ -220,6 +220,15 @@ app.get("/me",
 Dependencies are cached per request. If both the handler and another
 dependency request `get_db`, it runs once and the same value is reused.
 
+Caching can be disabled per occurrence, matching FastAPI’s `use_cache=False`:
+
+```cpp
+[[= depends{^^get_timestamp, {.use_cache = false}}]]
+```
+
+The result still has request-scoped storage, so handlers may take it by
+reference. Each occurrence invokes the provider again.
+
 Provider results are cached by value, so take resources by reference:
 
 ```cpp

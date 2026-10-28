@@ -329,6 +329,8 @@ template <typename T,
           fiasco::field<> Spec,
           param_in Source,
           std::meta::info Provider,
+          dependency_occurrence Occurrence,
+          bool UseCache,
           typename Cache>
 decltype(auto) resolve_arg(const request& req,
                            std::size_t& path_idx,
@@ -345,19 +347,26 @@ auto invoke_dependency(const request& req,
                        Cache& cache,
                        std::index_sequence<Is...>) {
     using traits = dependency_traits<Provider>;
-    return [:Provider:](resolve_arg<std::tuple_element_t<Is, typename traits::args_tuple>,
-                                    meta::field_of(std::meta::parameters_of(Provider)[Is]),
-                                    meta::source_of(std::meta::parameters_of(Provider)[Is]),
-                                    meta::depends_of(std::meta::parameters_of(Provider)[Is])>(
-        req,
-        path_idx,
-        meta::parameter_name(std::meta::parameters_of(Provider)[Is]),
-        body,
-        embed,
-        cache)...);
+    return [:Provider:](
+        resolve_arg<std::tuple_element_t<Is, typename traits::args_tuple>,
+                    meta::field_of(std::meta::parameters_of(Provider)[Is]),
+                    meta::source_of(std::meta::parameters_of(Provider)[Is]),
+                    meta::depends_of(std::meta::parameters_of(Provider)[Is]),
+                    dependency_occurrence{Provider, Is},
+                    meta::depends_use_cache_of(std::meta::parameters_of(Provider)[Is])>(
+            req,
+            path_idx,
+            meta::parameter_name(std::meta::parameters_of(Provider)[Is]),
+            body,
+            embed,
+            cache)...);
 }
 
-template <typename T, std::meta::info Provider, typename Cache>
+template <typename T,
+          std::meta::info Provider,
+          dependency_occurrence Occurrence,
+          bool UseCache,
+          typename Cache>
 decltype(auto) resolve_dependency(
     const request& req, std::size_t& path_idx, body_context& body, bool embed, Cache& cache) {
     using result_type = typename dependency_slot<Provider>::result_type;
@@ -366,17 +375,27 @@ decltype(auto) resolve_dependency(
     static_assert(std::is_lvalue_reference_v<T> || std::copy_constructible<result_type>,
                   "cached dependencies must be taken by reference unless they are copyable");
 
-    auto& slot = std::get<dependency_slot<Provider>>(cache.slots);
-    if (!slot.value) {
-        slot.value.emplace(invoke_dependency<Provider>(
+    auto invoke = [&]() {
+        return invoke_dependency<Provider>(
             req,
             path_idx,
             body,
             embed,
             cache,
-            std::make_index_sequence<dependency_traits<Provider>::arity>{}));
+            std::make_index_sequence<dependency_traits<Provider>::arity>{});
+    };
+
+    if constexpr (UseCache) {
+        auto& slot = std::get<dependency_slot<Provider>>(cache.cached);
+        if (!slot.value) {
+            slot.value.emplace(invoke());
+        }
+        return static_cast<T>(*slot.value);
+    } else {
+        auto& slot = std::get<occurrence_slot<Occurrence>>(cache.uncached);
+        slot.value.emplace(invoke());
+        return static_cast<T>(*slot.value);
     }
-    return static_cast<T>(*slot.value);
 }
 
 /// Resolve one handler argument according to its explicit source marker or,
@@ -385,6 +404,8 @@ template <typename T,
           fiasco::field<> Spec,
           param_in Source,
           std::meta::info Provider,
+          dependency_occurrence Occurrence,
+          bool UseCache,
           typename Cache>
 decltype(auto) resolve_arg(const request& req,
                            std::size_t& path_idx,
@@ -398,7 +419,8 @@ decltype(auto) resolve_arg(const request& req,
         (void)Spec;
         (void)Source;
         (void)name;
-        return resolve_dependency<T, Provider>(req, path_idx, body, embed, cache);
+        return resolve_dependency<T, Provider, Occurrence, UseCache>(
+            req, path_idx, body, embed, cache);
     } else if constexpr (std::same_as<CleanT, request>) {
         (void)Source;
         (void)path_idx;
@@ -503,7 +525,9 @@ response dispatch_impl(F& fn,
         args{resolve_arg<std::tuple_element_t<Is, ArgsTuple>,
                          meta::field_of(traits::parameter(Is)),
                          meta::source_of(traits::parameter(Is)),
-                         meta::depends_of(traits::parameter(Is))>(
+                         meta::depends_of(traits::parameter(Is)),
+                         dependency_occurrence{traits::reflection(), Is},
+                         meta::depends_use_cache_of(traits::parameter(Is))>(
             req, path_idx, traits::argument_name(Is), body, embed, cache)...};
 
     if constexpr (std::is_void_v<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>) {
@@ -520,8 +544,9 @@ template <typename F>
     using traits = meta::callable_traits<std::decay_t<F>>;
     using args_tuple = traits::args_tuple;
     static constexpr auto providers = meta::providers_for<traits::reflection()>();
+    static constexpr auto uncached = meta::uncached_parameters_for<traits::reflection()>();
     static constexpr bool embed_body = body_embedding_for<traits::reflection()>();
-    using cache_type = dependency_cache<providers>;
+    using cache_type = dependency_cache<providers, uncached>;
 
     return [fn = std::forward<F>(f)](request req) mutable -> response {
         cache_type cache;

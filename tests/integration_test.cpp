@@ -29,11 +29,28 @@ struct ExtraInput {
 };
 
 inline int dependency_calls = 0;
+inline int uncached_dependency_calls = 0;
 
 int dependency_value() {
     ++dependency_calls;
     return 40;
 }
+
+int uncached_dependency_value() {
+    ++uncached_dependency_calls;
+    return uncached_dependency_calls;
+}
+
+int uncached_parent(int value [[= depends{^^uncached_dependency_value, {.use_cache = false}}]]) {
+    return value * 10;
+}
+
+struct uncached_nested_handler {
+    std::string operator()(int first [[= depends{^^uncached_parent, {.use_cache = false}}]],
+                           int second [[= depends{^^uncached_parent, {.use_cache = false}}]]) const {
+        return std::to_string(first) + ":" + std::to_string(second);
+    }
+};
 
 int nested_dependency(int base [[= depends{^^dependency_value}]]) {
     return base + 2;
@@ -867,4 +884,89 @@ TEST_CASE("integration dependency body validation errors use body locations", "[
     REQUIRE(fiasco_test::extract_body(resp).find(R"("loc":["body","n"])") != std::string::npos);
     REQUIRE(fiasco_test::extract_body(resp).find(R"("type":"greater_than_equal")") !=
             std::string::npos);
+}
+
+TEST_CASE("integration dependency use_cache false runs each occurrence", "[integration]") {
+    fiasco::detail::uncached_dependency_calls = 0;
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/uncached",
+            [](int first [[= fiasco::depends{^^fiasco::detail::uncached_dependency_value,
+                                            {.use_cache = false}}]],
+               int second [[= fiasco::depends{^^fiasco::detail::uncached_dependency_value,
+                                             {.use_cache = false}}]]) -> std::string {
+                return std::to_string(first) + ":" + std::to_string(second);
+            });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /uncached HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "1:2\n");
+    REQUIRE(fiasco::detail::uncached_dependency_calls == 2);
+}
+
+TEST_CASE("integration use_cache false keeps RAII dependency storage alive", "[integration]") {
+    fiasco::detail::cleanup_resource::constructions = 0;
+    fiasco::detail::cleanup_resource::destructions = 0;
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/uncached-cleanup",
+            [](fiasco::detail::cleanup_resource& resource [[= fiasco::depends{
+                ^^fiasco::detail::make_cleanup_resource, {.use_cache = false}}]]) -> std::string {
+                (void)resource;
+                return "ok";
+            });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(
+        server.port(), "GET /uncached-cleanup HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco::detail::cleanup_resource::constructions ==
+            fiasco::detail::cleanup_resource::destructions);
+}
+
+TEST_CASE("integration nested use_cache false reruns its provider", "[integration]") {
+    fiasco::detail::uncached_dependency_calls = 0;
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/uncached-nested", fiasco::detail::uncached_nested_handler{});
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(
+        server.port(), "GET /uncached-nested HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "10:20\n");
+    REQUIRE(fiasco::detail::uncached_dependency_calls == 2);
+}
+
+TEST_CASE("integration cached and uncached occurrences do not share a slot", "[integration]") {
+    fiasco::detail::uncached_dependency_calls = 0;
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/mixed-cache",
+            [](int cached [[= fiasco::depends{^^fiasco::detail::uncached_dependency_value}]],
+               int uncached [[= fiasco::depends{^^fiasco::detail::uncached_dependency_value,
+                                               {.use_cache = false}}]]) -> std::string {
+                return std::to_string(cached) + ":" + std::to_string(uncached);
+            });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /mixed-cache HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "1:2\n");
+    REQUIRE(fiasco::detail::uncached_dependency_calls == 2);
 }

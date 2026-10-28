@@ -54,10 +54,17 @@ using cookie = field<param_in::cookie>;
 using form = field<param_in::form>;
 using file = field<param_in::file>;
 
+struct depends_options {
+    bool use_cache = true;
+};
+
 /// A handler or dependency parameter supplied by another callable. `fn` is the
 /// reflected function entity, e.g. `[[= depends{^^get_current_user}]]`.
+/// Pass `{.use_cache = false}` as the second argument to bypass the per-request
+/// cache for that occurrence.
 struct depends {
     std::meta::info fn{};
+    depends_options options{};
 };
 
 }  // namespace fiasco
@@ -127,6 +134,15 @@ consteval std::meta::info depends_of(std::meta::info item) {
         return {};
     }
     return std::meta::extract<fiasco::depends>(annotations[0]).fn;
+}
+
+/// Whether this dependency may reuse its cached value within one request.
+consteval bool depends_use_cache_of(std::meta::info item) {
+    const auto annotations = std::meta::annotations_of_with_type(item, ^^fiasco::depends);
+    if (annotations.empty()) {
+        return true;
+    }
+    return std::meta::extract<fiasco::depends>(annotations[0]).options.use_cache;
 }
 
 /// The `field` metadata attached to a member or parameter, normalised to the
