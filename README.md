@@ -385,6 +385,14 @@ throw fiasco::http_error(
 This produces `{"detail": "Not authenticated"}` with status `401` and the
 supplied headers.
 
+The detail may be any JSON value:
+
+```cpp
+throw fiasco::http_error(
+    422,
+    fiasco::json{{"field", "email"}, {"reason", "invalid"}});
+```
+
 Domain exceptions can be translated with a custom handler:
 
 ```cpp

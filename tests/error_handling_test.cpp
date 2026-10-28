@@ -76,3 +76,21 @@ TEST_CASE("explicit exception handler type remains supported", "[error_handling]
     REQUIRE(fiasco_test::extract_body(resp) == R"({"detail":"gone"})"
                                                "\n");
 }
+
+TEST_CASE("http_error accepts structured JSON detail", "[error_handling]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/structured", []() -> std::string {
+        throw fiasco::http_error(422, fiasco::json{{"field", "email"}, {"reason", "invalid"}});
+    });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /structured HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 422);
+    REQUIRE(fiasco_test::extract_body(resp).find(
+                R"("detail":{"field":"email","reason":"invalid"})") != std::string::npos);
+}
