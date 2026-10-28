@@ -69,6 +69,35 @@ int auth_dependency(const request& req) {
     return 1;
 }
 
+struct dependency_body {
+    int value = 0;
+};
+
+struct handler_body {
+    int value = 0;
+};
+
+dependency_body get_dependency_body(
+    dependency_body payload [[= fiasco::body{.alias = "dependency"}]]) {
+    return payload;
+}
+
+dependency_body get_only_dependency_body(dependency_body payload) {
+    return payload;
+}
+
+dependency_body get_shared_body(dependency_body payload) {
+    return payload;
+}
+
+struct constrained_body {
+    int n [[= field{.ge = 1}]] = 0;
+};
+
+constrained_body get_constrained_body(constrained_body payload) {
+    return payload;
+}
+
 }  // namespace fiasco::detail
 
 // -------------------------------------------------------------------
@@ -734,4 +763,108 @@ TEST_CASE("integration dependency parameters use constraints", "[integration]") 
         server.port(), "GET /dependency?n=5 HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(fiasco_test::extract_status(valid) == 200);
     REQUIRE(fiasco_test::extract_body(valid) == "5\n");
+}
+
+TEST_CASE("integration body parameters are shared with dependencies", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.post("/body-dependency",
+             [](fiasco::detail::handler_body handler [[= fiasco::body{.alias = "handler"}]],
+                fiasco::detail::dependency_body dependency
+                    [[= fiasco::depends{^^fiasco::detail::get_dependency_body}]]) -> std::string {
+                 return std::to_string(handler.value + dependency.value);
+             });
+
+    server.start();
+
+    const std::string body = R"({"handler":{"value":2},"dependency":{"value":3}})";
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "POST /body-dependency HTTP/1.1\r\nHost: localhost\r\n"
+                                          "Content-Type: application/json\r\nContent-Length: " +
+                                              std::to_string(body.size()) + "\r\n\r\n" + body);
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "5\n");
+
+    const std::string missing = R"({"handler":{"value":2}})";
+    auto invalid =
+        fiasco_test::send_request(server.port(),
+                                  "POST /body-dependency HTTP/1.1\r\n"
+                                  "Host: localhost\r\n"
+                                  "Content-Type: application/json\r\n"
+                                  "Content-Length: " +
+                                      std::to_string(missing.size()) + "\r\n\r\n" + missing);
+    REQUIRE(fiasco_test::extract_status(invalid) == 422);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("loc":["body","dependency"])") !=
+            std::string::npos);
+}
+
+TEST_CASE("integration dependency can be the only body parameter", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.post("/body-dependency",
+             [](fiasco::detail::dependency_body dependency
+                    [[= fiasco::depends{^^fiasco::detail::get_only_dependency_body}]]) -> std::string {
+                 return std::to_string(dependency.value);
+             });
+
+    server.start();
+
+    const std::string body = R"({"value":7})";
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "POST /body-dependency HTTP/1.1\r\nHost: localhost\r\n"
+                                          "Content-Type: application/json\r\nContent-Length: " +
+                                              std::to_string(body.size()) + "\r\n\r\n" + body);
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "7\n");
+}
+
+TEST_CASE("integration same-name body parameters are not embedded", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.post("/body-dependency",
+             [](fiasco::detail::dependency_body payload,
+                fiasco::detail::dependency_body dependency
+                    [[= fiasco::depends{^^fiasco::detail::get_shared_body}]]) -> std::string {
+                 return std::to_string(payload.value + dependency.value);
+             });
+
+    server.start();
+
+    const std::string body = R"({"value":5})";
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "POST /body-dependency HTTP/1.1\r\nHost: localhost\r\n"
+                                          "Content-Type: application/json\r\nContent-Length: " +
+                                              std::to_string(body.size()) + "\r\n\r\n" + body);
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == "10\n");
+}
+
+TEST_CASE("integration dependency body validation errors use body locations", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.post("/body-dependency",
+             [](fiasco::detail::constrained_body dependency
+                    [[= fiasco::depends{^^fiasco::detail::get_constrained_body}]]) -> std::string {
+                 return std::to_string(dependency.n);
+             });
+
+    server.start();
+
+    const std::string body = R"({"n":0})";
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "POST /body-dependency HTTP/1.1\r\nHost: localhost\r\n"
+                                          "Content-Type: application/json\r\nContent-Length: " +
+                                              std::to_string(body.size()) + "\r\n\r\n" + body);
+    REQUIRE(fiasco_test::extract_status(resp) == 422);
+    REQUIRE(fiasco_test::extract_body(resp).find(R"("loc":["body","n"])") != std::string::npos);
+    REQUIRE(fiasco_test::extract_body(resp).find(R"("type":"greater_than_equal")") !=
+            std::string::npos);
 }

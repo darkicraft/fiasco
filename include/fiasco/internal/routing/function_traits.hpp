@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cctype>
 #include <charconv>
 #include <concepts>
@@ -112,6 +113,71 @@ consteval param_in effective_source(param_in source) {
     }
 }
 
+inline constexpr std::size_t max_body_params = 64;
+
+consteval void add_body_key(std::array<std::string_view, max_body_params>& keys,
+                            std::size_t& count,
+                            std::string_view key) {
+    for (std::size_t i = 0; i < count; ++i) {
+        if (keys[i] == key) {
+            return;
+        }
+    }
+    if (count == max_body_params) {
+        throw std::meta::exception("too many body parameters", ^^fiasco::depends);
+    }
+    keys[count++] = key;
+}
+
+template <std::meta::info Parameter>
+consteval void collect_body_key(std::array<std::string_view, max_body_params>& keys,
+                                std::size_t& count) {
+    if (meta::depends_of(Parameter) != std::meta::info{}) {
+        return;
+    }
+
+    using parameter_type = [:meta::parameter_type(Parameter):];
+    if constexpr (effective_source<parameter_type>(meta::source_of(Parameter)) == param_in::body) {
+        const auto spec = meta::field_of(Parameter);
+        add_body_key(
+            keys, count, spec.alias.has ? spec.alias.view() : meta::parameter_name(Parameter));
+    }
+}
+
+template <std::meta::info Callable, std::size_t I, std::size_t N>
+consteval void collect_callable_body_keys(std::array<std::string_view, max_body_params>& keys,
+                                          std::size_t& count) {
+    if constexpr (I < N) {
+        collect_body_key<std::meta::parameters_of(Callable)[I]>(keys, count);
+        collect_callable_body_keys<Callable, I + 1, N>(keys, count);
+    }
+}
+
+template <auto Providers, std::size_t I, std::size_t N>
+consteval void collect_provider_body_keys(std::array<std::string_view, max_body_params>& keys,
+                                          std::size_t& count) {
+    if constexpr (I < N) {
+        constexpr auto provider = Providers[I];
+        collect_callable_body_keys<provider, 0, std::meta::parameters_of(provider).size()>(keys,
+                                                                                           count);
+        collect_provider_body_keys<Providers, I + 1, N>(keys, count);
+    }
+}
+
+/// True when the handler and its dependency graph have more than one unique
+/// body field name, which means body parameters are embedded by name.
+template <std::meta::info Callable>
+consteval bool body_embedding_for() {
+    constexpr auto providers = meta::providers_for<Callable>();
+    std::array<std::string_view, max_body_params> keys{};
+    std::size_t count = 0;
+
+    collect_callable_body_keys<Callable, 0, std::meta::parameters_of(Callable).size()>(keys, count);
+    collect_provider_body_keys<providers, 0, providers.size()>(keys, count);
+
+    return count > 1;
+}
+
 template <typename T, fiasco::field<> Spec>
 [[nodiscard]] T parse_scalar(std::string_view raw, const char* source, std::string_view key) {
     if constexpr (OptionalPrimitive<T>) {
@@ -159,32 +225,48 @@ template <typename T>
     return {};  // unreachable
 }
 
+struct body_context {
+    const request& req;
+    bool loaded = false;
+    json_type value;
+
+    explicit body_context(const request& request)
+        : req(request) {}
+
+    [[nodiscard]] const json_type& get() {
+        if (loaded) {
+            return value;
+        }
+        if (req.body.empty()) {
+            throw request_validation_error({{.type = "missing",
+                                             .loc = {std::string("body")},
+                                             .msg = "Field required",
+                                             .input = json_type()}});
+        }
+        try {
+            value = json::parse(req.body);
+        } catch (const json_type::parse_exception& e) {
+            throw request_validation_error({{.type = "json_invalid",
+                                             .loc = {std::string("body"), e.position()},
+                                             .msg = "JSON decode error",
+                                             .input = json_type::object()}});
+        } catch (const json::exception&) {
+            throw request_validation_error({{.type = "json_invalid",
+                                             .loc = {std::string("body"), std::size_t{0}},
+                                             .msg = "JSON decode error",
+                                             .input = json_type::object()}});
+        }
+        loaded = true;
+        return value;
+    }
+};
+
 template <typename T, fiasco::field<> Spec>
-[[nodiscard]] T resolve_body(const request& req, std::string_view key, std::size_t body_count) {
+[[nodiscard]] T resolve_body(body_context& body, std::string_view key, bool embed) {
     using CleanT = std::decay_t<T>;
     static_assert(FromJson<CleanT>, "body parameters must be JSON-deserializable");
 
-    if (req.body.empty()) {
-        throw request_validation_error({{.type = "missing",
-                                         .loc = {std::string("body")},
-                                         .msg = "Field required",
-                                         .input = json_type()}});
-    }
-
-    json_type j;
-    try {
-        j = json::parse(req.body);
-    } catch (const json_type::parse_exception& e) {
-        throw request_validation_error({{.type = "json_invalid",
-                                         .loc = {std::string("body"), e.position()},
-                                         .msg = "JSON decode error",
-                                         .input = json_type::object()}});
-    } catch (const json::exception&) {
-        throw request_validation_error({{.type = "json_invalid",
-                                         .loc = {std::string("body"), std::size_t{0}},
-                                         .msg = "JSON decode error",
-                                         .input = json_type::object()}});
-    }
+    const json_type& j = body.get();
 
     const auto validate = [&](const CleanT& value, const json_type& raw) {
         std::vector<validation_error> errors;
@@ -194,14 +276,14 @@ template <typename T, fiasco::field<> Spec>
         }
     };
 
-    if (body_count > 1) {
+    if (embed) {
         if (!j.contains(std::string(key))) {
             throw request_validation_error({{.type = "missing",
                                              .loc = {std::string("body"), std::string(key)},
                                              .msg = "Field required",
                                              .input = j}});
         }
-        json_type sub = j[std::string(key)];
+        const json_type& sub = j[std::string(key)];
         CleanT val{};
         try {
             from_json(sub, val);
@@ -251,22 +333,18 @@ template <typename T,
 decltype(auto) resolve_arg(const request& req,
                            std::size_t& path_idx,
                            std::string_view name,
-                           std::size_t body_count,
+                           body_context& body,
+                           bool embed,
                            Cache& cache);
 
 template <std::meta::info Provider, typename Cache, std::size_t... Is>
 auto invoke_dependency(const request& req,
                        std::size_t& path_idx,
-                       std::size_t body_count,
+                       body_context& body,
+                       bool embed,
                        Cache& cache,
                        std::index_sequence<Is...>) {
     using traits = dependency_traits<Provider>;
-    constexpr bool uses_body =
-        ((effective_source<std::tuple_element_t<Is, typename traits::args_tuple>>(
-              meta::source_of(std::meta::parameters_of(Provider)[Is])) == param_in::body) ||
-         ...);
-    static_assert(!uses_body, "body parameters in dependencies are not supported yet");
-
     return [:Provider:](resolve_arg<std::tuple_element_t<Is, typename traits::args_tuple>,
                                     meta::field_of(std::meta::parameters_of(Provider)[Is]),
                                     meta::source_of(std::meta::parameters_of(Provider)[Is]),
@@ -274,15 +352,14 @@ auto invoke_dependency(const request& req,
         req,
         path_idx,
         meta::parameter_name(std::meta::parameters_of(Provider)[Is]),
-        body_count,
+        body,
+        embed,
         cache)...);
 }
 
 template <typename T, std::meta::info Provider, typename Cache>
-decltype(auto) resolve_dependency(const request& req,
-                                  std::size_t& path_idx,
-                                  std::size_t body_count,
-                                  Cache& cache) {
+decltype(auto) resolve_dependency(
+    const request& req, std::size_t& path_idx, body_context& body, bool embed, Cache& cache) {
     using result_type = typename dependency_slot<Provider>::result_type;
     static_assert(std::same_as<std::remove_cvref_t<T>, result_type>,
                   "dependency return type does not match the handler parameter type");
@@ -294,7 +371,8 @@ decltype(auto) resolve_dependency(const request& req,
         slot.value.emplace(invoke_dependency<Provider>(
             req,
             path_idx,
-            body_count,
+            body,
+            embed,
             cache,
             std::make_index_sequence<dependency_traits<Provider>::arity>{}));
     }
@@ -311,7 +389,8 @@ template <typename T,
 decltype(auto) resolve_arg(const request& req,
                            std::size_t& path_idx,
                            std::string_view name,
-                           std::size_t body_count,
+                           body_context& body,
+                           bool embed,
                            Cache& cache) {
     using CleanT = std::decay_t<T>;
 
@@ -319,15 +398,18 @@ decltype(auto) resolve_arg(const request& req,
         (void)Spec;
         (void)Source;
         (void)name;
-        return resolve_dependency<T, Provider>(req, path_idx, body_count, cache);
+        return resolve_dependency<T, Provider>(req, path_idx, body, embed, cache);
     } else if constexpr (std::same_as<CleanT, request>) {
         (void)Source;
         (void)path_idx;
         (void)name;
-        (void)body_count;
+        (void)body;
+        (void)embed;
         (void)cache;
         return req;
     } else {
+        (void)body;
+        (void)embed;
         constexpr bool has_alias = Spec.alias.has;
         const std::string_view key = has_alias ? Spec.alias.view() : name;
 
@@ -346,7 +428,7 @@ decltype(auto) resolve_arg(const request& req,
         if constexpr (Source == param_in::form || Source == param_in::file) {
             static_assert(!sizeof(T), "form/file parameters are not implemented");
         } else if constexpr (Source == param_in::body) {
-            return resolve_body<CleanT, Spec>(req, key, body_count);
+            return resolve_body<CleanT, Spec>(body, key, embed);
         } else if constexpr (Source == param_in::path) {
             static_assert(ScalarParam<CleanT>, "path parameters must be scalar types");
             if (auto it = req.path_params.find(key); it != req.path_params.end()) {
@@ -390,7 +472,7 @@ decltype(auto) resolve_arg(const request& req,
             }
             return absent("query");
         } else if constexpr (FromJson<CleanT>) {
-            return resolve_body<CleanT, Spec>(req, key, body_count);
+            return resolve_body<CleanT, Spec>(body, key, embed);
         } else {
             static_assert(!sizeof(T), "unsupported handler parameter type");
         }
@@ -405,15 +487,14 @@ template <typename T, std::meta::info Provider>
 using parameter_storage_t = std::conditional_t<Provider != std::meta::info{}, T, arg_storage_t<T>>;
 
 template <typename F, typename ArgsTuple, typename Cache, size_t... Is>
-response dispatch_impl(
-    F& fn, const request& req, std::size_t& path_idx, Cache& cache, std::index_sequence<Is...>) {
+response dispatch_impl(F& fn,
+                       const request& req,
+                       std::size_t& path_idx,
+                       body_context& body,
+                       bool embed,
+                       Cache& cache,
+                       std::index_sequence<Is...>) {
     using traits = meta::callable_traits<std::decay_t<F>>;
-    constexpr std::size_t body_count =
-        ((effective_source<std::tuple_element_t<Is, ArgsTuple>>(
-              meta::source_of(traits::parameter(Is))) == param_in::body
-              ? 1u
-              : 0u) +
-         ... + 0u);
 
     // braced init guarantees left-to-right evaluation; regular values are owned by the
     // tuple, while dependency references point into the per-request cache.
@@ -423,7 +504,7 @@ response dispatch_impl(
                          meta::field_of(traits::parameter(Is)),
                          meta::source_of(traits::parameter(Is)),
                          meta::depends_of(traits::parameter(Is))>(
-            req, path_idx, traits::argument_name(Is), body_count, cache)...};
+            req, path_idx, traits::argument_name(Is), body, embed, cache)...};
 
     if constexpr (std::is_void_v<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>) {
         fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
@@ -439,13 +520,15 @@ template <typename F>
     using traits = meta::callable_traits<std::decay_t<F>>;
     using args_tuple = traits::args_tuple;
     static constexpr auto providers = meta::providers_for<traits::reflection()>();
+    static constexpr bool embed_body = body_embedding_for<traits::reflection()>();
     using cache_type = dependency_cache<providers>;
 
     return [fn = std::forward<F>(f)](request req) mutable -> response {
         cache_type cache;
+        body_context body{req};
         std::size_t path_idx = 0;
         return dispatch_impl<decltype(fn), args_tuple>(
-            fn, req, path_idx, cache, std::make_index_sequence<traits::arity>{});
+            fn, req, path_idx, body, embed_body, cache, std::make_index_sequence<traits::arity>{});
     };
 }
 

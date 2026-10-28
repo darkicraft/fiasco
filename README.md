@@ -226,10 +226,32 @@ Provider results are cached by value, so take resources by reference:
 [](DbSession& db [[= depends{^^get_db}]]) { ... }
 ```
 
+Body parameters are shared across the whole dependency graph. The body is
+parsed once. If there is one unique body field name, the whole body is used; if
+the handler and its dependencies declare multiple names, the body is embedded
+by name:
+
+```cpp
+struct SearchRequest { std::string query; };
+struct Options { int limit; };
+
+Options get_options(Options payload) { return payload; }
+
+app.post("/search",
+         [](SearchRequest request,
+            Options options [[= depends{^^get_options}]]) {
+             ...
+         });
+```
+
+```json
+{"request": {"query": "cats"}, "payload": {"limit": 10}}
+```
+
 RAII is the replacement for FastAPI's `yield` dependencies: the value lives
 until the handler returns, then its destructor performs cleanup. Dependencies
-are synchronous for now; async providers, body parameters inside dependencies,
-and runtime captured state are deferred.
+are synchronous for now; async providers and runtime captured state are
+deferred.
 
 ## Request Bodies
 
