@@ -53,6 +53,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
+| `constraints` | `validation/constraints.cpp` | `gt`/`ge`/`lt`/`le`/`multiple_of`, length, `pattern`, `alias`, and collected `422` errors. |
 
 ## Dependencies
 

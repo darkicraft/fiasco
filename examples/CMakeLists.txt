@@ -15,6 +15,7 @@ fiasco_add_example(body_model models/body.cpp)
 fiasco_add_example(multiple_bodies models/multiple_bodies.cpp)
 fiasco_add_example(collections models/collections.cpp)
 fiasco_add_example(requiredness models/requiredness.cpp)
+fiasco_add_example(constraints validation/constraints.cpp)
 fiasco_add_example(dependencies dependencies.cpp)
 fiasco_add_example(dependency_graph dependency_graph.cpp)
 
