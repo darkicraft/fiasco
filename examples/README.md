@@ -68,6 +68,7 @@ cmake --build build --target hello
 | Target | Source | Demonstrates |
 |---|---|---|
 | `http_errors` | `errors/http_error.cpp` | `http_error` with status, string or structured detail, and response headers. |
+| `exception_handlers` | `errors/custom_handler.cpp` | Domain exceptions mapped by inferred and explicit handler types. |
 
 ## Responses
 
