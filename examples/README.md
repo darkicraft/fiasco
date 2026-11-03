@@ -80,6 +80,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
+| `server_configuration` | `server/configuration.cpp` | `server_config`, host/port/workers, port `0`, and start/stop lifecycle helpers. |
 
 ## JSON
 
