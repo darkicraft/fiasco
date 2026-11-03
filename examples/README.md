@@ -47,6 +47,7 @@ cmake --build build --target hello
 | `body_model` | `models/body.cpp` | A single reflected JSON request model and reflected response model. |
 | `multiple_bodies` | `models/multiple_bodies.cpp` | Several body parameters embedded by name into one JSON object. |
 | `collections` | `models/collections.cpp` | Nested structs, `vector`, `map`, `pair`, `tuple`, and `optional` in requests and responses. |
+| `requiredness` | `models/requiredness.cpp` | Required vs nullable vs defaulted members, including absent and `null` cases. |
 
 ## Validation
 
