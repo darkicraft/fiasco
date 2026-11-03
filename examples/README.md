@@ -38,6 +38,7 @@ cmake --build build --target hello
 |---|---|---|
 | `path_params` | `params/path.cpp` | Name-bound, order-independent path parameters across scalar and fixed-width types. |
 | `query_params` | `params/query.cpp` | Typed query binding, optional values, percent decoding, duplicates, and missing/parse errors. |
+| `param_sources` | `params/sources.cpp` | Explicit `path`, `query`, `body`, `header`, and `cookie` markers with aliases and optionals. |
 
 ## Models
 
