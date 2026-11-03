@@ -74,6 +74,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
+| `responses` | `responses/factories.cpp` | Response factories, automatic return wrapping, status/header mutation, redirect, and empty responses. |
 
 ## Server
 
