@@ -94,6 +94,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
+| `module` | `modules/module.cpp` | `import fiasco.server;` with the opt-in C++20 module build. |
 
 ## All-in-one
 

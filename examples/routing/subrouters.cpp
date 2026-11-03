@@ -1,13 +1,11 @@
-// Mounting routers under prefixes.
+// Sub-routers mounted under path prefixes.
 //
 //   cmake --build build --target subrouters
 //   FIASCO_PORT=8080 ./build/examples/subrouters
 //
 //   curl localhost:8080/api/v1/status
-//   curl localhost:8080/api/v1/users/42
-//   curl localhost:8080/api/v1/health
-//
-// The same routes can also be printed at startup with app.print_routes().
+//   curl localhost:8080/api/v1/users/7
+//   curl localhost:8080/admin/health
 
 #include <fiasco/fiasco.hpp>
 
@@ -31,16 +29,21 @@ int main() {
         fiasco::server_config{.network = {.port = example_port()}},
     };
 
-    fiasco::router users;
-    users.get("/{id}", [](int id) { return fiasco::json{{"user_id", id}}; });
+    fiasco::router api("/v1");
+    api.get("/status", []() { return "ok"; });
+    api.get("/users/{id}", [](int id) { return fiasco::json{{"id", id}}; });
 
-    fiasco::router v1("/v1");
-    v1.get("/status", []() { return fiasco::json{{"status", "ok"}}; });
-    v1.get("/health", []() { return "healthy"; });
-    v1.include_router(std::move(users), "/users");
+    // A router may itself contain another router.
+    fiasco::router users("/users");
+    users.get("/", []() { return fiasco::json{{"users", "all"}}; });
+    api.include_router(std::move(users), "/v2");
+    // GET /api/v1/v2/users
 
-    // Prefixes compose: "/api" + "/v1" + "/users/{id}".
-    app.include_router(std::move(v1), "/api");
+    fiasco::router admin("/admin");
+    admin.get("/health", []() { return "healthy"; });
+
+    app.include_router(std::move(api), "/api");
+    app.include_router(std::move(admin));
 
     app.print_routes();
     app.run();
