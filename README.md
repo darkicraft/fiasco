@@ -92,6 +92,12 @@ int main() {
 }
 ```
 
+## Examples
+
+The [`examples/`](examples/README.md) directory contains a focused example for
+each feature, plus one `all_in_one` workload that combines them. Start with
+`hello`, then browse by category in the example index.
+
 ## How requests are bound
 
 Handler arguments are bound **by name** using C++26 reflection, so the order of

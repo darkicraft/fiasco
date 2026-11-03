@@ -1,16 +1,16 @@
-add_executable(main main.cpp)
-target_link_libraries(main PRIVATE fiasco)
+function(fiasco_add_example name source)
+  add_executable(${name} ${source})
+  target_link_libraries(${name} PRIVATE fiasco)
+  set_target_properties(${name} PROPERTIES FOLDER "examples")
+endfunction()
 
-add_executable(hello hello.cpp)
-target_link_libraries(hello PRIVATE fiasco)
-
-add_executable(dependencies dependencies.cpp)
-target_link_libraries(dependencies PRIVATE fiasco)
-
-add_executable(dependency_graph dependency_graph.cpp)
-target_link_libraries(dependency_graph PRIVATE fiasco)
+fiasco_add_example(main main.cpp)
+fiasco_add_example(hello hello.cpp)
+fiasco_add_example(dependencies dependencies.cpp)
+fiasco_add_example(dependency_graph dependency_graph.cpp)
 
 if(FIASCO_BUILD_MODULES)
   add_executable(module module.cpp)
   target_link_libraries(module PRIVATE fiasco_modules)
+  set_target_properties(module PROPERTIES FOLDER "examples")
 endif()

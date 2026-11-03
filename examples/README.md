@@ -1,0 +1,84 @@
+# Fiasco examples
+
+The examples are split by feature: each target is a small, standalone program
+that demonstrates one part of the API. Start with `hello`, then follow the
+categories below. `all_in_one` is intentionally different: it combines several
+features into a heavier workload and is not the place to learn a single API.
+
+Every example is self-contained and reads `FIASCO_PORT` (default `8080`), so
+several can run at once without editing code:
+
+```shell
+FIASCO_PORT=9001 ./build/examples/path_params
+curl 'localhost:9001/items/42'
+```
+
+Build a single target from the repository root:
+
+```shell
+cmake --build build --target hello
+```
+
+## Basics
+
+| Target | Source | Demonstrates |
+|---|---|---|
+| `hello` | `basics/hello.cpp` | The smallest useful server: one route and a text response. |
+
+## Routing
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+## Parameters
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+## Models
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+## Validation
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+## Dependencies
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+## Errors
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+## Responses
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+## Server
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+## JSON
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+## Modules
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+## All-in-one
+
+| Target | Source | Demonstrates |
+|---|---|---|
+
+Each example's source header also contains the exact `curl` commands for the
+routes it registers.
