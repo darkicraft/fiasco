@@ -18,7 +18,7 @@ fiasco_add_example(requiredness models/requiredness.cpp)
 fiasco_add_example(constraints validation/constraints.cpp)
 fiasco_add_example(dependencies dependencies/basic.cpp)
 fiasco_add_example(dependency_caching dependencies/caching.cpp)
-fiasco_add_example(dependency_graph dependency_graph.cpp)
+fiasco_add_example(dependency_graph dependencies/graph.cpp)
 
 if(FIASCO_BUILD_MODULES)
   add_executable(module module.cpp)

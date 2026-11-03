@@ -1,8 +1,9 @@
-// A dependency-graph stress test.
+// Advanced dependency-graph stress test.
 //
 // The graph is intentionally large and redundant: many providers depend on the
 // same shared nodes, and the handler asks for several roots. With per-request
-// caching, every provider runs exactly once.
+// caching, every provider runs exactly once. This is a manual diagnostic
+// example, not the place to learn dependency injection.
 //
 //   curl localhost:8080/graph/reset
 //   curl 'localhost:8080/graph?limit=25' -H 'X-Trace: abc' -H 'X-Tenant: acme'
