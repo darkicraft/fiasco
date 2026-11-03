@@ -44,6 +44,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
+| `body_model` | `models/body.cpp` | A single reflected JSON request model and reflected response model. |
 
 ## Validation
 
