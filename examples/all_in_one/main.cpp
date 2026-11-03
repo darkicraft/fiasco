@@ -1,18 +1,12 @@
 // =============================================================================
-// fiasco feature tour
+// All-in-one integration example
 //
-// Exercises, on purpose, in an over-engineered way:
-//   - path params by name, order-independent, every supported scalar type
-//   - query params by name (int / bool / string)
-//   - multiple body models embedded by name  ({"req": {...}, "tuning": {...}})
-//   - single body model (batch)
-//   - required vs nullable vs defaulted members (Pydantic semantics)
-//   - field constraints: gt ge lt le multiple_of min_length max_length alias
-//   - optional / vector / map / pair / tuple / nested structs (both directions)
-//   - fiasco::json type-erased wrapper (incl. recursive building)
-//   - fiasco::response factories + status/header mutation
-//   - sub-router mounting (/v1, /tools)
-//   - multi-threaded server (sleep / cpu / whoami endpoints)
+// This is a heavier composition demo, not the place to learn one API. The
+// focused examples under examples/ each isolate a single feature.
+//
+// It combines path/query binding, multiple body models, nested collections,
+// requiredness, constraints, sub-routers, response factories, JSON building,
+// and a multi-threaded server (sleep / cpu / whoami endpoints).
 //
 // Designated initializers in `field{...}` follow the declaration order:
 //   gt, ge, lt, le, multiple_of, min_length, max_length,
@@ -726,49 +720,3 @@ int main(int argc, char** argv) {
     app.include_router(std::move(tools));
     app.run();
 }
-
-// =============================================================================
-// SAMPLE REQUESTS
-// =============================================================================
-//
-// Happy path (all features):
-//   curl -X POST 'localhost:8080/v1/analyze/7/3/0.1/true?page=3&verbose=true&q=hi' \
-//     -H 'content-type: application/json' -d '{
-//       "req": {
-//         "label": "aabbbcc",
-//         "user-name": "ada",
-//         "weights": [1, 2, 3],
-//         "offsets": {"a": 1.5, "b": -2.0},
-//         "window": [2, 9],
-//         "meta": [7, "x", true],
-//         "regions": [{"x": 5, "y": 5, "note": null}, {"x": 1, "y": 2}],
-//         "focus": null,
-//         "filters": {"min_degree": 1, "matrix_scale": 2.5, "tags": ["z", "a", "m"]}
-//       },
-//       "tuning": {"percent": 50, "boxes": 9, "damping": 1.5, "code": "abc", "matrix_n": 5}
-//     }'
-//
-// Should 422:
-//   - "focus" missing                      (required + nullable)
-//   - "label": ""                          (min_length)
-//   - "tuning.percent": 0 or 101           (gt / le)
-//   - "tuning.boxes": 4                    (multiple_of 3)
-//   - "tuning.matrix_n": 9                 (le 8)
-//   - "regions": [{"x": -1, "y": 0}]       (ge on nested element)
-//   - "weights" with 17 items              (max_length)
-//   - "username" instead of "user-name"    (alias; falls back to default)
-//   - ?page=abc, missing ?q, {strict}=maybe
-//   - body with only "req" (missing "tuning" embedded model)
-//
-// Edge seeds: 0, -7, 2147483647, 7 (prime => secret)
-// Overflow:   /v1/analyze/2147483647/9223372036854775807/1.0/false  => combined.overflow=true
-//
-// Items:
-//   curl -X PUT 'localhost:8080/v1/items/1?dry_run=false' -H 'content-type: application/json' \
-//     -d '{"sku":"ab-1","unit-price":9.99,"quantity":3,"pack_size":12,"tags":["x","a"],
-//          "discount":0.1,"notes":null}'
-//
-// Concurrency (4 threads => 4 parallel sleeps finish in ~1s, not 4s):
-//   for i in 1 2 3 4; do curl -s localhost:8080/tools/sleep/1000 & done; wait
-//   for i in 1 2 3 4 5 6; do curl -s localhost:8080/tools/whoami; done
-//   ab -n 2000 -c 64 'localhost:8080/tools/cpu/200000'

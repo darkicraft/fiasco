@@ -4,7 +4,7 @@ function(fiasco_add_example name source)
   set_target_properties(${name} PROPERTIES FOLDER "examples")
 endfunction()
 
-fiasco_add_example(main main.cpp)
+fiasco_add_example(all_in_one all_in_one/main.cpp)
 fiasco_add_example(hello basics/hello.cpp)
 fiasco_add_example(routing_methods routing/methods.cpp)
 fiasco_add_example(subrouters routing/subrouters.cpp)

@@ -100,6 +100,29 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
+| `all_in_one` | `all_in_one/main.cpp` | A heavier analytics/batch workload combining models, constraints, sub-routers, responses, JSON, and threading. |
+
+A representative request:
+
+```shell
+curl -X POST 'localhost:8080/v1/analyze/7/3/0.1/true?page=3&verbose=true&q=hi' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "req": {
+      "label": "aabbbcc",
+      "user-name": "ada",
+      "weights": [1, 2, 3],
+      "offsets": {"a": 1.5, "b": -2.0},
+      "window": [2, 9],
+      "meta": [7, "x", true],
+      "regions": [{"x": 5, "y": 5, "note": null}],
+      "focus": null
+    },
+    "tuning": {"percent": 50, "boxes": 9, "damping": 1.5, "code": "abc", "matrix_n": 5}
+  }'
+```
+
+The other focused examples are the reference for each feature used here.
 
 Each example's source header also contains the exact `curl` commands for the
 routes it registers.
