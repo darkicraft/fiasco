@@ -12,6 +12,7 @@
 #include <memory>
 #include <meta>
 #include <optional>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -606,7 +607,7 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
                   "'min_length' is only valid on string/sequence fields");
     static_assert(!Spec.max_length.has || is_lengthy,
                   "'max_length' is only valid on string/sequence fields");
-    static_assert(!Spec.pattern.has, "'pattern' is not implemented yet");
+    static_assert(!Spec.pattern.has || is_string, "'pattern' is only valid on string fields");
     if constexpr (is_number && std::integral<U>) {
         static_assert(!Spec.gt.has || is_integral_value(Spec.gt.value),
                       "'gt' must be an integer on an integer field");
@@ -689,6 +690,22 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
                       plural(Spec.max_length.value, " character", " characters"),
                   std::move(ctx));
             return;
+        }
+        if (Spec.pattern.has) {
+            // Pydantic's Rust regex performs a search (not a full match). The
+            // ECMAScript engine is the closest standard equivalent; differences
+            // for look-around, backreferences, and Unicode are documented.
+            static const std::regex regex{
+                std::string(Spec.pattern.view()),
+                std::regex_constants::ECMAScript | std::regex_constants::optimize};
+            if (!std::regex_search(value, regex)) {
+                json_type ctx = json_type::object();
+                ctx["pattern"] = json_type(std::string(Spec.pattern.view()));
+                raise("string_pattern_mismatch",
+                      "String should match pattern '" + std::string(Spec.pattern.view()) + "'",
+                      std::move(ctx));
+                return;
+            }
         }
     } else if constexpr (is_sized) {
         const char* field_type = JsonMap<U> ? "Dictionary" : "List";

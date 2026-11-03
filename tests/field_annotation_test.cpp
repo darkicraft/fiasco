@@ -23,6 +23,21 @@ struct CFloatGt { double v [[= field{.gt = 5}]] = 0.0; };
 
 struct CStrMin  { std::string v [[= field{.min_length = 3}]]; };
 struct CStrMax  { std::string v [[= field{.max_length = 2}]]; };
+struct CStrPattern {
+    std::string v [[= field{.pattern = "^[a-z]+$"}]];
+};
+struct CStrPatternSearch {
+    std::string v [[= field{.pattern = "[a-z]+"}]];
+};
+struct CStrPatternEscaped {
+    std::string v [[= field{.pattern = "^\\d+$"}]];
+};
+struct CStrPatternOrder {
+    std::string v [[= field{.min_length = 3, .max_length = 5, .pattern = "^[a-z]+$"}]];
+};
+struct COptStrPattern {
+    std::optional<std::string> v [[= field{.pattern = "^[a-z]+$"}]] = std::nullopt;
+};
 struct CListMin { std::vector<int> v [[= field{.min_length = 2}]]; };
 struct CListMax { std::vector<int> v [[= field{.max_length = 2}]]; };
 
@@ -112,6 +127,42 @@ TEST_CASE("field min_length on a string emits string_too_short", "[field]") {
 TEST_CASE("field max_length on a string emits string_too_long", "[field]") {
     REQUIRE(must_fail<CStrMax>(obj_with("v", json_type("abc"))) ==
             R"({"detail":[{"type":"string_too_long","loc":["v"],"msg":"String should have at most 2 characters","input":"abc","ctx":{"max_length":2}}]})");
+}
+
+TEST_CASE("field pattern accepts a matching string", "[field]") {
+    json_type j = obj_with("v", json_type("abc"));
+    REQUIRE(j.get<CStrPattern>().v == "abc");
+}
+
+TEST_CASE("field pattern emits Pydantic string_pattern_mismatch", "[field]") {
+    REQUIRE(must_fail<CStrPattern>(obj_with("v", json_type("abc1"))) ==
+            R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^[a-z]+$'","input":"abc1","ctx":{"pattern":"^[a-z]+$"}}]})");
+}
+
+TEST_CASE("field pattern uses search semantics like Pydantic", "[field]") {
+    json_type j = obj_with("v", json_type("123abc"));
+    REQUIRE(j.get<CStrPatternSearch>().v == "123abc");
+}
+
+TEST_CASE("field pattern supports escaped expressions", "[field]") {
+    REQUIRE(must_fail<CStrPatternEscaped>(obj_with("v", json_type("12a"))) ==
+            R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^\\d+$'","input":"12a","ctx":{"pattern":"^\\d+$"}}]})");
+}
+
+TEST_CASE("field pattern runs after string length checks", "[field]") {
+    REQUIRE(must_fail<CStrPatternOrder>(obj_with("v", json_type("AB"))) ==
+            R"({"detail":[{"type":"string_too_short","loc":["v"],"msg":"String should have at least 3 characters","input":"AB","ctx":{"min_length":3}}]})");
+    REQUIRE(must_fail<CStrPatternOrder>(obj_with("v", json_type("ABCDEF"))) ==
+            R"({"detail":[{"type":"string_too_long","loc":["v"],"msg":"String should have at most 5 characters","input":"ABCDEF","ctx":{"max_length":5}}]})");
+    REQUIRE(must_fail<CStrPatternOrder>(obj_with("v", json_type("ABC"))) ==
+            R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^[a-z]+$'","input":"ABC","ctx":{"pattern":"^[a-z]+$"}}]})");
+}
+
+TEST_CASE("field pattern applies to the inner value of an optional", "[field]") {
+    REQUIRE(must_fail<COptStrPattern>(obj_with("v", json_type("ABC"))) ==
+            R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^[a-z]+$'","input":"ABC","ctx":{"pattern":"^[a-z]+$"}}]})");
+    json_type absent = json_type::object();
+    REQUIRE_FALSE(absent.get<COptStrPattern>().v.has_value());
 }
 
 TEST_CASE("field min_length on a list emits too_short", "[field]") {

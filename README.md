@@ -52,7 +52,7 @@ cmake --install build
 | Multiple body parameters, auto-embedded by name | ✅ |
 | Nested models, `vector`/`map`/`pair`/`tuple`/`optional` fields | ✅ |
 | Exact Pydantic required-vs-nullable rules | ✅ |
-| `[[= field{...}]]` constraints (`gt`/`ge`/`lt`/`le`/`multiple_of`, `min_length`/`max_length`, `alias`) | ✅ |
+| `[[= field{...}]]` constraints (`gt`/`ge`/`lt`/`le`/`multiple_of`, `min_length`/`max_length`, `pattern`, `alias`) | ✅ |
 | FastAPI-compatible `422` payloads (`{"detail": ...}`, `type`/`loc`/`msg`/`input`/`ctx`) | ✅ |
 | Type-erased JSON wrapper | ✅ |
 | Generic arithmetic parsing, including fixed-width `std::int*_t` / `std::uint*_t` | ✅ |
@@ -333,13 +333,18 @@ struct Item {
     int percent [[= field{.gt = 0, .le = 100}]];
     int boxes [[= field{.multiple_of = 3}]];
     std::string code [[= field{.min_length = 2}]];
+    std::string slug [[= field{.pattern = "^[a-z0-9-]+$"}]];
     std::vector<int> tags [[= field{.min_length = 1}]];
     std::string username [[= field{.alias = "user-name"}]];
 };
 ```
 
 Supported now: `gt`, `ge`, `lt`, `le`, `multiple_of`, `min_length`, `max_length`,
-`alias`. `alias` changes the JSON key used for both reading and writing.
+`pattern`, `alias`. `alias` changes the JSON key used for both reading and writing.
+
+`pattern` uses search semantics, matching Pydantic: `[a-z]+` accepts `123abc`.
+fiasco uses C++'s ECMAScript regex engine, so look-around, backreferences, and
+Unicode behavior may differ from Pydantic's Rust regex engine.
 
 Misuse (e.g. `.gt` on a string, a fractional bound on an `int`, or two `field`
 annotations on one member) is a **compile-time error** with a clear message.

@@ -460,6 +460,32 @@ TEST_CASE("integration explicit query parameter with alias and constraint", "[in
             std::string::npos);
 }
 
+TEST_CASE("integration explicit query parameter with pattern", "[integration]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/code",
+            [](std::string code [[= fiasco::query{.pattern = "^[a-z]+$"}]]) -> std::string {
+                return code;
+            });
+
+    server.start();
+
+    auto valid =
+        fiasco_test::send_request(server.port(), "GET /code?code=abc HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(valid) == 200);
+    REQUIRE(fiasco_test::extract_body(valid) == "abc\n");
+
+    auto invalid = fiasco_test::send_request(
+        server.port(), "GET /code?code=abc1 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(invalid) == 422);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("type":"string_pattern_mismatch")") !=
+            std::string::npos);
+    REQUIRE(fiasco_test::extract_body(invalid).find(R"("loc":["query","code"])") !=
+            std::string::npos);
+}
+
 TEST_CASE("integration explicit header parameter is case-insensitive", "[integration]") {
     fiasco_test::test_server server{
         fiasco::server_config{.logging = {.enabled = false}},
