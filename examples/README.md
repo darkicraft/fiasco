@@ -88,6 +88,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
+| `json_wrapper` | `json/wrapper.cpp` | Recursive `fiasco::json` construction, objects/arrays, dump/parse, and typed access. |
 
 ## Modules
 
