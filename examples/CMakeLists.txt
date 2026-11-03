@@ -6,6 +6,7 @@ endfunction()
 
 fiasco_add_example(main main.cpp)
 fiasco_add_example(hello basics/hello.cpp)
+fiasco_add_example(routing_methods routing/methods.cpp)
 fiasco_add_example(dependencies dependencies.cpp)
 fiasco_add_example(dependency_graph dependency_graph.cpp)
 

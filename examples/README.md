@@ -29,6 +29,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
+| `routing_methods` | `routing/methods.cpp` | GET/POST/PUT/PATCH/DELETE, static and parameter routes, 404, and 405. |
 
 ## Parameters
 
