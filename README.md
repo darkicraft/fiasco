@@ -540,7 +540,7 @@ Omitting the sink uses stdout. Set `.logging.enabled = false` to disable all
 logging, or `.logging.access = false` to keep application logs but suppress
 per-request access lines.
 
-The example executable also accepts `--no-log`, `--log`, `--no-access-log`,
+The `all_in_one` example also accepts `--no-log`, `--log`, `--no-access-log`,
 `--access-log`, and `FIASCO_LOG=off`.
 
 ## Threading
