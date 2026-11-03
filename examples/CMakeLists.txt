@@ -9,6 +9,7 @@ fiasco_add_example(hello basics/hello.cpp)
 fiasco_add_example(routing_methods routing/methods.cpp)
 fiasco_add_example(subrouters routing/subrouters.cpp)
 fiasco_add_example(path_params params/path.cpp)
+fiasco_add_example(query_params params/query.cpp)
 fiasco_add_example(dependencies dependencies.cpp)
 fiasco_add_example(dependency_graph dependency_graph.cpp)
 
