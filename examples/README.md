@@ -67,6 +67,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
+| `http_errors` | `errors/http_error.cpp` | `http_error` with status, string or structured detail, and response headers. |
 
 ## Responses
 
