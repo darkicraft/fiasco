@@ -60,6 +60,7 @@ cmake --build build --target hello
 | Target | Source | Demonstrates |
 |---|---|---|
 | `dependencies` | `dependencies/basic.cpp` | Nested providers, request/header injection, per-request cache reuse, and RAII cleanup. |
+| `dependency_caching` | `dependencies/caching.cpp` | Default provider caching vs `use_cache = false`, with per-request call counts. |
 
 ## Errors
 
