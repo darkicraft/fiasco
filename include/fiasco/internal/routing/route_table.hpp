@@ -25,19 +25,27 @@ struct string_hash {
     size_t operator()(const std::string& s) const noexcept { return std::hash<std::string>{}(s); }
 };
 
+struct route_entry {
+    handler_fn handler;
+    async_handler_fn async_handler;
+};
+
 struct match_result {
     bool matched = false;
-    // Non-owning pointer to the matched handler, which is owned by the
-    // route_table. nullptr when !matched. Handlers are move-only, so the table
-    // cannot hand out a copy; callers invoke via `(*match.handler)(req)`.
+    bool is_async = false;
+    // Non-owning pointers to the matched handler, owned by the route_table.
+    // Handlers are move-only, so the table cannot hand out a copy; callers
+    // invoke via `(*match.async_handler)(req)` or `(*match.handler)(req)`.
     // match() is non-const because move_only_function::operator() is non-const.
     handler_fn* handler = nullptr;
+    async_handler_fn* async_handler = nullptr;
     std::vector<std::pair<std::string_view, std::string_view>> path_params;
 };
 
 class route_table {
   public:
     void add(http_method method, const std::string& pattern, handler_fn handler);
+    void add(http_method method, const std::string& pattern, async_handler_fn handler);
     match_result match(http_method method, std::string_view path);
     bool any_method_matches(std::string_view path) const;
     void merge_with_prefix(route_table&& other, std::string_view prefix);
@@ -60,13 +68,15 @@ class route_table {
         std::vector<std::string> segments;
         std::vector<std::string> names;
         std::vector<bool> is_param_seg;
-        handler_fn handler;
+        route_entry callable;
     };
 
-    std::array<std::unordered_map<std::string, handler_fn, string_hash, std::equal_to<>>,
+    std::array<std::unordered_map<std::string, route_entry, string_hash, std::equal_to<>>,
                num_http_methods>
         m_static;
     std::array<std::vector<param_route_entry>, num_http_methods> m_param;
+
+    void add_entry(http_method method, const std::string& pattern, route_entry entry);
 };
 
 }  // namespace fiasco::detail

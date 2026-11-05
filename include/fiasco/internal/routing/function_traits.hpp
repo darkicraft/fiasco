@@ -12,6 +12,7 @@
 #include <tuple>
 #include <type_traits>
 
+#include "fiasco/internal/http/async.hpp"
 #include "fiasco/internal/http/request.hpp"
 #include "fiasco/internal/http/response.hpp"
 #include "fiasco/internal/http/response_conversion.hpp"
@@ -27,6 +28,7 @@ namespace fiasco::detail {
 // Note: std::move_only_function::operator() is non-const, so handlers are
 // invoked through a non-const reference (see route_table::match).
 using handler_fn = std::move_only_function<response(request)>;
+using async_handler_fn = std::move_only_function<async(request)>;
 
 template <typename T>
 struct is_optional_primitive : std::false_type {};
@@ -492,7 +494,7 @@ template <typename T, std::meta::info Provider>
 using parameter_storage_t = std::conditional_t<Provider != std::meta::info{}, T, arg_storage_t<T>>;
 
 template <typename F, typename ArgsTuple, typename Cache, size_t... Is>
-response dispatch_impl(F& fn,
+auto resolve_arguments(F& fn,
                        const request& req,
                        std::size_t& path_idx,
                        body_context& body,
@@ -503,15 +505,27 @@ response dispatch_impl(F& fn,
 
     // braced init guarantees left-to-right evaluation; regular values are owned by the
     // tuple, while dependency references point into the per-request cache.
-    std::tuple<parameter_storage_t<std::tuple_element_t<Is, ArgsTuple>,
-                                   meta::depends_of(traits::parameter(Is))>...>
-        args{resolve_arg<std::tuple_element_t<Is, ArgsTuple>,
-                         meta::field_of(traits::parameter(Is)),
-                         meta::source_of(traits::parameter(Is)),
-                         meta::depends_of(traits::parameter(Is)),
-                         dependency_occurrence{traits::reflection(), Is},
-                         meta::depends_use_cache_of(traits::parameter(Is))>(
+    return std::tuple<parameter_storage_t<std::tuple_element_t<Is, ArgsTuple>,
+                                          meta::depends_of(traits::parameter(Is))>...>{
+        resolve_arg<std::tuple_element_t<Is, ArgsTuple>,
+                    meta::field_of(traits::parameter(Is)),
+                    meta::source_of(traits::parameter(Is)),
+                    meta::depends_of(traits::parameter(Is)),
+                    dependency_occurrence{traits::reflection(), Is},
+                    meta::depends_use_cache_of(traits::parameter(Is))>(
             req, path_idx, traits::argument_name(Is), body, embed, cache)...};
+}
+
+template <typename F, typename ArgsTuple, typename Cache, size_t... Is>
+response dispatch_impl(F& fn,
+                       const request& req,
+                       std::size_t& path_idx,
+                       body_context& body,
+                       bool embed,
+                       Cache& cache,
+                       std::index_sequence<Is...>) {
+    auto args = resolve_arguments<F, ArgsTuple>(
+        fn, req, path_idx, body, embed, cache, std::index_sequence<Is...>{});
 
     if constexpr (std::is_void_v<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>) {
         fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
@@ -520,6 +534,23 @@ response dispatch_impl(F& fn,
         return serialize_return(
             fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...));
     }
+}
+
+template <typename F, typename ArgsTuple, typename Args, size_t... Is>
+async invoke_async_handler(F& fn, Args& args, std::index_sequence<Is...>) {
+    co_return co_await fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
+}
+
+template <typename F, typename ArgsTuple, size_t... Is>
+consteval bool returns_async_handler_impl(std::index_sequence<Is...>) {
+    return std::same_as<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>, async>;
+}
+
+template <typename F>
+consteval bool returns_async_handler() {
+    using traits = meta::callable_traits<std::decay_t<F>>;
+    return returns_async_handler_impl<std::decay_t<F>, typename traits::args_tuple>(
+        std::make_index_sequence<traits::arity>{});
 }
 
 template <typename F>
@@ -537,6 +568,27 @@ template <typename F>
         std::size_t path_idx = 0;
         return dispatch_impl<decltype(fn), args_tuple>(
             fn, req, path_idx, body, embed_body, cache, std::make_index_sequence<traits::arity>{});
+    };
+}
+
+template <typename F>
+[[nodiscard]] async_handler_fn make_async_handler(F&& f) {
+    using traits = meta::callable_traits<std::decay_t<F>>;
+    using args_tuple = traits::args_tuple;
+    static constexpr auto providers = meta::providers_for<traits::reflection()>();
+    static constexpr auto uncached = meta::uncached_parameters_for<traits::reflection()>();
+    static constexpr bool embed_body = body_embedding_for<traits::reflection()>();
+    using cache_type = dependency_cache<providers, uncached>;
+
+    return [fn = std::forward<F>(f)](request req) mutable -> async {
+        cache_type cache;
+        body_context body{req};
+        std::size_t path_idx = 0;
+        auto args = resolve_arguments<decltype(fn), args_tuple>(
+            fn, req, path_idx, body, embed_body, cache,
+            std::make_index_sequence<traits::arity>{});
+        co_return co_await invoke_async_handler<decltype(fn), args_tuple>(
+            fn, args, std::make_index_sequence<traits::arity>{});
     };
 }
 

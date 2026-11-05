@@ -5,6 +5,14 @@
 namespace fiasco::detail {
 
 void route_table::add(http_method method, const std::string& pattern, handler_fn handler) {
+    add_entry(method, pattern, route_entry{.handler = std::move(handler)});
+}
+
+void route_table::add(http_method method, const std::string& pattern, async_handler_fn handler) {
+    add_entry(method, pattern, route_entry{.async_handler = std::move(handler)});
+}
+
+void route_table::add_entry(http_method method, const std::string& pattern, route_entry entry) {
     auto segs = split_path(pattern);
 
     bool has_param = false;
@@ -16,36 +24,41 @@ void route_table::add(http_method method, const std::string& pattern, handler_fn
     }
 
     if (!has_param) {
-        m_static[method_index(method)][pattern] = std::move(handler);
+        m_static[method_index(method)][pattern] = std::move(entry);
         return;
     }
 
-    param_route_entry entry;
-    entry.pattern = pattern;
-    entry.segments.reserve(segs.size());
-    entry.names.reserve(segs.size());
-    entry.is_param_seg.reserve(segs.size());
+    param_route_entry param_entry;
+    param_entry.pattern = pattern;
+    param_entry.segments.reserve(segs.size());
+    param_entry.names.reserve(segs.size());
+    param_entry.is_param_seg.reserve(segs.size());
 
     for (auto seg : segs) {
         if (is_param_segment(seg)) {
-            entry.is_param_seg.push_back(true);
-            entry.names.emplace_back(param_name(seg));
+            param_entry.is_param_seg.push_back(true);
+            param_entry.names.emplace_back(param_name(seg));
         } else {
-            entry.is_param_seg.push_back(false);
-            entry.names.emplace_back();
+            param_entry.is_param_seg.push_back(false);
+            param_entry.names.emplace_back();
         }
-        entry.segments.emplace_back(seg);
+        param_entry.segments.emplace_back(seg);
     }
 
-    entry.handler = std::move(handler);
-    m_param[method_index(method)].push_back(std::move(entry));
+    param_entry.callable = std::move(entry);
+    m_param[method_index(method)].push_back(std::move(param_entry));
 }
 
 match_result route_table::match(http_method method, std::string_view path) {
     auto& static_routes = m_static[method_index(method)];
     auto static_hit = static_routes.find(path);
     if (static_hit != static_routes.end()) {
-        return {true, &static_hit->second, {}};
+        match_result result;
+        result.matched = true;
+        result.is_async = static_cast<bool>(static_hit->second.async_handler);
+        result.handler = &static_hit->second.handler;
+        result.async_handler = &static_hit->second.async_handler;
+        return result;
     }
 
     auto& param_routes = m_param[method_index(method)];
@@ -79,7 +92,9 @@ match_result route_table::match(http_method method, std::string_view path) {
 
         match_result result;
         result.matched = true;
-        result.handler = &entry.handler;
+        result.is_async = static_cast<bool>(entry.callable.async_handler);
+        result.handler = &entry.callable.handler;
+        result.async_handler = &entry.callable.async_handler;
         result.path_params.reserve(entry.segments.size());
         for (size_t i = 0; i < entry.segments.size(); ++i) {
             if (entry.is_param_seg[i]) {
@@ -135,7 +150,7 @@ void route_table::merge_with_prefix(route_table&& other, std::string_view prefix
 
         for (auto& entry : other.m_param[mi]) {
             std::string full_pattern = join_prefix(prefix, entry.pattern);
-            add(static_cast<http_method>(mi), full_pattern, std::move(entry.handler));
+            add_entry(static_cast<http_method>(mi), full_pattern, std::move(entry.callable));
         }
         other.m_param[mi].clear();
     }

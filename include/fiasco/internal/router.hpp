@@ -67,7 +67,11 @@ class router {
 
     template <typename F>
     void add(http_method method, const std::string& pattern, F&& f) {
-        m_routes.add(method, pattern, make_handler(std::forward<F>(f)));
+        if constexpr (returns_async_handler<F>()) {
+            m_routes.add(method, pattern, make_async_handler(std::forward<F>(f)));
+        } else {
+            m_routes.add(method, pattern, make_handler(std::forward<F>(f)));
+        }
     }
 
     friend class server;

@@ -162,6 +162,7 @@ target_link_libraries(fiasco_routing PUBLIC
     fiasco_meta
     fiasco_types
     fiasco_http
+    asio
 )
 
 # -- fiasco_logging ----------------------------------------
