@@ -111,6 +111,11 @@ struct constrained_body {
     int n [[= field{.ge = 1}]] = 0;
 };
 
+struct async_user {
+    std::string name;
+    int age;
+};
+
 constrained_body get_constrained_body(constrained_body payload) {
     return payload;
 }
@@ -995,4 +1000,90 @@ TEST_CASE("integration cached and uncached occurrences do not share a slot", "[i
     REQUIRE(fiasco_test::extract_status(resp) == 200);
     REQUIRE(fiasco_test::extract_body(resp) == "1:2\n");
     REQUIRE(fiasco::detail::uncached_dependency_calls == 2);
+}
+
+TEST_CASE("integration async handler returns a model", "[integration][async]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/async-user", []() -> fiasco::async {
+        co_return fiasco::detail::async_user{"ada", 36};
+    });
+
+    server.start();
+
+    auto resp =
+        fiasco_test::send_request(server.port(), "GET /async-user HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == R"({"name":"ada","age":36})" "\n");
+}
+
+TEST_CASE("integration async handler binds path and query parameters", "[integration][async]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/async-items/{id}", [](std::string q, int id) -> fiasco::async {
+        co_return fiasco::json{{"id", id}, {"q", q}};
+    });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(
+        server.port(), "GET /async-items/7?q=cats HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 200);
+    REQUIRE(fiasco_test::extract_body(resp) == R"({"id":7,"q":"cats"})" "\n");
+}
+
+TEST_CASE("integration async handler validation uses body locations", "[integration][async]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/async-constrained/{id}",
+            [](int id [[= fiasco::path{.ge = 1}]]) -> fiasco::async { co_return id; });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(
+        server.port(), "GET /async-constrained/0 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 422);
+    REQUIRE(fiasco_test::extract_body(resp).find(R"("loc":["path","id"])") != std::string::npos);
+}
+
+TEST_CASE("integration async handler translates http_error", "[integration][async]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/async-error", []() -> fiasco::async {
+        throw fiasco::http_error(401, "Not authenticated");
+        co_return 1;
+    });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(
+        server.port(), "GET /async-error HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 401);
+    REQUIRE(fiasco_test::extract_body(resp) == R"({"detail":"Not authenticated"})" "\n");
+}
+
+TEST_CASE("integration async handler translates unhandled exceptions", "[integration][async]") {
+    fiasco_test::test_server server{
+        fiasco::server_config{.logging = {.enabled = false}},
+    };
+    auto& app = server.app();
+    app.get("/async-boom", []() -> fiasco::async {
+        throw std::runtime_error("boom");
+        co_return 1;
+    });
+
+    server.start();
+
+    auto resp = fiasco_test::send_request(
+        server.port(), "GET /async-boom HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    REQUIRE(fiasco_test::extract_status(resp) == 500);
+    REQUIRE(fiasco_test::extract_body(resp).find("boom") != std::string::npos);
 }
