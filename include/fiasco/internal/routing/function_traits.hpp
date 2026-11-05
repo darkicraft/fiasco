@@ -14,6 +14,7 @@
 
 #include "fiasco/internal/http/request.hpp"
 #include "fiasco/internal/http/response.hpp"
+#include "fiasco/internal/http/response_conversion.hpp"
 #include "fiasco/internal/json.hpp"
 #include "fiasco/internal/meta/reflect.hpp"
 #include "fiasco/internal/routing/concepts.hpp"
@@ -204,25 +205,7 @@ template <typename T, fiasco::field<> Spec>
 
 template <typename T>
 [[nodiscard]] response serialize_return(T&& val) {
-    using CleanT = std::decay_t<T>;
-    if constexpr (std::same_as<CleanT, response>) {
-        return std::forward<T>(val);
-    } else if constexpr (std::same_as<CleanT, std::string>) {
-        return response::text(std::forward<T>(val));
-    } else if constexpr (std::same_as<CleanT, const char*>) {
-        return response::text(std::string(val));
-    } else if constexpr (Primitive<CleanT>) {
-        return response::text(std::to_string(val));
-    } else if constexpr (ToJson<CleanT>) {
-        json j = val;
-        return response::json(j.dump());
-    } else {
-        static_assert(!sizeof(T),
-                      "Handler return type must be a primitive, "
-                      "fiasco::response, or a reflectable model type");
-    }
-
-    return {};  // unreachable
+    return to_response(std::forward<T>(val));
 }
 
 struct body_context {
