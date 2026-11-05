@@ -41,6 +41,25 @@ struct request {
 
     std::string client_address;
 
+    /// Re-anchor path and query views after the request object has been moved.
+    /// Callers must do this before reading path/query_string; path_params are
+    /// populated later by routing and are not touched here.
+    void reanchor_url_views() {
+        if (url.empty()) {
+            path = {};
+            query_string = {};
+            return;
+        }
+        const auto qpos = url.find('?');
+        if (qpos == std::string::npos) {
+            path = std::string_view(url);
+            query_string = {};
+        } else {
+            path = std::string_view(url.data(), qpos);
+            query_string = std::string_view(url.data() + qpos + 1, url.size() - qpos - 1);
+        }
+    }
+
     [[nodiscard]] const std::string* find_header(std::string_view key) const {
         if (auto it = headers.find(std::string(key)); it != headers.end()) {
             return &it->second;

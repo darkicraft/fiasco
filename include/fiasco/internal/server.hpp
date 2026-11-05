@@ -258,7 +258,8 @@ class server {
         m_logging.get("fiasco.access").info(alog.build_message());
     }
 
-    response dispatch(request req) {
+    request_result dispatch(request req) {
+        req.reanchor_url_views();
         const bool access_logging = m_logging.access_log_enabled() && m_logging.logging_enabled();
         auto start = access_logging ? std::chrono::steady_clock::now()
                                     : std::chrono::steady_clock::time_point{};
@@ -271,34 +272,69 @@ class server {
         }
 
         auto match = m_router.match(req.method, req.path);
-        response res;
-
         if (!match.matched) {
-            if (m_router.any_method_matches(req.path)) {
-                res = response::error("Method Not Allowed", 405);
-            } else {
-                res = response::error("Not Found", 404);
+            response res = m_router.any_method_matches(req.path)
+                               ? response::error("Method Not Allowed", 405)
+                               : response::error("Not Found", 404);
+            if (access_logging) {
+                log_access(std::move(alog), res, start);
             }
-        } else {
-            req.path_params.clear();
-            req.ordered_path_params.clear();
-            for (const auto& [name, value] : match.path_params) {
-                req.path_params.emplace(name, value);
-                req.ordered_path_params.push_back(value);
-            }
-            req.query_params = parse_query(req.query_string);
+            return res;
+        }
 
-            try {
-                res = (*match.handler)(std::move(req));
-            } catch (...) {
-                res = translate_exception(std::current_exception());
-            }
+        if (match.is_async) {
+            return dispatch_async(std::move(req), *match.async_handler, std::move(alog), start,
+                                  access_logging);
+        }
+
+        req.path_params.clear();
+        req.ordered_path_params.clear();
+        for (const auto& [name, value] : match.path_params) {
+            req.path_params.emplace(name, value);
+            req.ordered_path_params.push_back(value);
+        }
+        req.query_params = parse_query(req.query_string);
+
+        response res;
+        try {
+            res = (*match.handler)(req);
+        } catch (...) {
+            res = translate_exception(std::current_exception());
         }
 
         if (access_logging) {
             log_access(std::move(alog), res, start);
         }
         return res;
+    }
+
+    async dispatch_async(request req,
+                         async_handler_fn& handler,
+                         access_log alog,
+                         std::chrono::steady_clock::time_point start,
+                         bool access_logging) {
+        req.reanchor_url_views();
+        auto match = m_router.match(req.method, req.path);
+        req.path_params.clear();
+        req.ordered_path_params.clear();
+        for (const auto& [name, value] : match.path_params) {
+            req.path_params.emplace(name, value);
+            req.ordered_path_params.push_back(value);
+        }
+        req.query_params = parse_query(req.query_string);
+
+        response res;
+        try {
+            auto result = co_await handler(req);
+            res = std::move(result).take();
+        } catch (...) {
+            res = translate_exception(std::current_exception());
+        }
+
+        if (access_logging) {
+            log_access(std::move(alog), res, start);
+        }
+        co_return res;
     }
 };
 

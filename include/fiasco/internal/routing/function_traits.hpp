@@ -27,8 +27,8 @@ namespace fiasco::detail {
 // paying std::function's copyable-requirement / allocation model.
 // Note: std::move_only_function::operator() is non-const, so handlers are
 // invoked through a non-const reference (see route_table::match).
-using handler_fn = std::move_only_function<response(request)>;
-using async_handler_fn = std::move_only_function<async(request)>;
+using handler_fn = std::move_only_function<response(const request&)>;
+using async_handler_fn = std::move_only_function<async(const request&)>;
 
 template <typename T>
 struct is_optional_primitive : std::false_type {};
@@ -562,7 +562,7 @@ template <typename F>
     static constexpr bool embed_body = body_embedding_for<traits::reflection()>();
     using cache_type = dependency_cache<providers, uncached>;
 
-    return [fn = std::forward<F>(f)](request req) mutable -> response {
+    return [fn = std::forward<F>(f)](const request& req) mutable -> response {
         cache_type cache;
         body_context body{req};
         std::size_t path_idx = 0;
@@ -580,7 +580,7 @@ template <typename F>
     static constexpr bool embed_body = body_embedding_for<traits::reflection()>();
     using cache_type = dependency_cache<providers, uncached>;
 
-    return [fn = std::forward<F>(f)](request req) mutable -> async {
+    return [fn = std::forward<F>(f)](const request& req) mutable -> async {
         cache_type cache;
         body_context body{req};
         std::size_t path_idx = 0;

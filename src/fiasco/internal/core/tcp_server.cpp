@@ -76,9 +76,33 @@ struct session : std::enable_shared_from_this<session> {
             req.client_address = "unknown";
         }
 
-        response res = handler(req);
+        const bool request_close = request_wants_close(req);
+        request_result result = handler(std::move(req));
 
-        const bool close = request_wants_close(req) || response_wants_close(res);
+        if (auto* res = std::get_if<response>(&result)) {
+            finish(std::move(*res), request_close);
+            return;
+        }
+
+        auto self = shared_from_this();
+        auto task = std::move(std::get<async>(result));
+        asio::co_spawn(
+            strand,
+            [self, task = std::move(task), request_close]() mutable -> asio::awaitable<void> {
+                response res;
+                try {
+                    auto result = co_await std::move(task);
+                    res = std::move(result).take();
+                } catch (...) {
+                    res = response::error("Internal Server Error", 500);
+                }
+                self->finish(std::move(res), request_close);
+            },
+            asio::detached);
+    }
+
+    void finish(response res, bool request_close) {
+        const bool close = request_close || response_wants_close(res);
         if (close) {
             res.headers["Connection"] = "close";
         }
