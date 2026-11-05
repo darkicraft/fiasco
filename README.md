@@ -66,7 +66,7 @@ cmake --install build
 | Explicit parameter sources (`[[= query{}]]`, `[[= path{}]]`, `[[= body{}]]`, `[[= header{}]]`, `[[= cookie{}]]`) | ✅ |
 | Synchronous dependency injection with per-request caching (`[[= depends{^^fn}]]`) | ✅ |
 | `http_error` and custom exception handlers | ✅ |
-| Coroutine/async handlers | 🚧 Planned |
+| Coroutine/async handlers (`fiasco::async`) | ✅ |
 | Automatic API docs generation (OpenAPI / Swagger) | 🚧 Planned |
 | Static file serving | 🚧 Planned |
 | HTTPS / TLS | 🚧 Planned |
@@ -97,6 +97,26 @@ int main() {
 The [`examples/`](examples/README.md) directory contains a focused example for
 each feature, plus one `all_in_one` workload that combines them. Start with
 `hello`, then browse by category in the example index.
+
+## Async handlers
+
+Handlers stay synchronous by default. Add `-> fiasco::async` when the handler
+needs to `co_await`; ordinary values, models, and strings convert automatically:
+
+```cpp
+struct User {
+    std::string name;
+};
+
+app.get("/user", []() -> fiasco::async {
+    auto user = co_await load_user();
+    co_return user;
+});
+```
+
+Synchronous handlers keep the direct dispatch path. Returning
+`fiasco::response` remains the explicit escape hatch for custom status codes and
+headers.
 
 ## How requests are bound
 

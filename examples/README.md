@@ -28,6 +28,12 @@ cmake --build build --target hello
 |---|---|---|
 | `hello` | `basics/hello.cpp` | The smallest useful server: one route and a text response. |
 
+## Async
+
+| Target | Source | Demonstrates |
+|---|---|---|
+| `async_handlers` | `async/basic.cpp` | Sync vs `fiasco::async` handlers and explicit responses. |
+
 ## Routing
 
 | Target | Source | Demonstrates |
