@@ -133,7 +133,9 @@ TEST_CASE("make_handler no-arg returns void", "[function_traits]") {
     request req;
     auto res = handler(std::move(req));
     REQUIRE(called);
-    REQUIRE(res.status_code == 204);  // response::empty()
+    REQUIRE(res.status_code == 200);
+    REQUIRE(res.body == "null\n");
+    REQUIRE(res.headers.at("Content-Type") == "application/json");
 }
 
 TEST_CASE("make_handler captures request", "[function_traits]") {

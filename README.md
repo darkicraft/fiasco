@@ -438,7 +438,7 @@ app.get("/empty", []() { return fiasco::response::empty(204); });
 - `std::string` / `const char*` → `text/plain`
 - a numeric primitive → its text form
 - a model struct or `fiasco::json` → `application/json`
-- a `void` handler → `204 No Content`
+- a `void` handler → `200 OK` with a JSON `null` body (matching FastAPI)
 
 Status codes and headers can be set directly on the response struct after
 construction.

@@ -532,7 +532,7 @@ response dispatch_impl(F& fn,
 
     if constexpr (std::is_void_v<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>) {
         fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
-        return response::empty();
+        return response::json("null");
     } else {
         return serialize_return(
             fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...));
