@@ -37,6 +37,11 @@ add_executable(fiasco_test_router router_test.cpp)
 target_link_libraries(fiasco_test_router PRIVATE Catch2::Catch2WithMain fiasco_routing)
 catch_discover_tests(fiasco_test_router)
 
+# ---- async_test ----
+add_executable(fiasco_test_async async_test.cpp)
+target_link_libraries(fiasco_test_async PRIVATE Catch2::Catch2WithMain fiasco)
+catch_discover_tests(fiasco_test_async)
+
 # ---- function_traits_test ----
 add_executable(fiasco_test_function_traits function_traits_test.cpp)
 target_link_libraries(fiasco_test_function_traits PRIVATE Catch2::Catch2WithMain fiasco_routing)
