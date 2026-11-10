@@ -37,6 +37,11 @@ add_executable(fiasco_test_router router_test.cpp)
 target_link_libraries(fiasco_test_router PRIVATE Catch2::Catch2WithMain fiasco_routing)
 catch_discover_tests(fiasco_test_router)
 
+# ---- cors_test ----
+add_executable(fiasco_test_cors cors_test.cpp)
+target_link_libraries(fiasco_test_cors PRIVATE Catch2::Catch2WithMain fiasco)
+catch_discover_tests(fiasco_test_cors)
+
 # ---- middleware_test ----
 add_executable(fiasco_test_middleware middleware_test.cpp)
 target_link_libraries(fiasco_test_middleware PRIVATE Catch2::Catch2WithMain fiasco)

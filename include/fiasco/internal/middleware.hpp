@@ -78,3 +78,9 @@ inline asio::awaitable<response> next_handler::operator()(request& req) const {
 }
 
 }  // namespace fiasco::detail
+
+namespace fiasco::middleware {
+
+using fn = detail::middleware_fn;
+
+}  // namespace fiasco::middleware

@@ -8,13 +8,10 @@
 #include "fiasco/internal/logging.hpp"
 #include "fiasco/internal/middleware.hpp"
 #include "fiasco/internal/router.hpp"
+#include "fiasco/middleware/cors.hpp"
 #include "fiasco/internal/server.hpp"
 
 namespace fiasco {
-
-namespace middleware {
-using fn = detail::middleware_fn;
-}  // namespace middleware
 
 using async = detail::async;
 using http_error = detail::http_error;
