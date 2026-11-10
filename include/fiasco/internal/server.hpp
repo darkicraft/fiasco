@@ -23,6 +23,7 @@
 #include "fiasco/internal/json.hpp"
 #include "fiasco/internal/logging.hpp"
 #include "fiasco/internal/meta/reflect.hpp"
+#include "fiasco/internal/middleware.hpp"
 #include "fiasco/internal/router.hpp"
 
 namespace fiasco {
@@ -116,6 +117,15 @@ class server {
         m_router.include_router(std::move(sub), prefix);
     }
 
+    template <typename F>
+    void use(F&& middleware) {
+        std::lock_guard lock(m_server_mutex);
+        if (m_server) {
+            throw std::logic_error("cannot add middleware while the server is running");
+        }
+        m_middleware.add(middleware_fn{std::forward<F>(middleware)});
+    }
+
     void run() {
         const auto& network = m_config.network;
         const uint16_t port = network.port;
@@ -179,6 +189,7 @@ class server {
     fiasco::server_config m_config;
     log_registry m_logging;
     router m_router;
+    middleware_chain m_middleware;
     std::unordered_map<std::type_index, exception_handler> m_exception_handlers;
     mutable std::mutex m_server_mutex;
     std::condition_variable m_server_cv;
@@ -208,6 +219,30 @@ class server {
             res.headers[name] = value;
         }
         return res;
+    }
+
+    [[nodiscard]] response translate_known_exception(std::exception_ptr error) {
+        try {
+            std::rethrow_exception(error);
+        } catch (const request_validation_error& e) {
+            return response::json(to_fastapi_error_json(e.errors()), 422);
+        } catch (const http_error& e) {
+            if (auto it = m_exception_handlers.find(std::type_index(typeid(e)));
+                it != m_exception_handlers.end()) {
+                return invoke_exception_handler(it->second, error);
+            }
+            return make_http_error_response(e);
+        } catch (const json::exception& e) {
+            return response::error(e.what(), 422);
+        } catch (const std::exception& e) {
+            if (auto it = m_exception_handlers.find(std::type_index(typeid(e)));
+                it != m_exception_handlers.end()) {
+                return invoke_exception_handler(it->second, error);
+            }
+            throw;
+        } catch (...) {
+            throw;
+        }
     }
 
     [[nodiscard]] response translate_exception(std::exception_ptr error) {
@@ -271,6 +306,10 @@ class server {
             alog.path = req.path;
         }
 
+        if (!m_middleware.empty()) {
+            return dispatch_pipeline(std::move(req), std::move(alog), start, access_logging);
+        }
+
         auto match = m_router.match(req.method, req.path);
         if (!match.matched) {
             response res = m_router.any_method_matches(req.path)
@@ -327,6 +366,60 @@ class server {
         try {
             auto result = co_await handler(req);
             res = std::move(result).take();
+        } catch (...) {
+            res = translate_exception(std::current_exception());
+        }
+
+        if (access_logging) {
+            log_access(std::move(alog), res, start);
+        }
+        co_return res;
+    }
+
+    asio::awaitable<response> endpoint_handler(request& req) {
+        auto match = m_router.match(req.method, req.path);
+        if (!match.matched) {
+            co_return m_router.any_method_matches(req.path)
+                ? response::error("Method Not Allowed", 405)
+                : response::error("Not Found", 404);
+        }
+
+        req.path_params.clear();
+        req.ordered_path_params.clear();
+        for (const auto& [name, value] : match.path_params) {
+            req.path_params.emplace(name, value);
+            req.ordered_path_params.push_back(value);
+        }
+        req.query_params = parse_query(req.query_string);
+
+        if (match.is_async) {
+            try {
+                auto result = co_await (*match.async_handler)(req);
+                co_return std::move(result).take();
+            } catch (...) {
+                co_return translate_known_exception(std::current_exception());
+            }
+        }
+
+        try {
+            co_return (*match.handler)(req);
+        } catch (...) {
+            co_return translate_known_exception(std::current_exception());
+        }
+    }
+
+    async dispatch_pipeline(request req,
+                            access_log alog,
+                            std::chrono::steady_clock::time_point start,
+                            bool access_logging) {
+        req.reanchor_url_views();
+
+        response res;
+        try {
+            endpoint_fn endpoint = [this](request& request) -> asio::awaitable<response> {
+                co_return co_await endpoint_handler(request);
+            };
+            res = co_await m_middleware.run(req, std::move(endpoint));
         } catch (...) {
             res = translate_exception(std::current_exception());
         }

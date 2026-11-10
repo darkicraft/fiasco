@@ -6,6 +6,7 @@
 
 #include "fiasco/internal/json.hpp"
 #include "fiasco/internal/logging.hpp"
+#include "fiasco/internal/middleware.hpp"
 #include "fiasco/internal/router.hpp"
 #include "fiasco/internal/server.hpp"
 
@@ -14,6 +15,8 @@ namespace fiasco {
 using async = detail::async;
 using http_error = detail::http_error;
 using json = detail::json;
+using middleware = detail::middleware_fn;
+using next = detail::next_handler;
 using request = detail::request;
 using response = detail::response;
 using router = detail::router;
