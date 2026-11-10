@@ -8,7 +8,7 @@
 //   curl -i localhost:8080/whoami
 //   curl -i localhost:8080/blocked
 //
-// Middleware is registered with app.use(). The last one added is the outermost:
+// Middleware is registered with app.middleware(). The last one added is the outermost:
 // request_id wraps guard, so short-circuited responses still get an ID.
 
 #include <fiasco/fiasco.hpp>
@@ -37,7 +37,7 @@ int main() {
     std::atomic<int> next_request_id{1};
 
     // Inner middleware: short-circuit one path.
-    app.use([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+    app.middleware([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
         if (req.path == "/blocked") {
             co_return fiasco::response::error("blocked by middleware", 403);
         }
@@ -45,7 +45,7 @@ int main() {
     });
 
     // Outer middleware: give every request an ID and echo it back.
-    app.use([&next_request_id](fiasco::request& req,
+    app.middleware([&next_request_id](fiasco::request& req,
                                const fiasco::next& next) -> fiasco::async {
         const std::string id =
             "req-" + std::to_string(next_request_id.fetch_add(1, std::memory_order_relaxed));

@@ -38,7 +38,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
-| `middleware` | `middleware/basic.cpp` | `app.use`, last-added-outermost ordering, request/response mutation, and short-circuiting. |
+| `middleware` | `middleware/basic.cpp` | `app.middleware`, last-added-outermost ordering, request/response mutation, and short-circuiting. |
 
 ## Routing
 

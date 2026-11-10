@@ -23,13 +23,13 @@ TEST_CASE("middleware runs last-added-outermost", "[middleware]") {
     };
     auto& app = server.app();
 
-    app.use([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+    app.middleware([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
         req.headers["X-Seen"] += "A";
         auto res = co_await next(req);
         res.headers["X-Out"] += "A";
         co_return res;
     });
-    app.use([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+    app.middleware([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
         req.headers["X-Seen"] += "B";
         auto res = co_await next(req);
         res.headers["X-Out"] += "B";
@@ -54,7 +54,7 @@ TEST_CASE("middleware can short-circuit", "[middleware]") {
     auto& app = server.app();
     std::atomic<bool> handler_called{false};
 
-    app.use([](fiasco::request&, const fiasco::next&) -> fiasco::async {
+    app.middleware([](fiasco::request&, const fiasco::next&) -> fiasco::async {
         co_return fiasco::response::text("blocked", 403);
     });
     app.get("/blocked", [&handler_called] {
@@ -77,7 +77,7 @@ TEST_CASE("middleware can mutate request and response", "[middleware]") {
     };
     auto& app = server.app();
 
-    app.use([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+    app.middleware([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
         req.headers["X-Injected"] = "yes";
         auto res = co_await next(req);
         res.status_code = 201;
@@ -101,7 +101,7 @@ TEST_CASE("middleware sees 404, 405, and 422 responses", "[middleware]") {
     };
     auto& app = server.app();
 
-    app.use([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+    app.middleware([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
         auto res = co_await next(req);
         res.headers["X-Middleware"] = "seen";
         co_return res;
@@ -133,7 +133,7 @@ TEST_CASE("middleware can catch an unhandled handler exception", "[middleware]")
     };
     auto& app = server.app();
 
-    app.use([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+    app.middleware([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
         try {
             co_return co_await next(req);
         } catch (const std::runtime_error& error) {
@@ -156,7 +156,7 @@ TEST_CASE("middleware can throw http_error", "[middleware]") {
     };
     auto& app = server.app();
 
-    app.use([](fiasco::request&, const fiasco::next&) -> fiasco::async {
+    app.middleware([](fiasco::request&, const fiasco::next&) -> fiasco::async {
         throw fiasco::http_error(401, "Not authenticated");
         co_return fiasco::response::empty();
     });
@@ -176,7 +176,7 @@ TEST_CASE("middleware cannot call next twice", "[middleware]") {
     };
     auto& app = server.app();
 
-    app.use([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+    app.middleware([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
         (void)co_await next(req);
         co_return co_await next(req);
     });
@@ -195,7 +195,7 @@ TEST_CASE("middleware wraps async handlers", "[middleware]") {
     };
     auto& app = server.app();
 
-    app.use([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+    app.middleware([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
         auto res = co_await next(req);
         res.headers["X-Async-Middleware"] = "yes";
         co_return res;

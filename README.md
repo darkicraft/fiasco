@@ -67,7 +67,7 @@ cmake --install build
 | Synchronous dependency injection with per-request caching (`[[= depends{^^fn}]]`) | ✅ |
 | `http_error` and custom exception handlers | ✅ |
 | Coroutine/async handlers (`fiasco::async`) | ✅ |
-| Application middleware (`app.use`) | ✅ |
+| Application middleware (`app.middleware`) | ✅ |
 | Automatic API docs generation (OpenAPI / Swagger) | 🚧 Planned |
 | Static file serving | 🚧 Planned |
 | HTTPS / TLS | 🚧 Planned |
@@ -125,7 +125,7 @@ Middleware runs for every request, including 404/405 responses, and is
 registered before `run()`:
 
 ```cpp
-app.use([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+app.middleware([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
     auto res = co_await next(req);
     res.headers["X-Request-ID"] = "example";
     co_return res;

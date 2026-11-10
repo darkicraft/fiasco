@@ -118,12 +118,12 @@ class server {
     }
 
     template <typename F>
-    void use(F&& middleware) {
+    void middleware(F&& fn) {
         std::lock_guard lock(m_server_mutex);
         if (m_server) {
             throw std::logic_error("cannot add middleware while the server is running");
         }
-        m_middleware.add(middleware_fn{std::forward<F>(middleware)});
+        m_middleware.add(middleware_fn{std::forward<F>(fn)});
     }
 
     void run() {
