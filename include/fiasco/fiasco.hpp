@@ -12,10 +12,13 @@
 
 namespace fiasco {
 
+namespace middleware {
+using fn = detail::middleware_fn;
+}  // namespace middleware
+
 using async = detail::async;
 using http_error = detail::http_error;
 using json = detail::json;
-using middleware = detail::middleware_fn;
 using next = detail::next_handler;
 using request = detail::request;
 using response = detail::response;
