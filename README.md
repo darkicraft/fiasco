@@ -68,6 +68,7 @@ cmake --install build
 | `http_error` and custom exception handlers | ✅ |
 | Coroutine/async handlers (`fiasco::async`) | ✅ |
 | Application middleware (`app.middleware`) | ✅ |
+| Built-in CORS middleware (`fiasco::middleware::cors`) | ✅ |
 | Automatic API docs generation (OpenAPI / Swagger) | 🚧 Planned |
 | Static file serving | 🚧 Planned |
 | HTTPS / TLS | 🚧 Planned |
@@ -136,6 +137,17 @@ The last middleware added is the outermost, matching FastAPI. Middleware can
 short-circuit by returning without calling `next`, and `next` may be called at
 most once. Applications without middleware keep the synchronous dispatch fast
 path.
+
+CORS is available as a built-in middleware factory:
+
+```cpp
+app.middleware(fiasco::middleware::cors({
+    .allow_origins = {"https://example.com"},
+    .allow_methods = {"GET", "POST"},
+    .allow_headers = {"X-Token"},
+    .allow_credentials = true,
+}));
+```
 
 ## How requests are bound
 

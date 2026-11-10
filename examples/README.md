@@ -39,6 +39,7 @@ cmake --build build --target hello
 | Target | Source | Demonstrates |
 |---|---|---|
 | `middleware` | `middleware/basic.cpp` | `app.middleware`, last-added-outermost ordering, request/response mutation, and short-circuiting. |
+| `cors` | `middleware/cors.cpp` | Built-in CORS middleware with origins, methods, headers, credentials, and preflight. |
 
 ## Routing
 
