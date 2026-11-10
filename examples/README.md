@@ -34,6 +34,12 @@ cmake --build build --target hello
 |---|---|---|
 | `async_handlers` | `async/basic.cpp` | Sync vs `fiasco::async` handlers and explicit responses. |
 
+## Middleware
+
+| Target | Source | Demonstrates |
+|---|---|---|
+| `middleware` | `middleware/basic.cpp` | `app.use`, last-added-outermost ordering, request/response mutation, and short-circuiting. |
+
 ## Routing
 
 | Target | Source | Demonstrates |

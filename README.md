@@ -67,6 +67,7 @@ cmake --install build
 | Synchronous dependency injection with per-request caching (`[[= depends{^^fn}]]`) | ✅ |
 | `http_error` and custom exception handlers | ✅ |
 | Coroutine/async handlers (`fiasco::async`) | ✅ |
+| Application middleware (`app.use`) | ✅ |
 | Automatic API docs generation (OpenAPI / Swagger) | 🚧 Planned |
 | Static file serving | 🚧 Planned |
 | HTTPS / TLS | 🚧 Planned |
@@ -117,6 +118,24 @@ app.get("/user", []() -> fiasco::async {
 Synchronous handlers keep the direct dispatch path. Returning
 `fiasco::response` remains the explicit escape hatch for custom status codes and
 headers.
+
+## Middleware
+
+Middleware runs for every request, including 404/405 responses, and is
+registered before `run()`:
+
+```cpp
+app.use([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+    auto res = co_await next(req);
+    res.headers["X-Request-ID"] = "example";
+    co_return res;
+});
+```
+
+The last middleware added is the outermost, matching FastAPI. Middleware can
+short-circuit by returning without calling `next`, and `next` may be called at
+most once. Applications without middleware keep the synchronous dispatch fast
+path.
 
 ## How requests are bound
 
