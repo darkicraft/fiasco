@@ -100,6 +100,18 @@ The [`examples/`](examples/README.md) directory contains a focused example for
 each feature, plus one `all_in_one` workload that combines them. Start with
 `hello`, then browse by category in the example index.
 
+## Demo
+
+A 30-second tour is in [`demo/demo.sh`](demo/demo.sh). It starts two servers and
+prints a hello response, a reflected JSON body, and a validation error:
+
+```shell
+./demo/demo.sh
+```
+
+Record it with `asciinema rec -c ./demo/demo.sh demo.cast` and embed the GIF
+here at release time.
+
 ## Async handlers
 
 Handlers stay synchronous by default. Add `-> fiasco::async` when the handler
