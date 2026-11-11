@@ -11,6 +11,7 @@
 #include "fiasco/middleware/cors.hpp"
 #include "fiasco/internal/server.hpp"
 #include "fiasco/app/app.hpp"
+#include "fiasco/app/test_client.hpp"
 
 namespace fiasco {
 
@@ -23,6 +24,7 @@ using request = detail::request;
 using response = detail::response;
 using router = detail::router;
 using server = detail::server;
+using test_client = detail::test_client;
 using logger = detail::logger;
 
 }  // namespace fiasco
