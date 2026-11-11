@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "fiasco/contract/result.hpp"
+#include "fiasco/contract/exchange.hpp"
 #include "fiasco/http/tcp_server.hpp"
 #include "fiasco/internal/config.hpp"
 
@@ -18,7 +18,7 @@ namespace fiasco::detail {
 /// type-erased application handler and never registers routes.
 class server {
   public:
-    explicit server(request_handler handler, fiasco::server_config config = {})
+    explicit server(application_handler handler, fiasco::server_config config = {})
         : m_handler(std::move(handler)), m_config(std::move(config)) {}
 
     server(const server&) = delete;
@@ -32,8 +32,7 @@ class server {
             std::lock_guard<std::mutex> lock(m_server_mutex);
             m_run_finished = false;
             m_server = std::make_unique<tcp_server>(
-                network.port, network.host,
-                [this](request req) { return m_handler(std::move(req)); }, network.workers);
+                network.port, network.host, std::move(m_handler), network.workers);
             running = m_server.get();
             m_server_cv.notify_all();
         }
@@ -67,7 +66,7 @@ class server {
     }
 
   private:
-    request_handler m_handler;
+    application_handler m_handler;
     fiasco::server_config m_config;
     mutable std::mutex m_server_mutex;
     std::condition_variable m_server_cv;

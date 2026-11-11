@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "fiasco/contract/result.hpp"
+#include "fiasco/contract/exchange.hpp"
 #include "fiasco/internal/http/request.hpp"
 #include "fiasco/internal/http/response.hpp"
 
@@ -13,7 +13,7 @@ class tcp_server {
   public:
     tcp_server(uint16_t port,
                const std::string& host,
-               request_handler handler,
+               application_handler handler,
                unsigned int num_threads = 0);
 
     void run();

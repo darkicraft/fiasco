@@ -1,10 +1,13 @@
 #pragma once
 
 #include <concepts>
+#include <cstddef>
 #include <functional>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <typeindex>
@@ -13,6 +16,7 @@
 #include <vector>
 
 #include "fiasco/app/app_options.hpp"
+#include "fiasco/contract/exchange.hpp"
 #include "fiasco/contract/result.hpp"
 #include "fiasco/internal/http/http_error.hpp"
 #include "fiasco/internal/http/request.hpp"
@@ -103,9 +107,13 @@ class app {
     request_result handle(request req);
 
     /// Type-erased handler for the transport.
-    request_handler handler() {
-        return [this](request req) { return handle(std::move(req)); };
+    application_handler handler() {
+        return [this](exchange& ex) { return handle(ex); };
     }
+
+    /// Exchange seam. Adapts the internal `handle(request)` fast path to the
+    /// sink; the async result is awaited before the response is written.
+    task<void> handle(exchange& ex);
 
     /// Single-server sugar; implemented by the umbrella target.
     void run();
@@ -227,6 +235,8 @@ class app {
 
     async dispatch_pipeline(request req);
 
+    static task<void> write_response(response_sink& sink, response res);
+
     request_result dispatch(request req);
 
     std::optional<request_result> try_sub_app(request& req);
@@ -289,6 +299,30 @@ inline request_result app::handle(request req) {
         return dispatch_pipeline(std::move(req));
     }
     return dispatch(std::move(req));
+}
+
+inline task<void> app::handle(exchange& ex) {
+    auto result = handle(std::move(ex.req));
+    if (auto* res = std::get_if<response>(&result)) {
+        co_await write_response(ex.res, std::move(*res));
+        co_return;
+    }
+    auto res = co_await std::get<async>(std::move(result));
+    co_await write_response(ex.res, std::move(res).take());
+    co_return;
+}
+
+inline task<void> app::write_response(response_sink& sink, response res) {
+    sink.status(res.status_code);
+    for (const auto& [key, value] : res.headers) {
+        sink.header(key, value);
+    }
+    if (!res.body.empty()) {
+        co_await sink.write(
+            std::as_bytes(std::span<const char>(res.body.data(), res.body.size())));
+    }
+    co_await sink.end();
+    co_return;
 }
 
 inline async app::dispatch_async(request req, async_handler_fn& handler) {

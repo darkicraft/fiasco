@@ -4,7 +4,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -33,6 +36,12 @@ bool response_wants_close(const response& res) {
     return it != res.headers.end() && ascii_lower(it->second) == "close";
 }
 
+struct exchange_state {
+    response out;
+    response_sink sink;
+    body_source body;
+};
+
 }  // namespace
 
 struct session : std::enable_shared_from_this<session> {
@@ -40,9 +49,9 @@ struct session : std::enable_shared_from_this<session> {
     tcp::socket socket;
     llhttp_parser parser;
     std::array<char, 8192> buf;
-    request_handler& handler;
+    application_handler& handler;
 
-    session(tcp::socket sock, asio::io_context::executor_type ex, request_handler& h)
+    session(tcp::socket sock, asio::io_context::executor_type ex, application_handler& h)
         : strand(asio::make_strand(ex)),
           socket(std::move(sock)),
           handler(h) {}
@@ -67,36 +76,60 @@ struct session : std::enable_shared_from_this<session> {
     }
 
     void respond() {
-        request req = parser.take_request();
+        auto req = std::make_shared<request>(parser.take_request());
 
         try {
             auto ep = socket.remote_endpoint();
-            req.client_address = ep.address().to_string() + ':' + std::to_string(ep.port());
+            req->client_address = ep.address().to_string() + ':' + std::to_string(ep.port());
         } catch (...) {
-            req.client_address = "unknown";
+            req->client_address = "unknown";
         }
 
-        const bool request_close = request_wants_close(req);
-        request_result result = handler(std::move(req));
+        const bool request_close = request_wants_close(*req);
 
-        if (auto* res = std::get_if<response>(&result)) {
-            finish(std::move(*res), request_close);
-            return;
-        }
+        auto state = std::make_shared<exchange_state>();
+        response* out = &state->out;
+        state->sink = response_sink{
+            .status = [out](int status) { out->status_code = status; },
+            .header =
+                [out](std::string_view key, std::string_view value) {
+                    out->headers[std::string(key)] = std::string(value);
+                },
+            .write =
+                [out](std::span<const std::byte> bytes) -> task<void> {
+                    out->body.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+                    co_return;
+                },
+            .end = []() -> task<void> { co_return; },
+        };
+
+        std::string_view body_view = req->body;
+        state->body = body_source{
+            .read =
+                [body_view, pos = std::size_t{0}]() mutable
+                -> task<std::optional<std::span<const std::byte>>> {
+                    if (pos >= body_view.size()) {
+                        co_return std::nullopt;
+                    }
+                    auto chunk =
+                        std::as_bytes(std::span(body_view.data() + pos, body_view.size() - pos));
+                    pos = body_view.size();
+                    co_return chunk;
+                },
+        };
 
         auto self = shared_from_this();
-        auto task = std::move(std::get<async>(result));
         asio::co_spawn(
             strand,
-            [self, task = std::move(task), request_close]() mutable -> asio::awaitable<void> {
-                response res;
+            [self, req, state, request_close]() -> task<void> {
+                exchange ex{*req, state->body, state->sink};
                 try {
-                    auto result = co_await std::move(task);
-                    res = std::move(result).take();
+                    co_await self->handler(ex);
                 } catch (...) {
-                    res = response::error("Internal Server Error", 500);
+                    state->out = response::error("Internal Server Error", 500);
                 }
-                self->finish(std::move(res), request_close);
+                self->finish(std::move(state->out), request_close);
+                co_return;
             },
             asio::detached);
     }
@@ -123,13 +156,14 @@ struct session : std::enable_shared_from_this<session> {
 
 struct tcp_server::impl {
     asio::io_context m_ioc;
-    request_handler m_handler;
+    application_handler m_handler;
     tcp::acceptor m_acceptor;
     asio::executor_work_guard<asio::io_context::executor_type> m_work_guard;
     unsigned int m_threads;
     asio::signal_set m_signals;
 
-    impl(uint16_t port, const std::string& host, request_handler handler, unsigned int num_threads)
+    impl(uint16_t port, const std::string& host, application_handler handler,
+         unsigned int num_threads)
         : m_handler(std::move(handler)),
           m_acceptor(m_ioc, tcp::endpoint(asio::ip::make_address(host), port)),
           m_work_guard(asio::make_work_guard(m_ioc)),
@@ -149,7 +183,7 @@ struct tcp_server::impl {
 
 tcp_server::tcp_server(uint16_t port,
                        const std::string& host,
-                       request_handler handler,
+                       application_handler handler,
                        unsigned int num_threads)
     : p_impl(std::make_unique<impl>(port, host, std::move(handler), num_threads)) {}
 
