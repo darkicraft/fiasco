@@ -10,6 +10,13 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
+#include <vector>
+
+#ifdef _WIN32
+#else
+#include <sys/socket.h>
+#endif
 
 #include "fiasco/internal/http/parser.hpp"
 
@@ -41,6 +48,26 @@ struct exchange_state {
     response_sink sink;
     body_source body;
 };
+
+std::unique_ptr<tcp::acceptor> make_acceptor(asio::io_context& context,
+                                             const std::string& host,
+                                             std::uint16_t port,
+                                             bool reuse_port) {
+    auto acceptor = std::make_unique<tcp::acceptor>(context);
+    acceptor->open(tcp::v4());
+    acceptor->set_option(asio::socket_base::reuse_address(true));
+#if !defined(_WIN32) && defined(SO_REUSEPORT)
+    if (reuse_port) {
+        const int one = 1;
+        ::setsockopt(acceptor->native_handle(), SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one));
+    }
+#else
+    (void)reuse_port;
+#endif
+    acceptor->bind(tcp::endpoint(asio::ip::make_address(host), port));
+    acceptor->listen();
+    return acceptor;
+}
 
 }  // namespace
 
@@ -155,29 +182,86 @@ struct session : std::enable_shared_from_this<session> {
 };
 
 struct tcp_server::impl {
-    asio::io_context m_ioc;
     application_handler m_handler;
-    tcp::acceptor m_acceptor;
-    asio::executor_work_guard<asio::io_context::executor_type> m_work_guard;
-    unsigned int m_threads;
-    asio::signal_set m_signals;
+    std::vector<std::unique_ptr<asio::io_context>> m_contexts;
+    std::vector<std::unique_ptr<tcp::acceptor>> m_acceptors;
+    std::vector<std::thread> m_threads;
+    std::unique_ptr<asio::signal_set> m_signals;
+    unsigned int m_workers;
 
     impl(uint16_t port, const std::string& host, application_handler handler,
          unsigned int num_threads)
         : m_handler(std::move(handler)),
-          m_acceptor(m_ioc, tcp::endpoint(asio::ip::make_address(host), port)),
-          m_work_guard(asio::make_work_guard(m_ioc)),
-          m_threads(num_threads == 0 ? std::max(std::thread::hardware_concurrency(), 2u)
-                                     : num_threads),
-          m_signals(m_ioc, SIGINT, SIGTERM) {
-        m_acceptor.set_option(tcp::no_delay(true));
-
-        m_signals.async_wait([this](asio::error_code ec, int) {
+          m_workers(num_threads == 0 ? std::max(std::thread::hardware_concurrency(), 2u)
+                                     : num_threads) {
+#ifdef _WIN32
+        // Windows: one shared io_context; IOCP balances across the worker threads.
+        m_contexts.push_back(std::make_unique<asio::io_context>());
+        m_acceptors.push_back(make_acceptor(*m_contexts.front(), host, port, false));
+#else
+        // Linux/BSD: one io_context per core, one acceptor per core, SO_REUSEPORT.
+        m_contexts.reserve(m_workers);
+        m_acceptors.reserve(m_workers);
+        std::uint16_t actual_port = port;
+        for (unsigned int i = 0; i < m_workers; ++i) {
+            m_contexts.push_back(std::make_unique<asio::io_context>(1));
+            m_acceptors.push_back(make_acceptor(*m_contexts.back(), host, actual_port, true));
+            if (i == 0) {
+                actual_port = m_acceptors.front()->local_endpoint().port();
+            }
+        }
+#endif
+        m_signals = std::make_unique<asio::signal_set>(*m_contexts.front(), SIGINT, SIGTERM);
+        m_signals->async_wait([this](asio::error_code ec, int) {
             if (!ec) {
-                m_work_guard.reset();
-                m_ioc.stop();
+                stop();
             }
         });
+    }
+
+    void accept_at(std::size_t index) {
+        auto& context = *m_contexts[index];
+        auto& acceptor = *m_acceptors[index];
+        acceptor.async_accept(
+            context, [this, index](asio::error_code ec, tcp::socket socket) {
+                if (!ec) {
+                    std::make_shared<session>(std::move(socket),
+                                              m_contexts[index]->get_executor(), m_handler)
+                        ->start();
+                }
+                if (m_acceptors[index]->is_open()) {
+                    accept_at(index);
+                }
+            });
+    }
+
+    void run() {
+        if (m_contexts.size() == 1) {
+            accept_at(0);
+            for (unsigned int i = 0; i < m_workers; ++i) {
+                m_threads.emplace_back([this] { m_contexts.front()->run(); });
+            }
+        } else {
+            for (std::size_t i = 0; i < m_contexts.size(); ++i) {
+                accept_at(i);
+            }
+            for (std::size_t i = 0; i < m_contexts.size(); ++i) {
+                m_threads.emplace_back([this, i] { m_contexts[i]->run(); });
+            }
+        }
+        for (auto& thread : m_threads) {
+            thread.join();
+        }
+    }
+
+    void stop() {
+        for (auto& context : m_contexts) {
+            context->stop();
+        }
+    }
+
+    [[nodiscard]] std::uint16_t port() const {
+        return m_acceptors.empty() ? 0 : m_acceptors.front()->local_endpoint().port();
     }
 };
 
@@ -188,41 +272,15 @@ tcp_server::tcp_server(uint16_t port,
     : p_impl(std::make_unique<impl>(port, host, std::move(handler), num_threads)) {}
 
 uint16_t tcp_server::port() const {
-    return p_impl->m_acceptor.local_endpoint().port();
+    return p_impl->port();
 }
 
 void tcp_server::run() {
-    accept();
-    std::vector<std::thread> threads;
-    threads.reserve(p_impl->m_threads);
-    for (unsigned int i = 0; i < p_impl->m_threads; ++i) {
-        threads.emplace_back([this] { p_impl->m_ioc.run(); });
-    }
-    for (auto& t : threads) {
-        t.join();
-    }
+    p_impl->run();
 }
 
 void tcp_server::stop() noexcept {
-    // io_context::stop() is the documented, thread-safe way to interrupt run()
-    // from another thread. We intentionally do NOT touch m_work_guard here:
-    // resetting it from a foreign thread races with the io threads on Asio's
-    // internal state (and Asio's fence-based synchronization is invisible to
-    // TSan). stop() alone is sufficient to make run() return.
-    p_impl->m_ioc.stop();
-}
-
-void tcp_server::accept() {
-    p_impl->m_acceptor.async_accept(p_impl->m_ioc, [this](asio::error_code ec, tcp::socket socket) {
-        if (!ec) {
-            std::make_shared<session>(
-                std::move(socket), p_impl->m_ioc.get_executor(), p_impl->m_handler)
-                ->start();
-        }
-        if (p_impl->m_acceptor.is_open()) {
-            accept();
-        }
-    });
+    p_impl->stop();
 }
 
 tcp_server::~tcp_server() = default;

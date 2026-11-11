@@ -4,6 +4,8 @@ project(fiasco LANGUAGES CXX)
 option(FIASCO_BUILD_MODULES "Build C++ module targets" OFF)
 option(FIASCO_BUILD_EXAMPLES "Build examples" ON)
 option(FIASCO_BUILD_TESTS "Build tests" ON)
+option(FIASCO_BUILD_BENCHMARKS "Build benchmarks" OFF)
+option(FIASCO_WITH_IO_URING "Use Asio's io_uring backend (requires liburing)" OFF)
 
 # C++26 reflection (std::meta) is required and, for now, only GCC 16+ provides
 # the needed `-freflection` support.
@@ -139,6 +141,13 @@ target_include_directories(fiasco_core INTERFACE
 target_link_libraries(fiasco_core INTERFACE
     asio
 )
+if(FIASCO_WITH_IO_URING)
+    target_compile_definitions(fiasco_core INTERFACE
+        ASIO_HAS_IO_URING
+        ASIO_HAS_IO_URING_AS_DEFAULT
+    )
+    target_link_libraries(fiasco_core INTERFACE uring)
+endif()
 
 # -- fiasco_http ------------------------------------------
 # Transport: HTTP/1.1 parser, connection lifecycle and the socket session.
