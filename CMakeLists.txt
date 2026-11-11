@@ -170,9 +170,22 @@ target_include_directories(fiasco_routing PUBLIC
 
 target_link_libraries(fiasco_routing PUBLIC
     fiasco_meta
+    fiasco_contract
     fiasco_types
-    fiasco_http
-    asio
+)
+
+# -- fiasco_app --------------------------------------------
+# Header-only application layer: routing, middleware, DI, validation,
+# exception handlers, app options, mounts, test client. No sockets, no llhttp.
+add_library(fiasco_app INTERFACE)
+target_include_directories(fiasco_app INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(fiasco_app INTERFACE
+    fiasco_contract
+    fiasco_meta
+    fiasco_types
+    fiasco_routing
 )
 
 # -- fiasco_logging ----------------------------------------
@@ -201,6 +214,7 @@ target_link_libraries(fiasco INTERFACE
     fiasco_core
     fiasco_http
     fiasco_routing
+    fiasco_app
     fiasco_logging
 )
 

@@ -10,9 +10,11 @@
 #include "fiasco/internal/router.hpp"
 #include "fiasco/middleware/cors.hpp"
 #include "fiasco/internal/server.hpp"
+#include "fiasco/app/app.hpp"
 
 namespace fiasco {
 
+using app = detail::app;
 using async = detail::async;
 using http_error = detail::http_error;
 using json = detail::json;
