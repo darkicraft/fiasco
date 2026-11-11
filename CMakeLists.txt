@@ -107,6 +107,14 @@ target_include_directories(fiasco_meta INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+# -- fiasco_contract --------------------------------------
+# Header-only boundary: request/response and, later, the application handler,
+# sinks and exchange. No llhttp, no routing.
+add_library(fiasco_contract INTERFACE)
+target_include_directories(fiasco_contract INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 # -- fiasco_types -----------------------------------------
 add_library(fiasco_types STATIC
     src/fiasco/internal/types/json.cpp
@@ -131,13 +139,12 @@ target_include_directories(fiasco_core PUBLIC
 
 target_link_libraries(fiasco_core PUBLIC
     asio
+    fiasco_contract
 )
 
 # -- fiasco_http ------------------------------------------
 add_library(fiasco_http STATIC
     src/fiasco/internal/http/parser.cpp
-    src/fiasco/internal/http/request.cpp
-    src/fiasco/internal/http/response.cpp
 )
 
 target_include_directories(fiasco_http PUBLIC
@@ -145,6 +152,7 @@ target_include_directories(fiasco_http PUBLIC
 )
 
 target_link_libraries(fiasco_http PUBLIC
+    fiasco_contract
     fiasco_types
     llhttp_static
 )
@@ -186,6 +194,7 @@ target_include_directories(fiasco INTERFACE
 
 target_link_libraries(fiasco INTERFACE
     fiasco_meta
+    fiasco_contract
     fiasco_types
     fiasco_core
     fiasco_http
