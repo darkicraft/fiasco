@@ -114,6 +114,8 @@ add_library(fiasco_contract INTERFACE)
 target_include_directories(fiasco_contract INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+# Temporary: `task` aliases asio::awaitable until fiasco::task lands.
+target_link_libraries(fiasco_contract INTERFACE asio)
 
 # -- fiasco_types -----------------------------------------
 add_library(fiasco_types STATIC

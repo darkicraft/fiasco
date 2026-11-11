@@ -2,6 +2,11 @@
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
+# ---- contract_test ----
+add_executable(fiasco_test_contract contract_test.cpp)
+target_link_libraries(fiasco_test_contract PRIVATE Catch2::Catch2WithMain fiasco_contract)
+catch_discover_tests(fiasco_test_contract)
+
 # ---- json_test ----
 add_executable(fiasco_test_json json_test.cpp)
 target_link_libraries(fiasco_test_json PRIVATE Catch2::Catch2WithMain fiasco_types)
