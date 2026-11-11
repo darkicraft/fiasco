@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Fiasco needs GCC 16 (C++26 reflection) and CMake >= 3.30. The official gcc
+# image carries the compiler; CMake is installed from PyPI because the image's
+# Debian package is older than the project's minimum.
+
+jobs:
+  build:
+    name: GCC 16 build + ctest
+    runs-on: ubuntu-latest
+    container:
+      image: gcc:16.2.0-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CMake
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-pip
+          pip install --break-system-packages --no-cache-dir cmake
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - name: Build
+        run: cmake --build build --parallel "$(nproc)"
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  asan:
+    name: ASan
+    runs-on: ubuntu-latest
+    container:
+      image: gcc:16.2.0-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CMake
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-pip
+          pip install --break-system-packages --no-cache-dir cmake
+      - name: Configure
+        run: |
+          cmake -S . -B build-asan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+      - name: Build
+        run: cmake --build build-asan --parallel "$(nproc)"
+      - name: Test
+        run: ctest --test-dir build-asan --output-on-failure
+
+  tsan:
+    name: TSan
+    runs-on: ubuntu-latest
+    container:
+      image: gcc:16.2.0-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CMake
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-pip
+          pip install --break-system-packages --no-cache-dir cmake
+      - name: Configure
+        run: |
+          cmake -S . -B build-tsan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+      - name: Build
+        run: cmake --build build-tsan --parallel "$(nproc)"
+      - name: Test
+        run: ctest --test-dir build-tsan --output-on-failure
+
+  modules:
+    name: C++20 modules
+    runs-on: ubuntu-latest
+    container:
+      image: gcc:16.2.0-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CMake
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-pip
+          pip install --break-system-packages --no-cache-dir cmake
+      - name: Configure
+        run: cmake -S . -B build-modules -DCMAKE_BUILD_TYPE=RelWithDebInfo -DFIASCO_BUILD_MODULES=ON
+      - name: Build
+        run: cmake --build build-modules --parallel "$(nproc)"
+      - name: Test
+        run: ctest --test-dir build-modules --output-on-failure
