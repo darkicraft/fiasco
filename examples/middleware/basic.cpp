@@ -30,9 +30,7 @@ std::uint16_t example_port() {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     std::atomic<int> next_request_id{1};
 
@@ -61,5 +59,5 @@ int main() {
         return fiasco::json{{"request_id", req.header("X-Request-ID")}};
     });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

@@ -5,7 +5,6 @@
 #include "fiasco/internal/http/response.hpp"
 
 #include "fiasco/internal/json.hpp"
-#include "fiasco/internal/logging.hpp"
 #include "fiasco/internal/middleware.hpp"
 #include "fiasco/internal/router.hpp"
 #include "fiasco/middleware/cors.hpp"
@@ -25,6 +24,16 @@ using response = detail::response;
 using router = detail::router;
 using server = detail::server;
 using test_client = detail::test_client;
-using logger = detail::logger;
 
 }  // namespace fiasco
+
+namespace fiasco::detail {
+
+inline void app::run() { run(server_config{}); }
+
+inline void app::run(server_config config) {
+    server srv{handler(), std::move(config)};
+    srv.run();
+}
+
+}  // namespace fiasco::detail

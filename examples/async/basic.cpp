@@ -37,9 +37,7 @@ user load_user() {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     // No coroutine machinery: the original synchronous fast path.
     app.get("/sync", []() { return load_user(); });
@@ -55,5 +53,5 @@ int main() {
         co_return response;
     });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

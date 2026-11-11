@@ -22,6 +22,10 @@
 #include "fiasco/internal/middleware.hpp"
 #include "fiasco/internal/router.hpp"
 
+namespace fiasco {
+struct server_config;
+}  // namespace fiasco
+
 namespace fiasco::detail {
 
 /// The pure application object: routes, middleware, exception handlers, and
@@ -97,6 +101,15 @@ class app {
 
     /// The application seam. No socket, no logging, no threads.
     request_result handle(request req);
+
+    /// Type-erased handler for the transport.
+    request_handler handler() {
+        return [this](request req) { return handle(std::move(req)); };
+    }
+
+    /// Single-server sugar; implemented by the umbrella target.
+    void run();
+    void run(server_config config);
 
   private:
     struct sub_app {

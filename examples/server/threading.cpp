@@ -33,9 +33,7 @@ std::uint16_t example_port() {
 }  // namespace
 
 int main() {
-    fiasco::server app{fiasco::server_config{
-        .network = {.port = example_port(), .workers = 4},
-    }};
+    fiasco::app app;
 
     app.get("/sleep/{ms}", [](int ms) {
         ms = std::clamp(ms, 0, 5000);
@@ -63,5 +61,7 @@ int main() {
         return fiasco::json{{"thread_hash", std::to_string(hash)}};
     });
 
-    app.run();
+    app.run(fiasco::server_config{
+        .network = {.port = example_port(), .workers = 4},
+    });
 }

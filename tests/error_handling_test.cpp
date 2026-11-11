@@ -21,7 +21,7 @@ struct explicit_error : std::runtime_error {
 
 TEST_CASE("http_error becomes an HTTP response", "[error_handling]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/auth", []() -> std::string {
@@ -40,7 +40,7 @@ TEST_CASE("http_error becomes an HTTP response", "[error_handling]") {
 
 TEST_CASE("custom exception handler", "[error_handling]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.add_exception_handler([](const fiasco::detail::app_error& error) {
@@ -59,7 +59,7 @@ TEST_CASE("custom exception handler", "[error_handling]") {
 
 TEST_CASE("explicit exception handler type remains supported", "[error_handling]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.add_exception_handler<fiasco::detail::explicit_error>(
@@ -79,7 +79,7 @@ TEST_CASE("explicit exception handler type remains supported", "[error_handling]
 
 TEST_CASE("http_error accepts structured JSON detail", "[error_handling]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/structured", []() -> std::string {

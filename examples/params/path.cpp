@@ -28,9 +28,7 @@ std::uint16_t example_port() {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.get("/types/{i}/{lg}/{ll}/{f}/{d}/{b}/{s}",
             [](std::string s, bool b, double d, float f, long long ll, long lg, int i) {
@@ -48,5 +46,5 @@ int main() {
                 return fiasco::json{{"int32", i32}, {"uint16", u16}, {"uint64", u64}};
             });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

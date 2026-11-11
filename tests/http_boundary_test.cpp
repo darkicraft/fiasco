@@ -8,7 +8,7 @@
 
 TEST_CASE("server handles sequential requests on one connection", "[http][keep-alive]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/one", []() { return "one"; });
@@ -30,7 +30,7 @@ TEST_CASE("server handles sequential requests on one connection", "[http][keep-a
 
 TEST_CASE("server closes the connection when requested", "[http][connection]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/one", []() { return "one"; });
@@ -47,7 +47,7 @@ TEST_CASE("server closes the connection when requested", "[http][connection]") {
 
 TEST_CASE("server closes the connection on malformed requests", "[http][malformed]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     server.start();
 
@@ -59,7 +59,7 @@ TEST_CASE("server closes the connection on malformed requests", "[http][malforme
 
 TEST_CASE("server closes the connection when the response says close", "[http][connection]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/close", []() {

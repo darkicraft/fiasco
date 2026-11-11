@@ -39,9 +39,7 @@ fiasco::json nest(int depth) {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.get("/nest/{depth}", [](int depth) { return nest(std::clamp(depth, 0, 32)); });
 
@@ -66,5 +64,5 @@ int main() {
         };
     });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

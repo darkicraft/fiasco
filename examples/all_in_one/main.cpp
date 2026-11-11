@@ -562,24 +562,10 @@ int main(int argc, char** argv) {
         .network = {.host = "0.0.0.0", .port = 8080, .workers = 4},
     };
 
-    if (const char* env = std::getenv("FIASCO_LOG"); env && std::string_view{env} == "off") {
-        config.logging.enabled = false;
-    }
+    (void)argc;
+    (void)argv;
 
-    for (int i = 1; i < argc; ++i) {
-        std::string_view arg = argv[i];
-        if (arg == "--no-log") {
-            config.logging.enabled = false;
-        } else if (arg == "--log") {
-            config.logging.enabled = true;
-        } else if (arg == "--no-access-log") {
-            config.logging.access = false;
-        } else if (arg == "--access-log") {
-            config.logging.access = true;
-        }
-    }
-
-    fiasco::server app{std::move(config)};
+    fiasco::app app;
 
     // ---- plain value wrapped automatically ----
     app.get("/ping", []() { return "pong"; });
@@ -718,5 +704,5 @@ int main(int argc, char** argv) {
 
     app.include_router(std::move(v1));
     app.include_router(std::move(tools));
-    app.run();
+    app.run(std::move(config));
 }

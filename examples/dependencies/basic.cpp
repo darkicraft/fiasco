@@ -58,9 +58,7 @@ user get_current_user(
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.get("/me",
             [](db_session& db [[= fiasco::depends{^^get_db}]],
@@ -71,5 +69,5 @@ int main() {
                 };
             });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

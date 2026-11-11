@@ -1,155 +1,39 @@
 #pragma once
 
-#include <chrono>
-#include <concepts>
 #include <condition_variable>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
-#include <thread>
-#include <tuple>
-#include <type_traits>
-#include <typeindex>
-#include <unordered_map>
 #include <utility>
 
-#include "fiasco/internal/core/tcp_server.hpp"
-#include "fiasco/internal/http/http_error.hpp"
-#include "fiasco/internal/http/request.hpp"
-#include "fiasco/internal/http/response.hpp"
-#include "fiasco/internal/json.hpp"
-#include "fiasco/internal/logging.hpp"
-#include "fiasco/internal/meta/reflect.hpp"
-#include "fiasco/internal/middleware.hpp"
-#include "fiasco/internal/router.hpp"
-
-namespace fiasco {
-
-using log_level = detail::log_level;
-using log_format = detail::log_format_type;
-
-struct network_config {
-    std::string host = "0.0.0.0";
-    std::uint16_t port = 8080;
-    unsigned int workers = 0;  // 0 = hardware concurrency, at least 2
-};
-
-struct logging_config {
-    bool enabled = true;
-    bool access = true;
-    log_level level = log_level::info;
-    log_format format = log_format::human;
-    bool colors = true;
-    log_sink sink;  // empty => std::cout
-};
-
-struct server_config {
-    network_config network{};
-    logging_config logging{};
-};
-
-}  // namespace fiasco
+#include "fiasco/contract/result.hpp"
+#include "fiasco/http/tcp_server.hpp"
+#include "fiasco/internal/config.hpp"
 
 namespace fiasco::detail {
 
+/// The transport: owns the socket and the worker threads. It drives the
+/// type-erased application handler and never registers routes.
 class server {
   public:
-    using exception_handler = std::move_only_function<response(std::exception_ptr)>;
+    explicit server(request_handler handler, fiasco::server_config config = {})
+        : m_handler(std::move(handler)), m_config(std::move(config)) {}
 
-    void print_routes() const { m_router.print_routes(); }
-
-    template <typename F>
-    void add_exception_handler(F&& handler) {
-        using traits = meta::callable_traits<std::decay_t<F>>;
-        static_assert(traits::arity == 1,
-                      "an exception handler must take exactly one exception parameter");
-        using E = std::remove_cvref_t<std::tuple_element_t<0, typename traits::args_tuple>>;
-        static_assert(std::derived_from<E, std::exception>,
-                      "the exception handler parameter must derive from std::exception");
-        add_exception_handler_impl<E>(std::forward<F>(handler));
-    }
-
-    template <std::derived_from<std::exception> E, typename F>
-    void add_exception_handler(F&& handler) {
-        add_exception_handler_impl<E>(std::forward<F>(handler));
-    }
-
-    explicit server(fiasco::server_config config = {})
-        : m_config(std::move(config)),
-          m_logging(m_config.logging.enabled,
-                    m_config.logging.access,
-                    m_config.logging.level,
-                    m_config.logging.format,
-                    m_config.logging.colors,
-                    std::move(m_config.logging.sink)) {}
-
-    logger& get_logger(const std::string& name) { return m_logging.get(name); }
-
-    template <typename F>
-    void get(const std::string& path, F&& f) {
-        m_router.add(http_method::get, path, std::forward<F>(f));
-    }
-
-    template <typename F>
-    void post(const std::string& path, F&& f) {
-        m_router.add(http_method::post, path, std::forward<F>(f));
-    }
-
-    template <typename F>
-    void put(const std::string& path, F&& f) {
-        m_router.add(http_method::put, path, std::forward<F>(f));
-    }
-
-    template <typename F>
-    void del(const std::string& path, F&& f) {
-        m_router.add(http_method::del, path, std::forward<F>(f));
-    }
-
-    template <typename F>
-    void patch(const std::string& path, F&& f) {
-        m_router.add(http_method::patch, path, std::forward<F>(f));
-    }
-
-    void include_router(router sub, const std::string& prefix = "") {
-        m_router.include_router(std::move(sub), prefix);
-    }
-
-    template <typename F>
-    void middleware(F&& fn) {
-        std::lock_guard lock(m_server_mutex);
-        if (m_server) {
-            throw std::logic_error("cannot add middleware while the server is running");
-        }
-        m_middleware.add(middleware_fn{std::forward<F>(fn)});
-    }
+    server(const server&) = delete;
+    server& operator=(const server&) = delete;
 
     void run() {
         const auto& network = m_config.network;
-        const uint16_t port = network.port;
-        const std::string& host = network.host;
-        const unsigned int workers = network.workers;
-        const unsigned int actual_threads =
-            workers == 0 ? std::max(std::thread::hardware_concurrency(), 2u) : workers;
-        {
-            auto& log = m_logging.get("fiasco");
-            log.info("starting server with " + std::to_string(actual_threads) + " threads");
-            if (host == "0.0.0.0" || host == "::") {
-                log.info("listening on port " + std::to_string(port) +
-                         " (all interfaces, host: " + host + ")");
-            } else {
-                log.info("listening on " + host + ":" + std::to_string(port));
-            }
-        }
         // run() may be called on a different thread than stop(); guard m_server.
         tcp_server* running = nullptr;
         {
             std::lock_guard<std::mutex> lock(m_server_mutex);
             m_run_finished = false;
             m_server = std::make_unique<tcp_server>(
-                port, host, [this](request req) { return dispatch(std::move(req)); }, workers);
+                network.port, network.host,
+                [this](request req) { return m_handler(std::move(req)); }, network.workers);
             running = m_server.get();
             m_server_cv.notify_all();
         }
@@ -160,10 +44,7 @@ class server {
             m_run_finished = true;
             m_server_cv.notify_all();
         }
-        m_logging.get("fiasco").info("server stopped");
     }
-
-    void flush_logs() { m_logging.flush(); }
 
     [[nodiscard]] std::uint16_t port() const {
         std::lock_guard lock(m_server_mutex);
@@ -186,249 +67,12 @@ class server {
     }
 
   private:
+    request_handler m_handler;
     fiasco::server_config m_config;
-    log_registry m_logging;
-    router m_router;
-    middleware_chain m_middleware;
-    std::unordered_map<std::type_index, exception_handler> m_exception_handlers;
     mutable std::mutex m_server_mutex;
     std::condition_variable m_server_cv;
     std::unique_ptr<tcp_server> m_server;
     bool m_run_finished = false;
-
-    template <std::derived_from<std::exception> E, typename F>
-    void add_exception_handler_impl(F&& handler) {
-        m_exception_handlers.insert_or_assign(
-            std::type_index(typeid(E)),
-            [fn = std::forward<F>(handler)](std::exception_ptr error) mutable -> response {
-                try {
-                    std::rethrow_exception(error);
-                } catch (const E& e) {
-                    return fn(e);
-                } catch (...) {
-                    std::rethrow_exception(error);
-                }
-            });
-    }
-
-    [[nodiscard]] static response make_http_error_response(const http_error& error) {
-        json_type body = json_type::object();
-        body["detail"] = error.detail();
-        response res = response::json(body.dump(), error.status_code());
-        for (const auto& [name, value] : error.headers()) {
-            res.headers[name] = value;
-        }
-        return res;
-    }
-
-    [[nodiscard]] response translate_known_exception(std::exception_ptr error) {
-        try {
-            std::rethrow_exception(error);
-        } catch (const request_validation_error& e) {
-            return response::json(to_fastapi_error_json(e.errors()), 422);
-        } catch (const http_error& e) {
-            if (auto it = m_exception_handlers.find(std::type_index(typeid(e)));
-                it != m_exception_handlers.end()) {
-                return invoke_exception_handler(it->second, error);
-            }
-            return make_http_error_response(e);
-        } catch (const json::exception& e) {
-            return response::error(e.what(), 422);
-        } catch (const std::exception& e) {
-            if (auto it = m_exception_handlers.find(std::type_index(typeid(e)));
-                it != m_exception_handlers.end()) {
-                return invoke_exception_handler(it->second, error);
-            }
-            throw;
-        } catch (...) {
-            throw;
-        }
-    }
-
-    [[nodiscard]] response translate_exception(std::exception_ptr error) {
-        try {
-            std::rethrow_exception(error);
-        } catch (const request_validation_error& e) {
-            return response::json(to_fastapi_error_json(e.errors()), 422);
-        } catch (const http_error& e) {
-            if (auto it = m_exception_handlers.find(std::type_index(typeid(e)));
-                it != m_exception_handlers.end()) {
-                return invoke_exception_handler(it->second, error);
-            }
-            return make_http_error_response(e);
-        } catch (const json::exception& e) {
-            return response::error(e.what(), 422);
-        } catch (const std::exception& e) {
-            if (auto it = m_exception_handlers.find(std::type_index(typeid(e)));
-                it != m_exception_handlers.end()) {
-                return invoke_exception_handler(it->second, error);
-            }
-            return response::error(e.what(), 500);
-        } catch (...) {
-            return response::error("Internal Server Error", 500);
-        }
-    }
-
-    [[nodiscard]] static response invoke_exception_handler(exception_handler& handler,
-                                                           std::exception_ptr error) {
-        try {
-            return handler(error);
-        } catch (const std::exception& e) {
-            return response::error(e.what(), 500);
-        } catch (...) {
-            return response::error("Internal Server Error", 500);
-        }
-    }
-
-    void log_access(access_log alog,
-                    const response& res,
-                    std::chrono::steady_clock::time_point start) {
-        if (!m_logging.access_log_enabled() || !m_logging.logging_enabled()) {
-            return;
-        }
-        auto end = std::chrono::steady_clock::now();
-        alog.status_code = res.status_code;
-        alog.duration_us =
-            std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        m_logging.get("fiasco.access").info(alog.build_message());
-    }
-
-    request_result dispatch(request req) {
-        req.reanchor_url_views();
-        const bool access_logging = m_logging.access_log_enabled() && m_logging.logging_enabled();
-        auto start = access_logging ? std::chrono::steady_clock::now()
-                                    : std::chrono::steady_clock::time_point{};
-
-        access_log alog;
-        if (access_logging) {
-            alog.client = req.client_address;
-            alog.method = req.method;
-            alog.path = req.path;
-        }
-
-        if (!m_middleware.empty()) {
-            return dispatch_pipeline(std::move(req), std::move(alog), start, access_logging);
-        }
-
-        auto match = m_router.match(req.method, req.path);
-        if (!match.matched) {
-            response res = m_router.any_method_matches(req.path)
-                               ? response::error("Method Not Allowed", 405)
-                               : response::error("Not Found", 404);
-            if (access_logging) {
-                log_access(std::move(alog), res, start);
-            }
-            return res;
-        }
-
-        if (match.is_async) {
-            return dispatch_async(std::move(req), *match.async_handler, std::move(alog), start,
-                                  access_logging);
-        }
-
-        req.path_params.clear();
-        req.ordered_path_params.clear();
-        for (const auto& [name, value] : match.path_params) {
-            req.path_params.emplace(name, value);
-            req.ordered_path_params.push_back(value);
-        }
-        req.query_params = parse_query(req.query_string);
-
-        response res;
-        try {
-            res = (*match.handler)(req);
-        } catch (...) {
-            res = translate_exception(std::current_exception());
-        }
-
-        if (access_logging) {
-            log_access(std::move(alog), res, start);
-        }
-        return res;
-    }
-
-    async dispatch_async(request req,
-                         async_handler_fn& handler,
-                         access_log alog,
-                         std::chrono::steady_clock::time_point start,
-                         bool access_logging) {
-        req.reanchor_url_views();
-        auto match = m_router.match(req.method, req.path);
-        req.path_params.clear();
-        req.ordered_path_params.clear();
-        for (const auto& [name, value] : match.path_params) {
-            req.path_params.emplace(name, value);
-            req.ordered_path_params.push_back(value);
-        }
-        req.query_params = parse_query(req.query_string);
-
-        response res;
-        try {
-            auto result = co_await handler(req);
-            res = std::move(result).take();
-        } catch (...) {
-            res = translate_exception(std::current_exception());
-        }
-
-        if (access_logging) {
-            log_access(std::move(alog), res, start);
-        }
-        co_return res;
-    }
-
-    asio::awaitable<response> endpoint_handler(request& req) {
-        auto match = m_router.match(req.method, req.path);
-        if (!match.matched) {
-            co_return m_router.any_method_matches(req.path)
-                ? response::error("Method Not Allowed", 405)
-                : response::error("Not Found", 404);
-        }
-
-        req.path_params.clear();
-        req.ordered_path_params.clear();
-        for (const auto& [name, value] : match.path_params) {
-            req.path_params.emplace(name, value);
-            req.ordered_path_params.push_back(value);
-        }
-        req.query_params = parse_query(req.query_string);
-
-        if (match.is_async) {
-            try {
-                auto result = co_await (*match.async_handler)(req);
-                co_return std::move(result).take();
-            } catch (...) {
-                co_return translate_known_exception(std::current_exception());
-            }
-        }
-
-        try {
-            co_return (*match.handler)(req);
-        } catch (...) {
-            co_return translate_known_exception(std::current_exception());
-        }
-    }
-
-    async dispatch_pipeline(request req,
-                            access_log alog,
-                            std::chrono::steady_clock::time_point start,
-                            bool access_logging) {
-        req.reanchor_url_views();
-
-        response res;
-        try {
-            endpoint_fn endpoint = [this](request& request) -> asio::awaitable<response> {
-                co_return co_await endpoint_handler(request);
-            };
-            res = co_await m_middleware.run(req, std::move(endpoint));
-        } catch (...) {
-            res = translate_exception(std::current_exception());
-        }
-
-        if (access_logging) {
-            log_access(std::move(alog), res, start);
-        }
-        co_return res;
-    }
 };
 
 }  // namespace fiasco::detail

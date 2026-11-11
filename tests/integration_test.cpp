@@ -128,7 +128,7 @@ constrained_body get_constrained_body(constrained_body payload) {
 
 TEST_CASE("integration GET returns 200", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/hello", []() -> std::string { return "world"; });
@@ -143,7 +143,7 @@ TEST_CASE("integration GET returns 200", "[integration]") {
 
 TEST_CASE("integration 404 not found", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/exists", []() -> std::string { return "ok"; });
@@ -158,7 +158,7 @@ TEST_CASE("integration 404 not found", "[integration]") {
 
 TEST_CASE("integration 405 method not allowed", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/resource", []() -> std::string { return "ok"; });
@@ -172,7 +172,7 @@ TEST_CASE("integration 405 method not allowed", "[integration]") {
 
 TEST_CASE("integration invalid JSON body returns 422", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
@@ -192,7 +192,7 @@ TEST_CASE("integration invalid JSON body returns 422", "[integration]") {
 
 TEST_CASE("integration 500 internal error from handler", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/crash", []() -> std::string { throw std::runtime_error("boom"); });
@@ -206,7 +206,7 @@ TEST_CASE("integration 500 internal error from handler", "[integration]") {
 
 TEST_CASE("integration path parameters", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/users/{uid}", [](int uid) -> std::string { return "user:" + std::to_string(uid); });
@@ -221,7 +221,7 @@ TEST_CASE("integration path parameters", "[integration]") {
 
 TEST_CASE("integration JSON body deserialization", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/sum", [](const fiasco::detail::SumInput& input) -> std::string {
@@ -243,7 +243,7 @@ TEST_CASE("integration JSON body deserialization", "[integration]") {
 
 TEST_CASE("integration POST empty body with JSON model returns 422", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
@@ -263,7 +263,7 @@ TEST_CASE("integration POST empty body with JSON model returns 422", "[integrati
 
 TEST_CASE("integration POST missing field returns 422 with the field name", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/sum", [](const fiasco::detail::RequiredInput&) -> std::string { return ""; });
@@ -285,7 +285,7 @@ TEST_CASE("integration POST missing field returns 422 with the field name", "[in
 
 TEST_CASE("integration POST constraint violation returns Pydantic 422 with ctx", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/c", [](const fiasco::detail::ConstrainedInput&) -> std::string { return ""; });
@@ -307,7 +307,7 @@ TEST_CASE("integration POST constraint violation returns Pydantic 422 with ctx",
 
 TEST_CASE("integration query parameter", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/greet", [](std::string name) -> std::string { return "hi " + name; });
@@ -322,7 +322,7 @@ TEST_CASE("integration query parameter", "[integration]") {
 
 TEST_CASE("integration query parameters are decoded", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/echo", [](std::string name, std::string empty, std::string flag) -> std::string {
@@ -340,7 +340,7 @@ TEST_CASE("integration query parameters are decoded", "[integration]") {
 
 TEST_CASE("integration missing query parameter returns 422", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/greet", [](std::string name) -> std::string { return "hi " + name; });
@@ -355,7 +355,7 @@ TEST_CASE("integration missing query parameter returns 422", "[integration]") {
 
 TEST_CASE("integration path params bind by name, not position", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     // parameter order is the reverse of the path placeholders
@@ -373,7 +373,7 @@ TEST_CASE("integration path params bind by name, not position", "[integration]")
 
 TEST_CASE("integration multiple body params are embedded by name", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/embed", [](fiasco::detail::SumInput s, fiasco::detail::ExtraInput o) -> std::string {
@@ -395,7 +395,7 @@ TEST_CASE("integration path scalar + body model is not embedded", "[integration]
     // A scalar (std::string) path param must not count as a body param, so the
     // single model still receives the whole body rather than body[label].
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/sum/{label}", [](std::string label, fiasco::detail::SumInput input) -> std::string {
@@ -415,7 +415,7 @@ TEST_CASE("integration path scalar + body model is not embedded", "[integration]
 
 TEST_CASE("integration explicit path parameter with constraint", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/items/{id}",
@@ -438,7 +438,7 @@ TEST_CASE("integration explicit path parameter with constraint", "[integration]"
 
 TEST_CASE("integration explicit query parameter with alias and constraint", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/search",
@@ -467,7 +467,7 @@ TEST_CASE("integration explicit query parameter with alias and constraint", "[in
 
 TEST_CASE("integration explicit query parameter with pattern", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/code",
@@ -493,7 +493,7 @@ TEST_CASE("integration explicit query parameter with pattern", "[integration]") 
 
 TEST_CASE("integration explicit header parameter is case-insensitive", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/token", [](std::string token [[= fiasco::header{.alias = "X-Token"}]]) -> std::string {
@@ -516,7 +516,7 @@ TEST_CASE("integration explicit header parameter is case-insensitive", "[integra
 
 TEST_CASE("integration explicit cookie parameter", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/session",
@@ -541,7 +541,7 @@ TEST_CASE("integration explicit cookie parameter", "[integration]") {
 
 TEST_CASE("integration explicit body parameter", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/sum", [](const fiasco::detail::SumInput& input [[= fiasco::body{}]]) -> std::string {
@@ -561,7 +561,7 @@ TEST_CASE("integration explicit body parameter", "[integration]") {
 
 TEST_CASE("integration explicit scalar body parameter with constraint", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/double",
@@ -588,7 +588,7 @@ TEST_CASE("integration explicit scalar body parameter with constraint", "[integr
 
 TEST_CASE("integration explicit multiple body parameters use aliases", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/combine",
@@ -610,7 +610,7 @@ TEST_CASE("integration explicit multiple body parameters use aliases", "[integra
 
 TEST_CASE("integration optional query parameter", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/optional",
@@ -631,7 +631,7 @@ TEST_CASE("integration optional query parameter", "[integration]") {
 
 TEST_CASE("integration explicit optional query parameter with constraint", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/optional", [](std::optional<int> n [[= fiasco::query{.ge = 1}]]) -> std::string {
@@ -655,7 +655,7 @@ TEST_CASE("integration explicit optional query parameter with constraint", "[int
 
 TEST_CASE("integration dependency value", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/dependency",
@@ -674,7 +674,7 @@ TEST_CASE("integration dependency value", "[integration]") {
 TEST_CASE("integration dependency cache reuses nested providers", "[integration]") {
     fiasco::detail::dependency_calls = 0;
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get(
@@ -702,7 +702,7 @@ TEST_CASE("integration dependency cache reuses nested providers", "[integration]
 
 TEST_CASE("integration dependency parameters use request annotations", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/dependency",
@@ -722,7 +722,7 @@ TEST_CASE("integration dependency RAII cleanup", "[integration]") {
     fiasco::detail::cleanup_resource::constructions = 0;
     fiasco::detail::cleanup_resource::destructions = 0;
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/cleanup",
@@ -743,7 +743,7 @@ TEST_CASE("integration dependency RAII cleanup", "[integration]") {
 
 TEST_CASE("integration dependency can short-circuit with http_error", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/protected",
@@ -769,7 +769,7 @@ TEST_CASE("integration dependency RAII cleanup when the handler throws", "[integ
     fiasco::detail::cleanup_resource::constructions = 0;
     fiasco::detail::cleanup_resource::destructions = 0;
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/cleanup-throw",
@@ -790,7 +790,7 @@ TEST_CASE("integration dependency RAII cleanup when the handler throws", "[integ
 
 TEST_CASE("integration dependency parameters use constraints", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/dependency",
@@ -815,7 +815,7 @@ TEST_CASE("integration dependency parameters use constraints", "[integration]") 
 
 TEST_CASE("integration body parameters are shared with dependencies", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/body-dependency",
@@ -850,7 +850,7 @@ TEST_CASE("integration body parameters are shared with dependencies", "[integrat
 
 TEST_CASE("integration dependency can be the only body parameter", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/body-dependency",
@@ -872,7 +872,7 @@ TEST_CASE("integration dependency can be the only body parameter", "[integration
 
 TEST_CASE("integration same-name body parameters are not embedded", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/body-dependency",
@@ -895,7 +895,7 @@ TEST_CASE("integration same-name body parameters are not embedded", "[integratio
 
 TEST_CASE("integration dependency body validation errors use body locations", "[integration]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.post("/body-dependency",
@@ -920,7 +920,7 @@ TEST_CASE("integration dependency body validation errors use body locations", "[
 TEST_CASE("integration dependency use_cache false runs each occurrence", "[integration]") {
     fiasco::detail::uncached_dependency_calls = 0;
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/uncached",
@@ -944,7 +944,7 @@ TEST_CASE("integration use_cache false keeps RAII dependency storage alive", "[i
     fiasco::detail::cleanup_resource::constructions = 0;
     fiasco::detail::cleanup_resource::destructions = 0;
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/uncached-cleanup",
@@ -966,7 +966,7 @@ TEST_CASE("integration use_cache false keeps RAII dependency storage alive", "[i
 TEST_CASE("integration nested use_cache false reruns its provider", "[integration]") {
     fiasco::detail::uncached_dependency_calls = 0;
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/uncached-nested", fiasco::detail::uncached_nested_handler{});
@@ -983,7 +983,7 @@ TEST_CASE("integration nested use_cache false reruns its provider", "[integratio
 TEST_CASE("integration cached and uncached occurrences do not share a slot", "[integration]") {
     fiasco::detail::uncached_dependency_calls = 0;
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/mixed-cache",
@@ -1004,7 +1004,7 @@ TEST_CASE("integration cached and uncached occurrences do not share a slot", "[i
 
 TEST_CASE("integration async handler returns a model", "[integration][async]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/async-user", []() -> fiasco::async {
@@ -1021,7 +1021,7 @@ TEST_CASE("integration async handler returns a model", "[integration][async]") {
 
 TEST_CASE("integration async handler binds path and query parameters", "[integration][async]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/async-items/{id}", [](std::string q, int id) -> fiasco::async {
@@ -1038,7 +1038,7 @@ TEST_CASE("integration async handler binds path and query parameters", "[integra
 
 TEST_CASE("integration async handler validation uses body locations", "[integration][async]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/async-constrained/{id}",
@@ -1054,7 +1054,7 @@ TEST_CASE("integration async handler validation uses body locations", "[integrat
 
 TEST_CASE("integration async handler translates http_error", "[integration][async]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/async-error", []() -> fiasco::async {
@@ -1072,7 +1072,7 @@ TEST_CASE("integration async handler translates http_error", "[integration][asyn
 
 TEST_CASE("integration async handler translates unhandled exceptions", "[integration][async]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     app.get("/async-boom", []() -> fiasco::async {

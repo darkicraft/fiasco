@@ -131,21 +131,19 @@ target_link_libraries(fiasco_types PRIVATE
 )
 
 # -- fiasco_core ------------------------------------------
-add_library(fiasco_core STATIC
-    src/fiasco/internal/core/tcp_server.cpp
-)
-
-target_include_directories(fiasco_core PUBLIC
+# Networking layer: Asio only. No HTTP types, no llhttp.
+add_library(fiasco_core INTERFACE)
+target_include_directories(fiasco_core INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-
-target_link_libraries(fiasco_core PUBLIC
+target_link_libraries(fiasco_core INTERFACE
     asio
-    fiasco_contract
 )
 
 # -- fiasco_http ------------------------------------------
+# Transport: HTTP/1.1 parser, connection lifecycle and the socket session.
 add_library(fiasco_http STATIC
+    src/fiasco/http/tcp_server.cpp
     src/fiasco/internal/http/parser.cpp
 )
 
@@ -154,6 +152,7 @@ target_include_directories(fiasco_http PUBLIC
 )
 
 target_link_libraries(fiasco_http PUBLIC
+    fiasco_core
     fiasco_contract
     fiasco_types
     llhttp_static
@@ -188,18 +187,6 @@ target_link_libraries(fiasco_app INTERFACE
     fiasco_routing
 )
 
-# -- fiasco_logging ----------------------------------------
-add_library(fiasco_logging STATIC
-    src/fiasco/internal/logging/access_log.cpp
-    src/fiasco/internal/logging/log_formatter.cpp
-    src/fiasco/internal/logging/logger.cpp
-    src/fiasco/internal/logging/log_registry.cpp
-)
-
-target_include_directories(fiasco_logging PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
 # -- fiasco -----------------------------------------------
 add_library(fiasco INTERFACE)
 
@@ -215,7 +202,6 @@ target_link_libraries(fiasco INTERFACE
     fiasco_http
     fiasco_routing
     fiasco_app
-    fiasco_logging
 )
 
 # == SUBDIRECTORIES ===========================================================

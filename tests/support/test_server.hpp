@@ -12,26 +12,26 @@ namespace fiasco_test {
 class test_server {
   public:
     explicit test_server(fiasco::server_config config = {})
-        : m_app(make_config(std::move(config))) {}
+        : m_app(), m_server(m_app.handler(), make_config(std::move(config))) {}
 
     test_server(const test_server&) = delete;
     test_server& operator=(const test_server&) = delete;
 
     ~test_server() { stop(); }
 
-    fiasco::server& app() { return m_app; }
+    fiasco::app& app() { return m_app; }
 
     void start() {
         if (m_thread.joinable()) {
             throw std::logic_error("test_server already started");
         }
-        m_thread = std::thread([this] { m_app.run(); });
-        m_app.wait_until_started();
-        m_port = m_app.port();
+        m_thread = std::thread([this] { m_server.run(); });
+        m_server.wait_until_started();
+        m_port = m_server.port();
     }
 
     void stop() {
-        m_app.stop();
+        m_server.stop();
         if (m_thread.joinable()) {
             m_thread.join();
         }
@@ -46,7 +46,8 @@ class test_server {
         return config;
     }
 
-    fiasco::server m_app;
+    fiasco::app m_app;
+    fiasco::server m_server;
     std::thread m_thread;
     std::uint16_t m_port = 0;
 };

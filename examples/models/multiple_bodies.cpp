@@ -37,9 +37,7 @@ struct search_options {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.post("/search", [](search_request request, search_options options) {
         return fiasco::json{
@@ -48,5 +46,5 @@ int main() {
         };
     });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

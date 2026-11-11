@@ -44,11 +44,9 @@ struct requiredness_model {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.post("/requiredness", [](requiredness_model input) { return input; });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

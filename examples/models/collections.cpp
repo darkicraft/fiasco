@@ -64,9 +64,7 @@ struct collection_response {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.post("/collections", [](collection_request input) -> collection_response {
         int total = 0;
@@ -100,5 +98,5 @@ int main() {
         };
     });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

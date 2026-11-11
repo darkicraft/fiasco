@@ -22,11 +22,9 @@ std::uint16_t example_port() {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.get("/", []() { return "Hello, World!"; });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

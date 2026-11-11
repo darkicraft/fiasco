@@ -279,7 +279,7 @@ payload get_payload(payload graph [[= fiasco::body{.alias = "graph"}]]) {
 }  // namespace
 
 int main() {
-    fiasco::server app;
+    fiasco::app app;
 
     app.get("/graph/reset", []() {
         reset_graph();

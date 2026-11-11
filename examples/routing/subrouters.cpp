@@ -25,9 +25,7 @@ std::uint16_t example_port() {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     fiasco::router api("/v1");
     api.get("/status", []() { return "ok"; });
@@ -46,5 +44,5 @@ int main() {
     app.include_router(std::move(admin));
 
     app.print_routes();
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }
