@@ -91,6 +91,11 @@ class app {
         m_router.include_router(std::move(sub), prefix);
     }
 
+    template <std::meta::info Ns>
+    void register_api() {
+        m_router.register_api<Ns>();
+    }
+
     /// Mount a sub-application at `path`. The sub-app's own middleware and
     /// exception handlers run, and the prefix is stripped before its routes
     /// are matched. Starlette-style: the mount path is a path-segment prefix.

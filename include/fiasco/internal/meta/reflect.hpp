@@ -39,6 +39,15 @@ consteval std::meta::info callable_reflection() {
     }
 }
 
+/// A callable wrapper around a reflected function entity. It keeps the entity
+/// (and therefore parameter names) available to `callable_traits`.
+template <std::meta::info Fn>
+struct reflected_callable {
+    decltype(auto) operator()(auto&&... args) const {
+        return [:Fn:](std::forward<decltype(args)>(args)...);
+    }
+};
+
 /// The type represented by an entry of `parameters_of(...)`: entries are
 /// parameter reflections when reflecting a function entity, but plain type
 /// reflections when reflecting a function type.
@@ -98,6 +107,33 @@ struct callable_traits {
     }
 
     /// Name of the i-th parameter, or an empty view if it has none.
+    static consteval std::string_view argument_name(std::size_t i) {
+        std::meta::info param = parameter(i);
+        if (!std::meta::is_type(param) && std::meta::has_identifier(param)) {
+            return std::meta::identifier_of(param);
+        }
+        return {};
+    }
+};
+
+/// Traits for a reflected function entity. Unlike a function pointer, the
+/// entity carries parameter names, which path/query binding and OpenAPI need.
+template <std::meta::info Fn>
+struct callable_traits<reflected_callable<Fn>> {
+    static consteval std::meta::info reflection() { return Fn; }
+
+    static constexpr std::size_t arity = std::meta::parameters_of(Fn).size();
+
+    using args_tuple = [:arguments_type_impl_for(Fn, std::make_index_sequence<arity>()):];
+
+    using return_type = [:std::meta::return_type_of(Fn):];
+
+    static constexpr bool has_argument_names = true;
+
+    static consteval std::meta::info parameter(std::size_t i) {
+        return std::meta::parameters_of(Fn)[i];
+    }
+
     static consteval std::string_view argument_name(std::size_t i) {
         std::meta::info param = parameter(i);
         if (!std::meta::is_type(param) && std::meta::has_identifier(param)) {

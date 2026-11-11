@@ -5,6 +5,8 @@
 #include <utility>
 
 #include "fiasco/internal/http/request.hpp"
+#include "fiasco/internal/meta/annotations.hpp"
+#include "fiasco/internal/meta/reflect.hpp"
 #include "fiasco/internal/routing/function_traits.hpp"
 #include "fiasco/internal/routing/pathing.hpp"
 #include "fiasco/internal/routing/route_table.hpp"
@@ -51,6 +53,24 @@ class router {
     void include_router(router sub, const std::string& prefix = "") {
         std::string full_prefix = join_prefix(prefix, sub.m_prefix);
         m_routes.merge_with_prefix(std::move(sub.m_routes), full_prefix);
+    }
+
+    template <std::meta::info Ns>
+    void register_api() {
+        template for (constexpr auto member :
+                      std::define_static_array(
+                          std::meta::members_of(Ns, std::meta::access_context::current()))) {
+            if constexpr (std::meta::is_function(member)) {
+                constexpr auto annotations = std::define_static_array(
+                    std::meta::annotations_of_with_type(member, ^^fiasco::route_annotation));
+                if constexpr (!annotations.empty()) {
+                    constexpr auto annotation =
+                        std::meta::extract<fiasco::route_annotation>(annotations[0]);
+                    add(annotation.method, std::string(annotation.path.view()),
+                        meta::reflected_callable<member>{});
+                }
+            }
+        }
     }
 
     match_result match(http_method method, std::string_view path) {

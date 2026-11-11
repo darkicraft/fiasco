@@ -24,6 +24,7 @@
 //     failed"); `lit` stores a pointer produced by `std::define_static_string`,
 //     which materialises a real static object and therefore is reflectable.
 
+#include "fiasco/contract/request.hpp"
 #include "fiasco/internal/types/structural.hpp"
 
 #include <meta>
@@ -66,6 +67,40 @@ struct depends {
     std::meta::info fn{};
     depends_options options{};
 };
+
+/// Route metadata carried by an annotation on a handler function.
+struct route_options {
+    detail::lit summary{}, description{}, name{}, operation_id{};
+    detail::opt<int> status_code{};
+    bool deprecated = false;
+    bool include_in_schema = true;
+};
+
+struct route_annotation {
+    detail::http_method method = detail::http_method::get;
+    detail::lit path{};
+    route_options options{};
+};
+
+consteval route_annotation get(detail::lit path, route_options options = {}) {
+    return {detail::http_method::get, path, options};
+}
+
+consteval route_annotation post(detail::lit path, route_options options = {}) {
+    return {detail::http_method::post, path, options};
+}
+
+consteval route_annotation put(detail::lit path, route_options options = {}) {
+    return {detail::http_method::put, path, options};
+}
+
+consteval route_annotation patch(detail::lit path, route_options options = {}) {
+    return {detail::http_method::patch, path, options};
+}
+
+consteval route_annotation del(detail::lit path, route_options options = {}) {
+    return {detail::http_method::del, path, options};
+}
 
 }  // namespace fiasco
 
