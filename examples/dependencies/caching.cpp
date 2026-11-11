@@ -39,9 +39,7 @@ int cached_value() {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.get("/reset", []() {
         g_calls.store(0, std::memory_order_relaxed);
@@ -68,5 +66,5 @@ int main() {
                 };
             });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

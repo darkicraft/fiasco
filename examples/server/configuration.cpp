@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 
@@ -35,7 +36,18 @@ std::string example_host() {
 }  // namespace
 
 int main() {
-    fiasco::server app{fiasco::server_config{
+    fiasco::app app;
+    auto port = std::make_shared<std::uint16_t>(0);
+
+    app.get("/info", [port]() {
+        return fiasco::json{
+            {"port", *port},
+            {"workers", 4},
+            {"status", "running"},
+        };
+    });
+
+    fiasco::server server{app.handler(), fiasco::server_config{
         .network = {
             .host = example_host(),
             .port = example_port(),
@@ -43,18 +55,11 @@ int main() {
         },
     }};
 
-    app.get("/info", [&app]() {
-        return fiasco::json{
-            {"port", app.port()},
-            {"workers", 4},
-            {"status", "running"},
-        };
-    });
-
     // run() blocks, so start it on another thread to report the bound port.
-    std::thread runner([&app] { app.run(); });
-    app.wait_until_started();
-    std::cout << "listening on port " << app.port() << '\n';
+    std::thread runner([&server] { server.run(); });
+    server.wait_until_started();
+    *port = server.port();
+    std::cout << "listening on port " << *port << '\n';
 
     runner.join();
 }

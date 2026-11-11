@@ -2,6 +2,11 @@
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
+# ---- contract_test ----
+add_executable(fiasco_test_contract contract_test.cpp)
+target_link_libraries(fiasco_test_contract PRIVATE Catch2::Catch2WithMain fiasco_contract)
+catch_discover_tests(fiasco_test_contract)
+
 # ---- json_test ----
 add_executable(fiasco_test_json json_test.cpp)
 target_link_libraries(fiasco_test_json PRIVATE Catch2::Catch2WithMain fiasco_types)
@@ -92,18 +97,12 @@ add_executable(fiasco_test_integration integration_test.cpp)
 target_link_libraries(fiasco_test_integration PRIVATE Catch2::Catch2WithMain fiasco)
 catch_discover_tests(fiasco_test_integration)
 
-# ---- logging_test ----
-add_executable(fiasco_test_logging logging_test.cpp)
-target_link_libraries(fiasco_test_logging PRIVATE Catch2::Catch2WithMain fiasco_logging)
-target_link_libraries(fiasco_test_logging PRIVATE asio)
-catch_discover_tests(fiasco_test_logging)
-
-# ---- logging_integration_test ----
-add_executable(fiasco_test_logging_integration logging_integration_test.cpp)
-target_link_libraries(fiasco_test_logging_integration PRIVATE Catch2::Catch2WithMain fiasco)
-catch_discover_tests(fiasco_test_logging_integration)
-
 # ---- error_handling_test ----
 add_executable(fiasco_test_error_handling error_handling_test.cpp)
 target_link_libraries(fiasco_test_error_handling PRIVATE Catch2::Catch2WithMain fiasco)
 catch_discover_tests(fiasco_test_error_handling)
+
+# ---- test_client_test ----
+add_executable(fiasco_test_test_client test_client_test.cpp)
+target_link_libraries(fiasco_test_test_client PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_test_client)

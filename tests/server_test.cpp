@@ -13,23 +13,17 @@ TEST_CASE("server_config has stable defaults", "[server][config]") {
     REQUIRE(config.network.host == "0.0.0.0");
     REQUIRE(config.network.port == 8080);
     REQUIRE(config.network.workers == 0);
-
-    REQUIRE(config.logging.enabled);
-    REQUIRE(config.logging.access);
-    REQUIRE(config.logging.level == fiasco::log_level::info);
-    REQUIRE(config.logging.format == fiasco::log_format::human);
-    REQUIRE(config.logging.colors);
-    REQUIRE_FALSE(config.logging.sink);
 }
 
 TEST_CASE("server can be constructed with default config", "[server][config]") {
-    fiasco::server app;
-    REQUIRE(app.port() == 0);
+    fiasco::app app;
+    fiasco::server server{app.handler()};
+    REQUIRE(server.port() == 0);
 }
 
 TEST_CASE("server binds an ephemeral port and serves requests", "[server][boundary]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     server.app().get("/health", []() { return "ok"; });
     server.start();

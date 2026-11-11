@@ -19,7 +19,7 @@ struct middleware_user {
 
 TEST_CASE("middleware runs last-added-outermost", "[middleware]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
 
@@ -49,7 +49,7 @@ TEST_CASE("middleware runs last-added-outermost", "[middleware]") {
 
 TEST_CASE("middleware can short-circuit", "[middleware]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
     std::atomic<bool> handler_called{false};
@@ -73,7 +73,7 @@ TEST_CASE("middleware can short-circuit", "[middleware]") {
 
 TEST_CASE("middleware can mutate request and response", "[middleware]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
 
@@ -97,7 +97,7 @@ TEST_CASE("middleware can mutate request and response", "[middleware]") {
 
 TEST_CASE("middleware sees 404, 405, and 422 responses", "[middleware]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
 
@@ -129,7 +129,7 @@ TEST_CASE("middleware sees 404, 405, and 422 responses", "[middleware]") {
 
 TEST_CASE("middleware can catch an unhandled handler exception", "[middleware]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
 
@@ -152,7 +152,7 @@ TEST_CASE("middleware can catch an unhandled handler exception", "[middleware]")
 
 TEST_CASE("middleware can throw http_error", "[middleware]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
 
@@ -172,7 +172,7 @@ TEST_CASE("middleware can throw http_error", "[middleware]") {
 
 TEST_CASE("middleware cannot call next twice", "[middleware]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
 
@@ -191,7 +191,7 @@ TEST_CASE("middleware cannot call next twice", "[middleware]") {
 
 TEST_CASE("middleware wraps async handlers", "[middleware]") {
     fiasco_test::test_server server{
-        fiasco::server_config{.logging = {.enabled = false}},
+        fiasco::server_config{},
     };
     auto& app = server.app();
 

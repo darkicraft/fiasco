@@ -13,7 +13,7 @@
 import fiasco.server;
 
 int main() {
-    fiasco::server app;
+    fiasco::app app;
     app.get("/", []() { return fiasco::json{{"msg", "root"}}; });
     app.run();
 }

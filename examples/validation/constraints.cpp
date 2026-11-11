@@ -57,11 +57,9 @@ struct constrained_item {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.post("/constrained", [](constrained_item input) { return input; });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

@@ -35,9 +35,7 @@ struct payload {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.post("/items/{id}",
              [](int id [[= fiasco::path{.ge = 1}]],
@@ -63,5 +61,5 @@ int main() {
                 };
             });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

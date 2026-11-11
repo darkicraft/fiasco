@@ -27,9 +27,7 @@ std::uint16_t example_port() {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.middleware(fiasco::middleware::cors({
         .allow_origins = {"https://example.com"},
@@ -43,5 +41,5 @@ int main() {
     app.get("/hello", [] { return "hello"; });
     app.post("/hello", [] { return "created"; });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

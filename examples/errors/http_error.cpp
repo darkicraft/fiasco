@@ -29,9 +29,7 @@ std::uint16_t example_port() {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.get("/private",
             [](std::optional<std::string> authorization
@@ -51,5 +49,5 @@ int main() {
             fiasco::json{{"field", "email"}, {"reason", "invalid"}});
     });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

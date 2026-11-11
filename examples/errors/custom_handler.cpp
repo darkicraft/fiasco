@@ -37,9 +37,7 @@ struct bad_request : std::runtime_error {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.add_exception_handler([](const conflict& error) {
         return fiasco::response::error(error.what(), 409);
@@ -57,5 +55,5 @@ int main() {
         throw bad_request("invalid request");
     });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

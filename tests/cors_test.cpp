@@ -9,7 +9,7 @@
 namespace {
 
 fiasco::server_config quiet_config() {
-    return fiasco::server_config{.logging = {.enabled = false}};
+    return fiasco::server_config{};
 }
 
 bool has_header(const std::string& response, const std::string& header) {

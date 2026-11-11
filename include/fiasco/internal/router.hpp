@@ -75,6 +75,7 @@ class router {
     }
 
     friend class server;
+    friend class app;
 };
 
 }  // namespace fiasco::detail

@@ -5,14 +5,16 @@
 #include "fiasco/internal/http/response.hpp"
 
 #include "fiasco/internal/json.hpp"
-#include "fiasco/internal/logging.hpp"
 #include "fiasco/internal/middleware.hpp"
 #include "fiasco/internal/router.hpp"
 #include "fiasco/middleware/cors.hpp"
 #include "fiasco/internal/server.hpp"
+#include "fiasco/app/app.hpp"
+#include "fiasco/app/test_client.hpp"
 
 namespace fiasco {
 
+using app = detail::app;
 using async = detail::async;
 using http_error = detail::http_error;
 using json = detail::json;
@@ -21,6 +23,17 @@ using request = detail::request;
 using response = detail::response;
 using router = detail::router;
 using server = detail::server;
-using logger = detail::logger;
+using test_client = detail::test_client;
 
 }  // namespace fiasco
+
+namespace fiasco::detail {
+
+inline void app::run() { run(server_config{}); }
+
+inline void app::run(server_config config) {
+    server srv{handler(), std::move(config)};
+    srv.run();
+}
+
+}  // namespace fiasco::detail

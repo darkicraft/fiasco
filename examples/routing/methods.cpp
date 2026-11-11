@@ -29,9 +29,7 @@ std::uint16_t example_port() {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.get("/items", []() { return "list items"; });
     app.post("/items", []() { return fiasco::json{{"created", true}}; });
@@ -40,5 +38,5 @@ int main() {
     app.del("/items/{id}", [](int id) { return fiasco::json{{"deleted", id}}; });
     app.get("/only-get", []() { return "GET only"; });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

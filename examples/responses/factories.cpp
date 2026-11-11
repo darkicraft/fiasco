@@ -38,9 +38,7 @@ struct greeting {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     // Plain values are wrapped automatically.
     app.get("/auto/text", []() { return "plain text"; });
@@ -63,5 +61,5 @@ int main() {
         return response;
     });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

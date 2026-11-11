@@ -29,9 +29,7 @@ std::uint16_t example_port() {
 }  // namespace
 
 int main() {
-    fiasco::server app{
-        fiasco::server_config{.network = {.port = example_port()}},
-    };
+    fiasco::app app;
 
     app.get("/search",
             [](std::string q, std::optional<int> page, std::optional<bool> verbose) {
@@ -51,5 +49,5 @@ int main() {
         return fiasco::json{{"tag", tag}};
     });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }
