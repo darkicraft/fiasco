@@ -57,7 +57,6 @@ cmake --install build
 | Type-erased JSON wrapper | ✅ |
 | Generic arithmetic parsing, including fixed-width `std::int*_t` / `std::uint*_t` | ✅ |
 | Declarative per-server configuration (`server_config`) | ✅ |
-| Per-server logging with configurable sinks | ✅ |
 | Sub-router mounting with path prefixes | ✅ |
 | Multi-threaded Asio-based async I/O | ✅ |
 | Keep-alive, `Connection: close`, and malformed-request handling | ✅ |
@@ -80,7 +79,7 @@ cmake --install build
 #include <fiasco/fiasco.hpp>
 
 int main() {
-    fiasco::server app;
+    fiasco::app app;
 
     app.get("/hello", []() {
         return "Hello, World!";                 // text/plain
@@ -502,7 +501,7 @@ Mount groups of routes under a prefix.
 fiasco::router api("/v1");
 api.get("/status", []() { return "ok"; });
 
-fiasco::server app;
+fiasco::app app;
 app.include_router(std::move(api), "/api");
 // GET /api/v1/status now works
 ```
@@ -512,97 +511,49 @@ app.include_router(std::move(api), "/api");
 ## Configuration
 
 Server construction is declarative. `server_config` is entirely optional; with
-no config, Fiasco uses `0.0.0.0:8080`, automatic worker count, `info` level,
-human logging, access logging enabled, and stdout as the sink.
+no config, Fiasco uses `0.0.0.0:8080` and automatic worker count.
 
 ```cpp
-fiasco::server app{fiasco::server_config{
+fiasco::app app;
+app.get("/hello", []() { return "Hello, World!"; });
+
+app.run(fiasco::server_config{
     .network = {
         .host = "0.0.0.0",
         .port = 8080,
         .workers = 4,  // 0 = hardware concurrency, minimum 2
     },
-    .logging = {
-        .enabled = true,
-        .access = true,
-        .level = fiasco::log_level::info,
-        .format = fiasco::log_format::human,
-        .colors = true,
-        // .sink omitted => stdout
-    },
-}};
-
-app.run();
+});
 ```
 
-`server_config` is move-only because the optional sink is move-only. A temporary
-config can be passed directly; a named config must be moved:
+A temporary config can be passed directly; a named config must be moved:
 
 ```cpp
 fiasco::server_config config{/* ... */};
-fiasco::server app{std::move(config)};
+fiasco::app app;
+app.run(std::move(config));
 ```
 
-Lifecycle helpers:
+For explicit lifecycle control, use `fiasco::server` directly:
 
 ```cpp
-auto actual_port = app.port();  // useful when the config uses port 0
-app.wait_until_started();       // when run() is executing on another thread
-app.flush_logs();
-app.stop();
+fiasco::app app;
+fiasco::server server{app.handler(), fiasco::server_config{/* ... */}};
+
+auto actual_port = server.port();  // useful when the config uses port 0
+server.wait_until_started();       // when run() is executing on another thread
+server.stop();
 ```
-
-## Logging
-
-Each server owns its own log registry, queue, and consumer thread. Named loggers
-are created on demand and share that server's thread:
-
-```cpp
-fiasco::server app;
-auto& log = app.get_logger("app");
-log.info("starting up");
-log.warn("careful", {{"key", "value"}});
-```
-
-Levels: `debug`, `info`, `warn`, `error`. Access logging (`fiasco.access`) is on
-by default.
-
-The logging config controls the level, formatter, colors, access logs, and the
-sink. A sink is a move-only callable:
-
-```cpp
-using log_sink = std::move_only_function<void(std::string_view)>;
-```
-
-Use the provided stream helper or provide your own callback:
-
-```cpp
-auto sink = fiasco::make_ostream_log_sink(std::cerr);
-config.logging.sink = std::move(sink);
-```
-
-```cpp
-config.logging.sink = [&](std::string_view line) {
-    external_logger.info("{}", line);
-};
-```
-
-Omitting the sink uses stdout. Set `.logging.enabled = false` to disable all
-logging, or `.logging.access = false` to keep application logs but suppress
-per-request access lines.
-
-The `all_in_one` example also accepts `--no-log`, `--log`, `--no-access-log`,
-`--access-log`, and `FIASCO_LOG=off`.
 
 ## Threading
 
 Workers are configured through `server_config`:
 
 ```cpp
-fiasco::server app{fiasco::server_config{
+fiasco::app app;
+app.run(fiasco::server_config{
     .network = {.workers = 4},
-}};
-app.run();
+});
 ```
 
 `workers = 0` uses `std::thread::hardware_concurrency()`, with a minimum of 2.

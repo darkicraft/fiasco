@@ -97,7 +97,6 @@ cmake --build build --target hello
 | Target | Source | Demonstrates |
 |---|---|---|
 | `server_configuration` | `server/configuration.cpp` | `server_config`, host/port/workers, port `0`, and `wait_until_started`/`port()` lifecycle helpers. |
-| `logging` | `server/logging.cpp` | Named loggers, levels, JSON formatting, access logs, custom sinks, and dynamic level changes. |
 | `threading` | `server/threading.cpp` | Worker configuration and concurrent sleep/CPU/thread-identity probes. |
 
 ## JSON
