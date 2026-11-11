@@ -225,6 +225,10 @@ if(FIASCO_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
+if(FIASCO_BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()
+
 if(FIASCO_BUILD_MODULES)
   add_subdirectory(modules)
 endif()
