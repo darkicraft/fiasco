@@ -105,6 +105,7 @@ cmake --build build --target hello
 |---|---|---|
 | `responses` | `responses/factories.cpp` | Response factories, automatic return wrapping, status/header mutation, redirect, and empty responses. |
 | `response_cookies` | `responses/cookies.cpp` | `set_cookie`, multiple `Set-Cookie` headers, datetimes, and `delete_cookie`. |
+| `response_file` | `responses/download.cpp` | `response::file`, inferred media types, inline serving, and attachment downloads. |
 
 ## Server
 

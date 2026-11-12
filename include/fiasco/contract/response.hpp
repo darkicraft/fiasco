@@ -3,11 +3,15 @@
 #include <chrono>
 #include <cctype>
 #include <cstdint>
+#include <filesystem>
 #include <format>
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -23,7 +27,79 @@ struct cookie_options {
     std::string samesite = "lax";
 };
 
+struct file_options {
+    std::optional<std::string> filename;
+    std::optional<std::string> media_type;
+    std::string content_disposition_type = "attachment";
+};
+
 namespace response_detail {
+
+inline std::string media_type_for_path(std::string_view path) {
+    const auto dot = path.rfind('.');
+    std::string extension = (dot == std::string_view::npos) ? std::string{} : std::string(path.substr(dot));
+    for (char& c : extension) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+
+    if (extension == ".html" || extension == ".htm") {
+        return "text/html; charset=utf-8";
+    }
+    if (extension == ".css") {
+        return "text/css; charset=utf-8";
+    }
+    if (extension == ".js" || extension == ".mjs") {
+        return "application/javascript";
+    }
+    if (extension == ".json") {
+        return "application/json";
+    }
+    if (extension == ".txt" || extension == ".md") {
+        return "text/plain; charset=utf-8";
+    }
+    if (extension == ".svg") {
+        return "image/svg+xml";
+    }
+    if (extension == ".png") {
+        return "image/png";
+    }
+    if (extension == ".jpg" || extension == ".jpeg") {
+        return "image/jpeg";
+    }
+    if (extension == ".gif") {
+        return "image/gif";
+    }
+    if (extension == ".ico") {
+        return "image/x-icon";
+    }
+    if (extension == ".wasm") {
+        return "application/wasm";
+    }
+    if (extension == ".woff") {
+        return "font/woff";
+    }
+    if (extension == ".woff2") {
+        return "font/woff2";
+    }
+    return "application/octet-stream";
+}
+
+inline std::string content_disposition(const file_options& options) {
+    if (!options.filename.has_value()) {
+        return {};
+    }
+
+    std::string escaped;
+    escaped.reserve(options.filename->size());
+    for (char c : *options.filename) {
+        if (c == '"' || c == '\\') {
+            escaped.push_back('\\');
+        }
+        escaped.push_back(c);
+    }
+
+    return options.content_disposition_type + "; filename=\"" + escaped + "\"";
+}
 
 inline std::string json_escape(std::string_view value) {
     std::string out;
@@ -218,6 +294,32 @@ struct response {
     static response empty(int status = 204) {
         response r;
         r.status_code = status;
+        return r;
+    }
+
+    static response file(const std::filesystem::path& path,
+                         const file_options& options = {}) {
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(path, ec)) {
+            throw std::runtime_error("file does not exist: " + path.string());
+        }
+
+        std::ifstream input(path, std::ios::binary);
+        if (!input) {
+            throw std::runtime_error("cannot open file: " + path.string());
+        }
+
+        response r;
+        r.headers["Content-Type"] =
+            options.media_type.has_value()
+                ? *options.media_type
+                : response_detail::media_type_for_path(path.string());
+        const auto disposition = response_detail::content_disposition(options);
+        if (!disposition.empty()) {
+            r.headers["Content-Disposition"] = disposition;
+        }
+        r.body.assign(std::istreambuf_iterator<char>(input),
+                      std::istreambuf_iterator<char>());
         return r;
     }
 

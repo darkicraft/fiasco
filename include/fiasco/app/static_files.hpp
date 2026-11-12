@@ -111,50 +111,7 @@ inline std::optional<std::filesystem::path> static_relative_path(std::string_vie
 }
 
 inline std::string static_content_type(std::string extension) {
-    for (char& c : extension) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-
-    if (extension == ".html" || extension == ".htm") {
-        return "text/html; charset=utf-8";
-    }
-    if (extension == ".css") {
-        return "text/css; charset=utf-8";
-    }
-    if (extension == ".js" || extension == ".mjs") {
-        return "application/javascript";
-    }
-    if (extension == ".json") {
-        return "application/json";
-    }
-    if (extension == ".txt" || extension == ".md") {
-        return "text/plain; charset=utf-8";
-    }
-    if (extension == ".svg") {
-        return "image/svg+xml";
-    }
-    if (extension == ".png") {
-        return "image/png";
-    }
-    if (extension == ".jpg" || extension == ".jpeg") {
-        return "image/jpeg";
-    }
-    if (extension == ".gif") {
-        return "image/gif";
-    }
-    if (extension == ".ico") {
-        return "image/x-icon";
-    }
-    if (extension == ".wasm") {
-        return "application/wasm";
-    }
-    if (extension == ".woff") {
-        return "font/woff";
-    }
-    if (extension == ".woff2") {
-        return "font/woff2";
-    }
-    return "application/octet-stream";
+    return response_detail::media_type_for_path("file" + extension);
 }
 
 inline response static_not_found() {
