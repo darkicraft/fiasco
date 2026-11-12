@@ -53,7 +53,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
-| `openapi` | `openapi/basic.cpp` | `app_options` metadata, router tags, parameter constraints, and `/openapi.json`. |
+| `openapi` | `openapi/basic.cpp` | `app_options` metadata, router tags, parameter constraints, and request/response schemas in `/openapi.json`. |
 
 ## Parameters
 

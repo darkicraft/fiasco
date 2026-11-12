@@ -178,6 +178,10 @@ parameter_descriptor make_parameter_descriptor(std::string_view path) {
         if (descriptor.source == param_in::infer) {
             descriptor.source = param_in::body;
         }
+        if (descriptor.source == param_in::body) {
+            descriptor.schema = make_json_schema<CleanArg>();
+            descriptor.has_schema = true;
+        }
         descriptor.required = true;
     }
 
@@ -210,6 +214,25 @@ route_descriptor describe_impl(http_method method,
     (descriptor.parameters.push_back(
          make_parameter_descriptor<traits, Is>(pattern)),
      ...);
+
+    using Return = std::remove_cvref_t<typename traits::return_type>;
+    if constexpr (std::same_as<Return, response> || std::is_void_v<Return> ||
+                  std::same_as<Return, async>) {
+        // Explicit responses and async handlers are already type-erased.
+    } else if constexpr (std::same_as<Return, std::string> ||
+                         std::same_as<Return, const char*> ||
+                         std::same_as<Return, char*> || is_char_array_v<Return> ||
+                         std::is_arithmetic_v<Return>) {
+        descriptor.response_media_type = "text/plain";
+        json_type schema = json_type::object();
+        schema["type"] = "string";
+        descriptor.response_schema.root = std::move(schema);
+        descriptor.has_response_schema = true;
+    } else if constexpr (JsonSerializable<Return>) {
+        descriptor.response_media_type = "application/json";
+        descriptor.response_schema = make_json_schema<Return>();
+        descriptor.has_response_schema = true;
+    }
 
     return descriptor;
 }

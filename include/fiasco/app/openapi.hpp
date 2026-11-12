@@ -55,36 +55,11 @@ inline const char* openapi_scalar_type(std::string_view type) {
     return "string";
 }
 
-inline void apply_openapi_constraints(json_type& schema, const fiasco::field<>& field) {
-    if (field.gt.has) {
-        schema["exclusiveMinimum"] = field.gt.value;
-    }
-    if (field.ge.has) {
-        schema["minimum"] = field.ge.value;
-    }
-    if (field.lt.has) {
-        schema["exclusiveMaximum"] = field.lt.value;
-    }
-    if (field.le.has) {
-        schema["maximum"] = field.le.value;
-    }
-    if (field.multiple_of.has) {
-        schema["multipleOf"] = field.multiple_of.value;
-    }
-    if (field.min_length.has) {
-        schema["minLength"] = field.min_length.value;
-    }
-    if (field.max_length.has) {
-        schema["maxLength"] = field.max_length.value;
-    }
-    if (field.pattern.has) {
-        schema["pattern"] = std::string(field.pattern.view());
-    }
-    if (field.title.has) {
-        schema["title"] = std::string(field.title.view());
-    }
-    if (field.description.has) {
-        schema["description"] = std::string(field.description.view());
+inline void merge_schema_definitions(json_type& components, const json_schema& schema) {
+    for (const auto& definition : schema.definitions) {
+        if (!components.contains(definition.name)) {
+            components[definition.name] = definition.schema;
+        }
     }
 }
 
@@ -106,7 +81,8 @@ inline json_type build_openapi_parameter(const parameter_descriptor& parameter) 
     return out;
 }
 
-inline json_type build_openapi_operation(const route_descriptor& descriptor) {
+inline json_type build_openapi_operation(const route_descriptor& descriptor,
+                                         json_type& components) {
     json_type operation = json_type::object();
 
     if (!descriptor.summary.empty()) {
@@ -130,7 +106,11 @@ inline json_type build_openapi_operation(const route_descriptor& descriptor) {
     }
 
     json_type parameters = json_type::array({});
+    std::vector<const parameter_descriptor*> body_parameters;
     for (const auto& parameter : descriptor.parameters) {
+        if (parameter.source == fiasco::param_in::body && parameter.has_schema) {
+            body_parameters.push_back(&parameter);
+        }
         if (parameter.injected || openapi_source_name(parameter.source) == nullptr) {
             continue;
         }
@@ -140,8 +120,53 @@ inline json_type build_openapi_operation(const route_descriptor& descriptor) {
         operation["parameters"] = parameters;
     }
 
+    if (!body_parameters.empty()) {
+        json_type request_body = json_type::object();
+        json_type schema = json_type::object();
+        bool required = false;
+
+        if (body_parameters.size() == 1) {
+            const auto& body = *body_parameters.front();
+            schema = body.schema.root;
+            required = body.required;
+            merge_schema_definitions(components, body.schema);
+        } else {
+            schema["type"] = "object";
+            json_type properties = json_type::object();
+            json_type required_names = json_type::array({});
+            for (const auto* body : body_parameters) {
+                properties[body->name] = body->schema.root;
+                if (body->required) {
+                    required_names.push_back(body->name);
+                }
+                merge_schema_definitions(components, body->schema);
+            }
+            schema["properties"] = properties;
+            if (required_names.size() > 0) {
+                schema["required"] = required_names;
+            }
+            required = required_names.size() > 0;
+        }
+
+        request_body["required"] = required;
+        json_type content = json_type::object();
+        json_type media = json_type::object();
+        media["schema"] = schema;
+        content["application/json"] = media;
+        request_body["content"] = content;
+        operation["requestBody"] = request_body;
+    }
+
     json_type response = json_type::object();
     response["description"] = descriptor.response_description;
+    if (descriptor.has_response_schema) {
+        json_type content = json_type::object();
+        json_type media = json_type::object();
+        media["schema"] = descriptor.response_schema.root;
+        content[descriptor.response_media_type] = media;
+        response["content"] = content;
+        merge_schema_definitions(components, descriptor.response_schema);
+    }
     json_type responses = json_type::object();
     responses[std::to_string(descriptor.status_code)] = response;
     operation["responses"] = responses;
@@ -202,6 +227,7 @@ inline json_type build_openapi(const fiasco::app_options& options, const router&
     }
 
     json_type paths = json_type::object();
+    json_type schema_components = json_type::object();
     routes.for_each_descriptor([&](const route_descriptor& descriptor) {
         if (!descriptor.include_in_schema || descriptor.path.empty()) {
             return;
@@ -211,9 +237,15 @@ inline json_type build_openapi(const fiasco::app_options& options, const router&
             paths[descriptor.path] = json_type::object();
         }
         paths[descriptor.path][openapi_method_name(descriptor.method)] =
-            build_openapi_operation(descriptor);
+            build_openapi_operation(descriptor, schema_components);
     });
     document["paths"] = paths;
+
+    if (schema_components.size() > 0) {
+        json_type components = json_type::object();
+        components["schemas"] = schema_components;
+        document["components"] = components;
+    }
 
     return document;
 }

@@ -9,6 +9,7 @@
 
 #include "fiasco/internal/http/request.hpp"
 #include "fiasco/internal/meta/annotations.hpp"
+#include "fiasco/internal/types/json_schema.hpp"
 
 namespace fiasco::detail {
 
@@ -17,13 +18,16 @@ struct parameter_descriptor {
     fiasco::param_in source = fiasco::param_in::infer;
     fiasco::param_in declared_source = fiasco::param_in::infer;
     std::string type;
-    // Empty for ordinary params, "int" or "path" for converted path segments.
+    // Empty for ordinary params, "path" for catch-all segments.
     std::string converter;
     bool required = false;
     // request/dependency parameters are injected rather than read from the
     // wire, so they never appear in the OpenAPI parameter list.
     bool injected = false;
     fiasco::field<> constraints{};
+    // Request body schema; absent for non-body parameters.
+    json_schema schema;
+    bool has_schema = false;
 };
 
 struct route_descriptor {
@@ -39,6 +43,9 @@ struct route_descriptor {
     bool include_in_schema = true;
     std::vector<parameter_descriptor> parameters;
     std::string response_description = "Successful Response";
+    std::string response_media_type = "application/json";
+    json_schema response_schema;
+    bool has_response_schema = false;
 };
 
 }  // namespace fiasco::detail

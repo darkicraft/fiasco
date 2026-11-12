@@ -4,6 +4,8 @@
 //   FIASCO_PORT=8080 ./build/examples/openapi
 //
 //   curl localhost:8080/items/7
+//   curl -X POST localhost:8080/items -H 'Content-Type: application/json' \
+//        -d '{"name":"widget","quantity":3}'
 //   curl localhost:8080/openapi.json
 //
 // The document is generated from the registered route descriptors. The
@@ -42,6 +44,15 @@ item read_item(long id [[= fiasco::path{.ge = 1}]],
                std::optional<int> fields [[= fiasco::query{.ge = 1, .le = 10}]]) {
     (void)fields;
     return item{.name = "item-" + std::to_string(id), .quantity = 1};
+}
+
+[[= fiasco::post("/items",
+                 {.summary = "Create an item",
+                  .description = "Creates an item from the JSON request body.",
+                  .operation_id = "create_item",
+                  .status_code = 201})]]
+item create_item(item input) {
+    return input;
 }
 
 }  // namespace catalog
