@@ -55,6 +55,12 @@ cmake --build build --target hello
 |---|---|---|
 | `openapi` | `openapi/basic.cpp` | `app_options` metadata, router tags, parameter constraints, request/response schemas, explicit `response_model`, Swagger UI, and ReDoc. |
 
+## Static files
+
+| Target | Source | Demonstrates |
+|---|---|---|
+| `static_files` | `static/basic.cpp` | `mount_static`, `index.html`, content types, and `HEAD`. |
+
 ## Parameters
 
 | Target | Source | Demonstrates |

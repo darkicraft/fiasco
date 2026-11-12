@@ -1,0 +1,11 @@
+body {
+    margin: 3rem;
+    font-family: system-ui, sans-serif;
+    line-height: 1.5;
+}
+
+code {
+    padding: 0.15rem 0.35rem;
+    background: #f2f2f2;
+    border-radius: 0.25rem;
+}

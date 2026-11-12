@@ -26,6 +26,7 @@ using request = detail::request;
 using response = detail::response;
 using router = detail::router;
 using server = detail::server;
+using static_options = detail::static_options;
 using test_client = detail::test_client;
 
 }  // namespace fiasco

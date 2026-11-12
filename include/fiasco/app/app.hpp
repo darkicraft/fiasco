@@ -18,6 +18,7 @@
 #include "fiasco/app/app_options.hpp"
 #include "fiasco/app/docs.hpp"
 #include "fiasco/app/openapi.hpp"
+#include "fiasco/app/static_files.hpp"
 #include "fiasco/contract/exchange.hpp"
 #include "fiasco/contract/result.hpp"
 #include "fiasco/internal/http/http_error.hpp"
@@ -110,6 +111,16 @@ class app {
         m_sub_apps.push_back({path, &sub});
     }
 
+    /// Serve files from `directory` under `prefix`.
+    void mount_static(std::string prefix,
+                      std::filesystem::path directory,
+                      static_options options = {}) {
+        m_static_mounts.push_back(static_mount{
+            .prefix = normalize_static_prefix(std::move(prefix)),
+            .directory = std::move(directory),
+            .options = options});
+    }
+
     template <typename F>
     void middleware(F&& fn) {
         m_middleware.add(middleware_fn{std::forward<F>(fn)});
@@ -155,6 +166,7 @@ class app {
     router m_router;
     middleware_chain m_middleware;
     std::vector<sub_app> m_sub_apps;
+    std::vector<static_mount> m_static_mounts;
     std::unordered_map<std::type_index, exception_handler> m_exception_handlers;
 
     template <std::derived_from<std::exception> E, typename F>
@@ -310,6 +322,7 @@ class app {
     request_result dispatch(request req);
 
     std::optional<request_result> try_sub_app(request& req);
+    std::optional<response> try_static(const request& req) const;
 };
 
 inline std::optional<request_result> app::try_sub_app(request& req) {
@@ -329,6 +342,15 @@ inline std::optional<request_result> app::try_sub_app(request& req) {
     return std::nullopt;
 }
 
+inline std::optional<response> app::try_static(const request& req) const {
+    for (const auto& mount : m_static_mounts) {
+        if (auto result = serve_static(mount, req)) {
+            return std::move(*result);
+        }
+    }
+    return std::nullopt;
+}
+
 inline request_result app::dispatch(request req) {
     req.reanchor_url_views();
 
@@ -338,6 +360,10 @@ inline request_result app::dispatch(request req) {
 
     if (auto builtin = try_builtin(req)) {
         return std::move(*builtin);
+    }
+
+    if (auto static_result = try_static(req)) {
+        return std::move(*static_result);
     }
 
     auto match = m_router.match(req.method, req.path);
@@ -438,6 +464,10 @@ inline asio::awaitable<response> app::endpoint_handler(request& req) {
 
     if (auto builtin = try_builtin(req)) {
         co_return std::move(*builtin);
+    }
+
+    if (auto static_result = try_static(req)) {
+        co_return std::move(*static_result);
     }
 
     auto match = m_router.match(req.method, req.path);
