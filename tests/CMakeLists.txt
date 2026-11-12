@@ -106,3 +106,48 @@ catch_discover_tests(fiasco_test_error_handling)
 add_executable(fiasco_test_test_client test_client_test.cpp)
 target_link_libraries(fiasco_test_test_client PRIVATE Catch2::Catch2WithMain fiasco_app)
 catch_discover_tests(fiasco_test_test_client)
+
+# ---- annotation_route_test ----
+add_executable(fiasco_test_annotation_routes annotation_route_test.cpp)
+target_link_libraries(fiasco_test_annotation_routes PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_annotation_routes)
+
+# ---- descriptor_test ----
+add_executable(fiasco_test_descriptor descriptor_test.cpp)
+target_link_libraries(fiasco_test_descriptor PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_descriptor)
+
+# ---- openapi_test ----
+add_executable(fiasco_test_openapi openapi_test.cpp)
+target_link_libraries(fiasco_test_openapi PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_openapi)
+
+# ---- routing_behavior_test ----
+add_executable(fiasco_test_routing_behavior routing_behavior_test.cpp)
+target_link_libraries(fiasco_test_routing_behavior PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_routing_behavior)
+
+# ---- json_schema_test ----
+add_executable(fiasco_test_json_schema json_schema_test.cpp)
+target_link_libraries(fiasco_test_json_schema PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_json_schema)
+
+# ---- docs_test ----
+add_executable(fiasco_test_docs docs_test.cpp)
+target_link_libraries(fiasco_test_docs PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_docs)
+
+# ---- cookie_test ----
+add_executable(fiasco_test_cookies cookie_test.cpp)
+target_link_libraries(fiasco_test_cookies PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_cookies)
+
+# ---- static_files_test ----
+add_executable(fiasco_test_static_files static_files_test.cpp)
+target_link_libraries(fiasco_test_static_files PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_static_files)
+
+# ---- file_response_test ----
+add_executable(fiasco_test_file_response file_response_test.cpp)
+target_link_libraries(fiasco_test_file_response PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_file_response)

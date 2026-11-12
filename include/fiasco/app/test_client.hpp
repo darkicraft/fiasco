@@ -29,7 +29,11 @@ class test_client {
             .status = [&out](int status) { out.status_code = status; },
             .header =
                 [&out](std::string_view key, std::string_view value) {
-                    out.headers[std::string(key)] = std::string(value);
+                    if (key == "Set-Cookie") {
+                        out.set_cookie_headers.emplace_back(value);
+                    } else {
+                        out.headers[std::string(key)] = std::string(value);
+                    }
                 },
             .write =
                 [&out](std::span<const std::byte> bytes) -> task<void> {

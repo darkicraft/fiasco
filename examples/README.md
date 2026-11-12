@@ -32,7 +32,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
-| `async_handlers` | `async/basic.cpp` | Sync vs `fiasco::async` handlers and explicit responses. |
+| `async_handlers` | `async/basic.cpp` | Sync vs `fiasco::async` handlers, typed `fiasco::async_t<T>`, and explicit responses. |
 
 ## Middleware
 
@@ -46,7 +46,20 @@ cmake --build build --target hello
 | Target | Source | Demonstrates |
 |---|---|---|
 | `routing_methods` | `routing/methods.cpp` | GET/POST/PUT/PATCH/DELETE, static and parameter routes, 404, and 405. |
+| `annotation_routes` | `routing/annotations.cpp` | Namespace-annotated free functions, `register_api`, body binding, and `:path`. |
 | `subrouters` | `routing/subrouters.cpp` | Router prefixes, nested `include_router`, and `print_routes()`. |
+
+## OpenAPI
+
+| Target | Source | Demonstrates |
+|---|---|---|
+| `openapi` | `openapi/basic.cpp` | `app_options` metadata, router tags, parameter constraints, request/response schemas, explicit `response_model`, Swagger UI, and ReDoc. |
+
+## Static files
+
+| Target | Source | Demonstrates |
+|---|---|---|
+| `static_files` | `static/basic.cpp` | `mount_static`, `index.html`, content types, and `HEAD`. |
 
 ## Parameters
 
@@ -91,6 +104,8 @@ cmake --build build --target hello
 | Target | Source | Demonstrates |
 |---|---|---|
 | `responses` | `responses/factories.cpp` | Response factories, automatic return wrapping, status/header mutation, redirect, and empty responses. |
+| `response_cookies` | `responses/cookies.cpp` | `set_cookie`, multiple `Set-Cookie` headers, datetimes, and `delete_cookie`. |
+| `response_file` | `responses/download.cpp` | `response::file`, inferred media types, inline serving, and attachment downloads. |
 
 ## Server
 

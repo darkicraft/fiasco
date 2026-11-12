@@ -16,6 +16,10 @@ namespace fiasco {
 
 using app = detail::app;
 using async = detail::async;
+template <typename T>
+using async_t = detail::async_t<T>;
+using cookie_options = detail::cookie_options;
+using file_options = detail::file_options;
 using http_error = detail::http_error;
 using json = detail::json;
 using next = detail::next_handler;
@@ -23,6 +27,7 @@ using request = detail::request;
 using response = detail::response;
 using router = detail::router;
 using server = detail::server;
+using static_options = detail::static_options;
 using test_client = detail::test_client;
 
 }  // namespace fiasco

@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <concepts>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -57,4 +59,17 @@ TEST_CASE("async_result converts a collection of models", "[async]") {
     REQUIRE(res.headers.at("Content-Type") == "application/json");
     REQUIRE(res.body.find(R"("name":"ada")") != std::string::npos);
     REQUIRE(res.body.find(R"("name":"grace")") != std::string::npos);
+}
+
+TEST_CASE("typed_async_result carries its value type", "[async]") {
+    static_assert(std::same_as<typename typed_async_result<async_user>::value_type,
+                               async_user>);
+
+    typed_async_result<async_user> result{async_user{"ada", 36}};
+    const response res = std::move(result).take();
+
+    REQUIRE(res.status_code == 200);
+    REQUIRE(res.headers.at("Content-Type") == "application/json");
+    REQUIRE(res.body.find(R"("name":"ada")") != std::string::npos);
+    REQUIRE(res.body.find(R"("age":36)") != std::string::npos);
 }

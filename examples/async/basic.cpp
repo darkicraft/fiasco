@@ -5,10 +5,12 @@
 //
 //   curl localhost:8080/sync
 //   curl localhost:8080/async
+//   curl localhost:8080/async/typed
 //   curl -i localhost:8080/async/custom
 //
 // A normal lambda stays synchronous. Add `-> fiasco::async` only when the
-// handler needs to co_await. The framework owns starting and awaiting the task.
+// handler needs to co_await. Use `fiasco::async_t<T>` when you also want the
+// response model inferred for OpenAPI.
 
 #include <fiasco/fiasco.hpp>
 
@@ -44,6 +46,9 @@ int main() {
 
     // A coroutine that never suspends still uses the semantic async type.
     app.get("/async", []() -> fiasco::async { co_return load_user(); });
+
+    // Typed async keeps the response model in the signature for OpenAPI.
+    app.get("/async/typed", []() -> fiasco::async_t<user> { co_return load_user(); });
 
     // Advanced escape hatch: full control over status and headers.
     app.get("/async/custom", []() -> fiasco::async {

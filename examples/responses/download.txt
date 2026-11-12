@@ -1,0 +1,2 @@
+Fiasco file response demo.
+This text is read from examples/responses/download.txt.

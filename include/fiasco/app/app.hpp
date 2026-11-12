@@ -16,6 +16,9 @@
 #include <vector>
 
 #include "fiasco/app/app_options.hpp"
+#include "fiasco/app/docs.hpp"
+#include "fiasco/app/openapi.hpp"
+#include "fiasco/app/static_files.hpp"
 #include "fiasco/contract/exchange.hpp"
 #include "fiasco/contract/result.hpp"
 #include "fiasco/internal/http/http_error.hpp"
@@ -40,11 +43,16 @@ class app {
     using exception_handler = std::move_only_function<response(std::exception_ptr)>;
 
     app() = default;
-    explicit app(fiasco::app_options options) : m_options(std::move(options)) {}
+    explicit app(fiasco::app_options options, fiasco::router_options routes = {})
+        : m_options(std::move(options)),
+          m_router(std::move(routes)) {}
 
     void print_routes() const { m_router.print_routes(); }
 
     [[nodiscard]] const fiasco::app_options& options() const { return m_options; }
+
+    /// The OpenAPI document, projected from the registered route descriptors.
+    [[nodiscard]] json_type openapi() const { return build_openapi(m_options, m_router); }
 
     template <typename F>
     void add_exception_handler(F&& handler) {
@@ -91,11 +99,26 @@ class app {
         m_router.include_router(std::move(sub), prefix);
     }
 
+    template <std::meta::info Ns>
+    void register_api() {
+        m_router.register_api<Ns>();
+    }
+
     /// Mount a sub-application at `path`. The sub-app's own middleware and
     /// exception handlers run, and the prefix is stripped before its routes
     /// are matched. Starlette-style: the mount path is a path-segment prefix.
     void mount(const std::string& path, app& sub) {
         m_sub_apps.push_back({path, &sub});
+    }
+
+    /// Serve files from `directory` under `prefix`.
+    void mount_static(std::string prefix,
+                      std::filesystem::path directory,
+                      static_options options = {}) {
+        m_static_mounts.push_back(static_mount{
+            .prefix = normalize_static_prefix(std::move(prefix)),
+            .directory = std::move(directory),
+            .options = options});
     }
 
     template <typename F>
@@ -143,6 +166,7 @@ class app {
     router m_router;
     middleware_chain m_middleware;
     std::vector<sub_app> m_sub_apps;
+    std::vector<static_mount> m_static_mounts;
     std::unordered_map<std::type_index, exception_handler> m_exception_handlers;
 
     template <std::derived_from<std::exception> E, typename F>
@@ -158,6 +182,64 @@ class app {
                     std::rethrow_exception(error);
                 }
             });
+    }
+
+    [[nodiscard]] std::optional<response> try_builtin(const request& req) const {
+        if (m_options.openapi_url.empty() || req.method != http_method::get) {
+            return std::nullopt;
+        }
+        if (req.path == m_options.openapi_url) {
+            return response::json(openapi().dump());
+        }
+        if (!m_options.docs_url.empty() && req.path == m_options.docs_url) {
+            return response::html(swagger_ui_html(m_options));
+        }
+        if (!m_options.redoc_url.empty() && req.path == m_options.redoc_url) {
+            return response::html(redoc_html(m_options));
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] response method_not_allowed(const request& req) const {
+        response res = response::error("Method Not Allowed", 405);
+        const auto methods = m_router.allowed_methods(req.path);
+        if (!methods.empty()) {
+            std::string allow;
+            for (auto method : methods) {
+                if (!allow.empty()) {
+                    allow += ", ";
+                }
+                allow += method_to_string(method);
+            }
+            res.headers["Allow"] = std::move(allow);
+        }
+        return res;
+    }
+
+    [[nodiscard]] std::optional<response> try_redirect(const request& req) const {
+        if (!m_router.options().redirect_slashes || req.path.empty() || req.path == "/") {
+            return std::nullopt;
+        }
+
+        std::string alternate(req.path);
+        if (alternate.back() == '/') {
+            alternate.pop_back();
+        } else {
+            alternate.push_back('/');
+        }
+        if (!m_router.any_method_matches(alternate)) {
+            return std::nullopt;
+        }
+
+        response res;
+        res.status_code = 307;
+        std::string location = std::move(alternate);
+        if (!req.query_string.empty()) {
+            location += '?';
+            location.append(req.query_string);
+        }
+        res.headers["Location"] = std::move(location);
+        return res;
     }
 
     [[nodiscard]] static response make_http_error_response(const http_error& error) {
@@ -240,6 +322,7 @@ class app {
     request_result dispatch(request req);
 
     std::optional<request_result> try_sub_app(request& req);
+    std::optional<response> try_static(const request& req) const;
 };
 
 inline std::optional<request_result> app::try_sub_app(request& req) {
@@ -259,6 +342,15 @@ inline std::optional<request_result> app::try_sub_app(request& req) {
     return std::nullopt;
 }
 
+inline std::optional<response> app::try_static(const request& req) const {
+    for (const auto& mount : m_static_mounts) {
+        if (auto result = serve_static(mount, req)) {
+            return std::move(*result);
+        }
+    }
+    return std::nullopt;
+}
+
 inline request_result app::dispatch(request req) {
     req.reanchor_url_views();
 
@@ -266,11 +358,23 @@ inline request_result app::dispatch(request req) {
         return std::move(*sub_result);
     }
 
+    if (auto builtin = try_builtin(req)) {
+        return std::move(*builtin);
+    }
+
+    if (auto static_result = try_static(req)) {
+        return std::move(*static_result);
+    }
+
     auto match = m_router.match(req.method, req.path);
     if (!match.matched) {
-        return m_router.any_method_matches(req.path)
-            ? response::error("Method Not Allowed", 405)
-            : response::error("Not Found", 404);
+        if (m_router.any_method_matches(req.path)) {
+            return method_not_allowed(req);
+        }
+        if (auto redirect = try_redirect(req)) {
+            return std::move(*redirect);
+        }
+        return response::error("Not Found", 404);
     }
 
     if (match.is_async) {
@@ -317,6 +421,9 @@ inline task<void> app::write_response(response_sink& sink, response res) {
     for (const auto& [key, value] : res.headers) {
         sink.header(key, value);
     }
+    for (const auto& cookie : res.set_cookie_headers) {
+        sink.header("Set-Cookie", cookie);
+    }
     if (!res.body.empty()) {
         co_await sink.write(
             std::as_bytes(std::span<const char>(res.body.data(), res.body.size())));
@@ -355,11 +462,23 @@ inline asio::awaitable<response> app::endpoint_handler(request& req) {
         co_return std::move(res).take();
     }
 
+    if (auto builtin = try_builtin(req)) {
+        co_return std::move(*builtin);
+    }
+
+    if (auto static_result = try_static(req)) {
+        co_return std::move(*static_result);
+    }
+
     auto match = m_router.match(req.method, req.path);
     if (!match.matched) {
-        co_return m_router.any_method_matches(req.path)
-            ? response::error("Method Not Allowed", 405)
-            : response::error("Not Found", 404);
+        if (m_router.any_method_matches(req.path)) {
+            co_return method_not_allowed(req);
+        }
+        if (auto redirect = try_redirect(req)) {
+            co_return std::move(*redirect);
+        }
+        co_return response::error("Not Found", 404);
     }
 
     req.path_params.clear();
