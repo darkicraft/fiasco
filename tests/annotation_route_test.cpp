@@ -46,6 +46,11 @@ std::string files(std::string rest) {
     return rest;
 }
 
+[[= fiasco::get("/annotation/status", {.status_code = 202})]]
+std::string status_route() {
+    return "accepted";
+}
+
 }  // namespace annotation_routes
 
 TEST_CASE("annotation routes register with register_api", "[routing][annotations]") {
@@ -79,4 +84,9 @@ TEST_CASE("annotation routes register with register_api", "[routing][annotations
         client.handle(make_request("GET", "/annotation/files/a/b.txt"));
     REQUIRE(files.status_code == 200);
     REQUIRE(files.body == "a/b.txt\n");
+
+    const auto status =
+        client.handle(make_request("GET", "/annotation/status"));
+    REQUIRE(status.status_code == 202);
+    REQUIRE(status.body == "accepted\n");
 }

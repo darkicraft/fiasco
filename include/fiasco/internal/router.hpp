@@ -158,11 +158,30 @@ class router {
             descriptor.include_in_schema && m_options.include_in_schema;
 
         if constexpr (returns_async_handler<F>()) {
-            m_routes.add(method, pattern, make_async_handler(std::forward<F>(f)),
-                         std::move(descriptor));
+            auto handler = make_async_handler(std::forward<F>(f));
+            if (options.status_code.has) {
+                auto inner = std::move(handler);
+                const int status = options.status_code.value;
+                handler = [inner = std::move(inner), status](const request& req) mutable -> async {
+                    auto result = co_await inner(req);
+                    response res = std::move(result).take();
+                    res.status_code = status;
+                    co_return res;
+                };
+            }
+            m_routes.add(method, pattern, std::move(handler), std::move(descriptor));
         } else {
-            m_routes.add(method, pattern, make_handler(std::forward<F>(f)),
-                         std::move(descriptor));
+            auto handler = make_handler(std::forward<F>(f));
+            if (options.status_code.has) {
+                auto inner = std::move(handler);
+                const int status = options.status_code.value;
+                handler = [inner = std::move(inner), status](const request& req) mutable -> response {
+                    response res = inner(req);
+                    res.status_code = status;
+                    return res;
+                };
+            }
+            m_routes.add(method, pattern, std::move(handler), std::move(descriptor));
         }
     }
 
