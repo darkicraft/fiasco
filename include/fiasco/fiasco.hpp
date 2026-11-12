@@ -18,6 +18,7 @@ using app = detail::app;
 using async = detail::async;
 template <typename T>
 using async_t = detail::async_t<T>;
+using cookie_options = detail::cookie_options;
 using http_error = detail::http_error;
 using json = detail::json;
 using next = detail::next_handler;

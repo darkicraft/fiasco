@@ -136,3 +136,8 @@ catch_discover_tests(fiasco_test_json_schema)
 add_executable(fiasco_test_docs docs_test.cpp)
 target_link_libraries(fiasco_test_docs PRIVATE Catch2::Catch2WithMain fiasco_app)
 catch_discover_tests(fiasco_test_docs)
+
+# ---- cookie_test ----
+add_executable(fiasco_test_cookies cookie_test.cpp)
+target_link_libraries(fiasco_test_cookies PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_cookies)

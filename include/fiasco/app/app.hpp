@@ -395,6 +395,9 @@ inline task<void> app::write_response(response_sink& sink, response res) {
     for (const auto& [key, value] : res.headers) {
         sink.header(key, value);
     }
+    for (const auto& cookie : res.set_cookie_headers) {
+        sink.header("Set-Cookie", cookie);
+    }
     if (!res.body.empty()) {
         co_await sink.write(
             std::as_bytes(std::span<const char>(res.body.data(), res.body.size())));
