@@ -132,10 +132,6 @@ bool route_table::match_param_route(
             if (value.empty()) {
                 return false;
             }
-            if (entry.converters[i] == path_converter::integer &&
-                !is_integer_segment(value)) {
-                return false;
-            }
             if (path_params != nullptr) {
                 path_params->emplace_back(entry.names[i], value);
             }

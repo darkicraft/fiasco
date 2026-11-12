@@ -289,20 +289,6 @@ TEST_CASE("route_table add multiple methods same path", "[route_table]") {
 // path converters
 // ============================================================
 
-TEST_CASE("route_table int converter only matches integers", "[route_table]") {
-    route_table table;
-    table.add(http_method::get, "/items/{id:int}", make_dummy_response(200, "int"));
-
-    auto ok = table.match(http_method::get, "/items/42");
-    REQUIRE(ok.matched);
-    REQUIRE(ok.path_params.size() == 1);
-    REQUIRE(ok.path_params[0].first == "id");
-    REQUIRE(ok.path_params[0].second == "42");
-
-    REQUIRE_FALSE(table.match(http_method::get, "/items/abc").matched);
-    REQUIRE_FALSE(table.match(http_method::get, "/items/42.5").matched);
-}
-
 TEST_CASE("route_table path converter captures remaining segments", "[route_table]") {
     route_table table;
     table.add(http_method::get, "/files/{rest:path}", make_dummy_response(200, "file"));
@@ -316,7 +302,7 @@ TEST_CASE("route_table path converter captures remaining segments", "[route_tabl
     REQUIRE_FALSE(table.match(http_method::get, "/files").matched);
 }
 
-TEST_CASE("route_table rejects invalid path converters", "[route_table]") {
+TEST_CASE("route_table rejects unsupported path converters", "[route_table]") {
     route_table table;
     REQUIRE_THROWS_AS(table.add(http_method::get, "/files/{rest:path}/tail",
                                 make_dummy_response(200, "")),

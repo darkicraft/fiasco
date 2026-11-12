@@ -133,8 +133,6 @@ inline std::string descriptor_path_converter(std::string_view path, std::string_
             continue;
         }
         switch (param_converter(segment)) {
-        case path_converter::integer:
-            return "int";
         case path_converter::path:
             return "path";
         default:
