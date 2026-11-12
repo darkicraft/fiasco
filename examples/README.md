@@ -46,7 +46,14 @@ cmake --build build --target hello
 | Target | Source | Demonstrates |
 |---|---|---|
 | `routing_methods` | `routing/methods.cpp` | GET/POST/PUT/PATCH/DELETE, static and parameter routes, 404, and 405. |
+| `annotation_routes` | `routing/annotations.cpp` | Namespace-annotated free functions, `register_api`, body binding, and `:path`. |
 | `subrouters` | `routing/subrouters.cpp` | Router prefixes, nested `include_router`, and `print_routes()`. |
+
+## OpenAPI
+
+| Target | Source | Demonstrates |
+|---|---|---|
+| `openapi` | `openapi/basic.cpp` | `app_options` metadata, router tags, parameter constraints, and `/openapi.json`. |
 
 ## Parameters
 
