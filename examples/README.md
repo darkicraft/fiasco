@@ -53,7 +53,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
-| `openapi` | `openapi/basic.cpp` | `app_options` metadata, router tags, parameter constraints, request/response schemas, and explicit `response_model`. |
+| `openapi` | `openapi/basic.cpp` | `app_options` metadata, router tags, parameter constraints, request/response schemas, explicit `response_model`, Swagger UI, and ReDoc. |
 
 ## Parameters
 

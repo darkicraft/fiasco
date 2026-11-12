@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "fiasco/app/app_options.hpp"
+#include "fiasco/app/docs.hpp"
 #include "fiasco/app/openapi.hpp"
 #include "fiasco/contract/exchange.hpp"
 #include "fiasco/contract/result.hpp"
@@ -172,9 +173,17 @@ class app {
     }
 
     [[nodiscard]] std::optional<response> try_builtin(const request& req) const {
-        if (!m_options.openapi_url.empty() && req.method == http_method::get &&
-            req.path == m_options.openapi_url) {
+        if (m_options.openapi_url.empty() || req.method != http_method::get) {
+            return std::nullopt;
+        }
+        if (req.path == m_options.openapi_url) {
             return response::json(openapi().dump());
+        }
+        if (!m_options.docs_url.empty() && req.path == m_options.docs_url) {
+            return response::html(swagger_ui_html(m_options));
+        }
+        if (!m_options.redoc_url.empty() && req.path == m_options.redoc_url) {
+            return response::html(redoc_html(m_options));
         }
         return std::nullopt;
     }

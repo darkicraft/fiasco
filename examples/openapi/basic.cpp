@@ -8,6 +8,8 @@
 //   curl -X POST localhost:8080/items -H 'Content-Type: application/json' \
 //        -d '{"name":"widget","quantity":3}'
 //   curl localhost:8080/openapi.json
+//   curl localhost:8080/docs
+//   curl localhost:8080/redoc
 //
 // The document is generated from the registered route descriptors. The
 // /openapi.json route is served automatically unless openapi_url is cleared.
@@ -73,6 +75,7 @@ int main() {
     options.contact.name = "Fiasco";
     options.contact.url = "https://github.com/darkicraft/fiasco";
     options.license.name = "MIT";
+    options.swagger_ui_parameters = fiasco::json{{"syntaxHighlight", false}};
 
     fiasco::router_options router_options;
     router_options.tags = {"catalog"};

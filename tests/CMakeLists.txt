@@ -131,3 +131,8 @@ catch_discover_tests(fiasco_test_routing_behavior)
 add_executable(fiasco_test_json_schema json_schema_test.cpp)
 target_link_libraries(fiasco_test_json_schema PRIVATE Catch2::Catch2WithMain fiasco_app)
 catch_discover_tests(fiasco_test_json_schema)
+
+# ---- docs_test ----
+add_executable(fiasco_test_docs docs_test.cpp)
+target_link_libraries(fiasco_test_docs PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_docs)
