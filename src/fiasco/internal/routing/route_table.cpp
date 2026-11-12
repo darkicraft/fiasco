@@ -1,15 +1,35 @@
 #include "fiasco/internal/routing/route_table.hpp"
 
+#include <stdexcept>
+#include <utility>
+
 #include "fiasco/internal/routing/pathing.hpp"
 
 namespace fiasco::detail {
 
-void route_table::add(http_method method, const std::string& pattern, handler_fn handler) {
-    add_entry(method, pattern, route_entry{.handler = std::move(handler)});
+namespace {
+
+void append_tags(route_descriptor& descriptor, std::span<const std::string> tags) {
+    descriptor.tags.insert(descriptor.tags.end(), tags.begin(), tags.end());
 }
 
-void route_table::add(http_method method, const std::string& pattern, async_handler_fn handler) {
-    add_entry(method, pattern, route_entry{.async_handler = std::move(handler)});
+}  // namespace
+
+void route_table::add(http_method method,
+                      const std::string& pattern,
+                      handler_fn handler,
+                      route_descriptor descriptor) {
+    add_entry(method, pattern,
+              route_entry{.handler = std::move(handler), .descriptor = std::move(descriptor)});
+}
+
+void route_table::add(http_method method,
+                      const std::string& pattern,
+                      async_handler_fn handler,
+                      route_descriptor descriptor) {
+    add_entry(method, pattern,
+              route_entry{.async_handler = std::move(handler),
+                          .descriptor = std::move(descriptor)});
 }
 
 void route_table::add_entry(http_method method, const std::string& pattern, route_entry entry) {
@@ -24,8 +44,20 @@ void route_table::add_entry(http_method method, const std::string& pattern, rout
     }
 
     if (!has_param) {
-        m_static[method_index(method)][pattern] = std::move(entry);
+        auto& table = m_static[method_index(method)];
+        if (table.contains(pattern)) {
+            throw std::logic_error("duplicate route: " + std::string(method_to_string(method)) +
+                                   " " + pattern);
+        }
+        table[pattern] = std::move(entry);
         return;
+    }
+
+    for (const auto& existing : m_param[method_index(method)]) {
+        if (existing.pattern == pattern) {
+            throw std::logic_error("duplicate route: " + std::string(method_to_string(method)) +
+                                   " " + pattern);
+        }
     }
 
     param_route_entry param_entry;
@@ -58,6 +90,7 @@ match_result route_table::match(http_method method, std::string_view path) {
         result.is_async = static_cast<bool>(static_hit->second.async_handler);
         result.handler = &static_hit->second.handler;
         result.async_handler = &static_hit->second.async_handler;
+        result.descriptor = &static_hit->second.descriptor;
         return result;
     }
 
@@ -95,6 +128,7 @@ match_result route_table::match(http_method method, std::string_view path) {
         result.is_async = static_cast<bool>(entry.callable.async_handler);
         result.handler = &entry.callable.handler;
         result.async_handler = &entry.callable.async_handler;
+        result.descriptor = &entry.callable.descriptor;
         result.path_params.reserve(entry.segments.size());
         for (size_t i = 0; i < entry.segments.size(); ++i) {
             if (entry.is_param_seg[i]) {
@@ -140,16 +174,22 @@ bool route_table::any_method_matches(std::string_view path) const {
     return false;
 }
 
-void route_table::merge_with_prefix(route_table&& other, std::string_view prefix) {
+void route_table::merge_with_prefix(route_table&& other,
+                                    std::string_view prefix,
+                                    std::span<const std::string> extra_tags) {
     for (size_t mi = 0; mi < num_http_methods; ++mi) {
         for (auto& [path, handler] : other.m_static[mi]) {
             std::string full = join_prefix(prefix, path);
+            handler.descriptor.path = full;
+            append_tags(handler.descriptor, extra_tags);
             m_static[mi][std::move(full)] = std::move(handler);
         }
         other.m_static[mi].clear();
 
         for (auto& entry : other.m_param[mi]) {
             std::string full_pattern = join_prefix(prefix, entry.pattern);
+            entry.callable.descriptor.path = full_pattern;
+            append_tags(entry.callable.descriptor, extra_tags);
             add_entry(static_cast<http_method>(mi), full_pattern, std::move(entry.callable));
         }
         other.m_param[mi].clear();

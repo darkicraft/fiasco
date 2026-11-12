@@ -20,6 +20,8 @@
 #include "fiasco/internal/meta/reflect.hpp"
 #include "fiasco/internal/routing/concepts.hpp"
 #include "fiasco/internal/routing/dependency.hpp"
+#include "fiasco/internal/routing/descriptor.hpp"
+#include "fiasco/internal/routing/pathing.hpp"
 
 namespace fiasco::detail {
 
@@ -114,6 +116,97 @@ consteval param_in effective_source(param_in source) {
     } else {
         return param_in::infer;
     }
+}
+
+inline bool descriptor_path_contains(std::string_view path, std::string_view name) {
+    for (auto segment : split_path(path)) {
+        if (is_param_segment(segment) && param_name(segment) == name) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// Materialise the metadata for one handler parameter. This runs at
+/// registration time, not per request.
+template <typename Traits, std::size_t I>
+parameter_descriptor make_parameter_descriptor(std::string_view path) {
+    constexpr auto param = Traits::parameter(I);
+    using Arg = std::tuple_element_t<I, typename Traits::args_tuple>;
+    using CleanArg = std::remove_cvref_t<Arg>;
+
+    parameter_descriptor descriptor;
+    descriptor.constraints = meta::field_of(param);
+    descriptor.declared_source = meta::source_of(param);
+    descriptor.name = descriptor.constraints.alias.has
+                          ? std::string(descriptor.constraints.alias.view())
+                          : std::string(Traits::argument_name(I));
+    descriptor.type = std::string(std::meta::display_string_of(meta::parameter_type(param)));
+    descriptor.source = descriptor.declared_source;
+
+    constexpr bool is_request = std::same_as<CleanArg, request>;
+    constexpr bool is_dependency = meta::depends_of(param) != std::meta::info{};
+
+    if constexpr (is_request || is_dependency) {
+        descriptor.injected = true;
+        descriptor.source = param_in::infer;
+        descriptor.required = false;
+    } else if constexpr (ScalarParam<CleanArg>) {
+        if (descriptor.source == param_in::infer) {
+            descriptor.source = descriptor_path_contains(path, descriptor.name) ? param_in::path
+                                                                                : param_in::query;
+        }
+        descriptor.required =
+            descriptor.source == param_in::path || !OptionalPrimitive<CleanArg>;
+    } else if constexpr (FromJson<CleanArg>) {
+        if (descriptor.source == param_in::infer) {
+            descriptor.source = param_in::body;
+        }
+        descriptor.required = true;
+    }
+
+    return descriptor;
+}
+
+template <typename F, std::size_t... Is>
+route_descriptor describe_impl(http_method method,
+                               std::string path,
+                               const fiasco::route_options& options,
+                               std::index_sequence<Is...>) {
+    using traits = meta::callable_traits<std::decay_t<F>>;
+
+    route_descriptor descriptor;
+    descriptor.method = method;
+    descriptor.path = std::move(path);
+    descriptor.name = options.name.has ? std::string(options.name.view()) : std::string{};
+    descriptor.summary =
+        options.summary.has ? std::string(options.summary.view()) : std::string{};
+    descriptor.description =
+        options.description.has ? std::string(options.description.view()) : std::string{};
+    descriptor.operation_id =
+        options.operation_id.has ? std::string(options.operation_id.view()) : std::string{};
+    descriptor.status_code = options.status_code.has ? options.status_code.value : 200;
+    descriptor.deprecated = options.deprecated;
+    descriptor.include_in_schema = options.include_in_schema;
+    descriptor.parameters.reserve(traits::arity);
+
+    (descriptor.parameters.push_back(
+         make_parameter_descriptor<traits, Is>(descriptor.path)),
+     ...);
+
+    return descriptor;
+}
+
+/// Build the registration-time description of a handler. The reflection entity
+/// is retained by `reflected_callable`, so parameter names are available for
+/// namespace-registered routes.
+template <typename F>
+route_descriptor describe(http_method method,
+                          std::string path,
+                          const fiasco::route_options& options = {}) {
+    using traits = meta::callable_traits<std::decay_t<F>>;
+    return describe_impl<F>(method, std::move(path), options,
+                            std::make_index_sequence<traits::arity>{});
 }
 
 inline constexpr std::size_t max_body_params = 64;

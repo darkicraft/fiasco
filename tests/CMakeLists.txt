@@ -111,3 +111,8 @@ catch_discover_tests(fiasco_test_test_client)
 add_executable(fiasco_test_annotation_routes annotation_route_test.cpp)
 target_link_libraries(fiasco_test_annotation_routes PRIVATE Catch2::Catch2WithMain fiasco_app)
 catch_discover_tests(fiasco_test_annotation_routes)
+
+# ---- descriptor_test ----
+add_executable(fiasco_test_descriptor descriptor_test.cpp)
+target_link_libraries(fiasco_test_descriptor PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_descriptor)

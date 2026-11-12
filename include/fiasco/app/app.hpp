@@ -40,7 +40,9 @@ class app {
     using exception_handler = std::move_only_function<response(std::exception_ptr)>;
 
     app() = default;
-    explicit app(fiasco::app_options options) : m_options(std::move(options)) {}
+    explicit app(fiasco::app_options options, fiasco::router_options routes = {})
+        : m_options(std::move(options)),
+          m_router(std::move(routes)) {}
 
     void print_routes() const { m_router.print_routes(); }
 
