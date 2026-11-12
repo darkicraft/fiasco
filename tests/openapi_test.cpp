@@ -49,6 +49,22 @@ std::string batch(item_input first, dimensions second) {
     return first.name + std::to_string(second.width);
 }
 
+[[= fiasco::get("/typed-async/{id}")]]
+fiasco::async_t<item_output> typed_async(long id) {
+    co_return item_output{.name = "item-" + std::to_string(id), .quantity = 1};
+}
+
+[[= fiasco::get("/untyped-async")]]
+fiasco::async untyped_async() {
+    co_return item_output{.name = "untyped", .quantity = 1};
+}
+
+[[= fiasco::get("/override-response")]]
+[[= fiasco::response_model(^^item_output)]]
+item_input override_response() {
+    return item_input{.name = "actual", .size = {1, 2}, .stock = 1, .tags = {"x"}};
+}
+
 }  // namespace openapi_routes
 
 namespace {
@@ -145,6 +161,28 @@ TEST_CASE("openapi document projects route descriptors", "[openapi]") {
     CHECK(batch_schema["properties"]["first"]["$ref"].get<std::string>().starts_with(prefix));
     CHECK(batch_schema["properties"]["second"]["$ref"].get<std::string>().starts_with(prefix));
     CHECK(batch_schema["required"].size() == 2);
+
+    const auto typed_async_response =
+        paths["/typed-async/{id}"]["get"]["responses"]["200"];
+    CHECK(typed_async_response["content"].contains("application/json"));
+    const auto typed_async_ref =
+        typed_async_response["content"]["application/json"]["schema"]["$ref"]
+            .get<std::string>();
+    REQUIRE(typed_async_ref.starts_with(prefix));
+    CHECK(components.contains(typed_async_ref.substr(prefix.size())));
+
+    const auto untyped_async_response =
+        paths["/untyped-async"]["get"]["responses"]["200"];
+    CHECK_FALSE(untyped_async_response.contains("content"));
+
+    const auto override_response =
+        paths["/override-response"]["get"]["responses"]["200"];
+    CHECK(override_response["content"].contains("application/json"));
+    const auto override_ref =
+        override_response["content"]["application/json"]["schema"]["$ref"].get<std::string>();
+    REQUIRE(override_ref.starts_with(prefix));
+    const auto override_schema = components[override_ref.substr(prefix.size())];
+    CHECK(override_schema["properties"]["quantity"]["type"] == "integer");
 }
 
 TEST_CASE("openapi document is served at app_options.openapi_url", "[openapi]") {
@@ -158,6 +196,10 @@ TEST_CASE("openapi document is served at app_options.openapi_url", "[openapi]") 
     const auto document = fiasco::json::parse(response.body);
     CHECK(document["openapi"] == "3.1.0");
     CHECK(document["paths"].contains("/items/{id}"));
+
+    const auto typed = client.handle(make_request("GET", "/typed-async/7"));
+    REQUIRE(typed.status_code == 200);
+    CHECK(typed.body.find(R"("name":"item-7")") != std::string::npos);
 }
 
 TEST_CASE("openapi route can be disabled", "[openapi]") {

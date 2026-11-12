@@ -117,8 +117,24 @@ class router {
                 if constexpr (!annotations.empty()) {
                     constexpr auto annotation =
                         std::meta::extract<fiasco::route_annotation>(annotations[0]);
-                    add(annotation.method, std::string(annotation.path.view()),
-                        meta::reflected_callable<member>{}, annotation.options);
+                    constexpr auto response_models = std::define_static_array(
+                        std::meta::annotations_of_with_type(
+                            member, ^^fiasco::response_model_annotation));
+                    if constexpr (!response_models.empty()) {
+                        static_assert(response_models.size() == 1,
+                                      "only one response_model annotation is allowed per route");
+                        constexpr auto model_annotation =
+                            std::meta::extract<fiasco::response_model_annotation>(
+                                response_models[0]);
+                        static_assert(std::meta::is_type(model_annotation.type),
+                                      "response_model must reference a type");
+                        add_with_response_model<model_annotation.type>(
+                            annotation.method, std::string(annotation.path.view()),
+                            meta::reflected_callable<member>{}, annotation.options);
+                    } else {
+                        add(annotation.method, std::string(annotation.path.view()),
+                            meta::reflected_callable<member>{}, annotation.options);
+                    }
                 }
             }
         }
@@ -145,12 +161,30 @@ class router {
     route_table m_routes;
     fiasco::router_options m_options;
 
+    template <std::meta::info Model, typename F>
+    void add_with_response_model(http_method method,
+                                 const std::string& pattern,
+                                 F&& f,
+                                 const fiasco::route_options& options) {
+        using ModelType = [:Model:];
+        auto schema = make_json_schema<ModelType>();
+        add(method, pattern, std::forward<F>(f), options, &schema,
+            response_media_type_for<ModelType>());
+    }
+
     template <typename F>
     void add(http_method method,
              const std::string& pattern,
              F&& f,
-             const fiasco::route_options& options = {}) {
+             const fiasco::route_options& options = {},
+             const json_schema* response_schema = nullptr,
+             std::string response_media_type = "application/json") {
         auto descriptor = describe<std::decay_t<F>>(method, pattern, options);
+        if (response_schema != nullptr) {
+            descriptor.response_schema = *response_schema;
+            descriptor.response_media_type = std::move(response_media_type);
+            descriptor.has_response_schema = true;
+        }
         descriptor.tags.insert(descriptor.tags.end(), m_options.tags.begin(),
                                m_options.tags.end());
         descriptor.deprecated = descriptor.deprecated || m_options.deprecated;

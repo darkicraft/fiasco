@@ -32,7 +32,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
-| `async_handlers` | `async/basic.cpp` | Sync vs `fiasco::async` handlers and explicit responses. |
+| `async_handlers` | `async/basic.cpp` | Sync vs `fiasco::async` handlers, typed `fiasco::async_t<T>`, and explicit responses. |
 
 ## Middleware
 
@@ -53,7 +53,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
-| `openapi` | `openapi/basic.cpp` | `app_options` metadata, router tags, parameter constraints, and request/response schemas in `/openapi.json`. |
+| `openapi` | `openapi/basic.cpp` | `app_options` metadata, router tags, parameter constraints, request/response schemas, and explicit `response_model`. |
 
 ## Parameters
 

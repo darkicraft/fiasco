@@ -76,6 +76,17 @@ struct route_options {
     bool include_in_schema = true;
 };
 
+/// Explicit OpenAPI response model for a handler. Kept separate from
+/// `route_options` because `std::meta::info` is consteval-only and cannot be
+/// carried through the runtime registration path.
+struct response_model_annotation {
+    std::meta::info type{};
+};
+
+consteval response_model_annotation response_model(std::meta::info type) {
+    return {type};
+}
+
 struct route_annotation {
     detail::http_method method = detail::http_method::get;
     detail::lit path{};

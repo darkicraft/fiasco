@@ -4,6 +4,7 @@
 //   FIASCO_PORT=8080 ./build/examples/openapi
 //
 //   curl localhost:8080/items/7
+//   curl localhost:8080/items/7/raw
 //   curl -X POST localhost:8080/items -H 'Content-Type: application/json' \
 //        -d '{"name":"widget","quantity":3}'
 //   curl localhost:8080/openapi.json
@@ -53,6 +54,15 @@ item read_item(long id [[= fiasco::path{.ge = 1}]],
                   .status_code = 201})]]
 item create_item(item input) {
     return input;
+}
+
+// `fiasco::response` is opaque to schema inference; use response_model to
+// describe the JSON it actually returns.
+[[= fiasco::get("/items/{id}/raw")]]
+[[= fiasco::response_model(^^item)]]
+fiasco::response raw_item(long id) {
+    return fiasco::response::json(
+        fiasco::json{{"name", "item-" + std::to_string(id)}, {"quantity", 1}}.dump());
 }
 
 }  // namespace catalog

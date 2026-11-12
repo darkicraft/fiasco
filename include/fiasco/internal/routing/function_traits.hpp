@@ -11,6 +11,7 @@
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 
 #include "fiasco/internal/http/async.hpp"
 #include "fiasco/internal/http/request.hpp"
@@ -31,6 +32,17 @@ namespace fiasco::detail {
 // invoked through a non-const reference (see route_table::match).
 using handler_fn = std::move_only_function<response(const request&)>;
 using async_handler_fn = std::move_only_function<async(const request&)>;
+
+template <typename T>
+struct async_return_traits {
+    static constexpr bool is_async = false;
+};
+
+template <typename T>
+struct async_return_traits<asio::awaitable<T>> {
+    static constexpr bool is_async = requires(T value) { std::move(value).take(); };
+    using result_type = T;
+};
 
 template <typename T>
 struct is_optional_primitive : std::false_type {};
@@ -188,6 +200,39 @@ parameter_descriptor make_parameter_descriptor(std::string_view path) {
     return descriptor;
 }
 
+template <typename T>
+constexpr const char* response_media_type_for() {
+    using R = std::remove_cvref_t<T>;
+    if constexpr (std::same_as<R, std::string> || std::same_as<R, const char*> ||
+                  std::same_as<R, char*> || is_char_array_v<R> ||
+                  std::is_arithmetic_v<R>) {
+        return "text/plain";
+    } else {
+        return "application/json";
+    }
+}
+
+template <typename T>
+void apply_response_schema(route_descriptor& descriptor) {
+    using R = std::remove_cvref_t<T>;
+    if constexpr (std::same_as<R, response> || std::is_void_v<R>) {
+        // Explicit responses and void handlers expose no inferred schema.
+    } else if constexpr (std::same_as<R, std::string> ||
+                         std::same_as<R, const char*> ||
+                         std::same_as<R, char*> || is_char_array_v<R> ||
+                         std::is_arithmetic_v<R>) {
+        descriptor.response_media_type = response_media_type_for<R>();
+        json_type schema = json_type::object();
+        schema["type"] = "string";
+        descriptor.response_schema.root = std::move(schema);
+        descriptor.has_response_schema = true;
+    } else if constexpr (JsonSerializable<R>) {
+        descriptor.response_media_type = response_media_type_for<R>();
+        descriptor.response_schema = make_json_schema<R>();
+        descriptor.has_response_schema = true;
+    }
+}
+
 template <typename F, std::size_t... Is>
 route_descriptor describe_impl(http_method method,
                                std::string path,
@@ -216,22 +261,14 @@ route_descriptor describe_impl(http_method method,
      ...);
 
     using Return = std::remove_cvref_t<typename traits::return_type>;
-    if constexpr (std::same_as<Return, response> || std::is_void_v<Return> ||
-                  std::same_as<Return, async>) {
-        // Explicit responses and async handlers are already type-erased.
-    } else if constexpr (std::same_as<Return, std::string> ||
-                         std::same_as<Return, const char*> ||
-                         std::same_as<Return, char*> || is_char_array_v<Return> ||
-                         std::is_arithmetic_v<Return>) {
-        descriptor.response_media_type = "text/plain";
-        json_type schema = json_type::object();
-        schema["type"] = "string";
-        descriptor.response_schema.root = std::move(schema);
-        descriptor.has_response_schema = true;
-    } else if constexpr (JsonSerializable<Return>) {
-        descriptor.response_media_type = "application/json";
-        descriptor.response_schema = make_json_schema<Return>();
-        descriptor.has_response_schema = true;
+    using Async = async_return_traits<Return>;
+    if constexpr (Async::is_async) {
+        using Result = typename Async::result_type;
+        if constexpr (requires { typename Result::value_type; }) {
+            apply_response_schema<typename Result::value_type>(descriptor);
+        }
+    } else {
+        apply_response_schema<Return>(descriptor);
     }
 
     return descriptor;
@@ -671,12 +708,14 @@ response dispatch_impl(F& fn,
 
 template <typename F, typename ArgsTuple, typename Args, size_t... Is>
 async invoke_async_handler(F& fn, Args& args, std::index_sequence<Is...>) {
-    co_return co_await fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
+    auto result = co_await fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
+    co_return std::move(result).take();
 }
 
 template <typename F, typename ArgsTuple, size_t... Is>
 consteval bool returns_async_handler_impl(std::index_sequence<Is...>) {
-    return std::same_as<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>, async>;
+    return async_return_traits<
+        std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>::is_async;
 }
 
 template <typename F>
