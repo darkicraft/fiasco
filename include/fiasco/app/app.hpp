@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "fiasco/app/app_options.hpp"
+#include "fiasco/app/openapi.hpp"
 #include "fiasco/contract/exchange.hpp"
 #include "fiasco/contract/result.hpp"
 #include "fiasco/internal/http/http_error.hpp"
@@ -47,6 +48,9 @@ class app {
     void print_routes() const { m_router.print_routes(); }
 
     [[nodiscard]] const fiasco::app_options& options() const { return m_options; }
+
+    /// The OpenAPI document, projected from the registered route descriptors.
+    [[nodiscard]] json_type openapi() const { return build_openapi(m_options, m_router); }
 
     template <typename F>
     void add_exception_handler(F&& handler) {
@@ -167,6 +171,14 @@ class app {
             });
     }
 
+    [[nodiscard]] std::optional<response> try_builtin(const request& req) const {
+        if (!m_options.openapi_url.empty() && req.method == http_method::get &&
+            req.path == m_options.openapi_url) {
+            return response::json(openapi().dump());
+        }
+        return std::nullopt;
+    }
+
     [[nodiscard]] static response make_http_error_response(const http_error& error) {
         json_type body = json_type::object();
         body["detail"] = error.detail();
@@ -273,6 +285,10 @@ inline request_result app::dispatch(request req) {
         return std::move(*sub_result);
     }
 
+    if (auto builtin = try_builtin(req)) {
+        return std::move(*builtin);
+    }
+
     auto match = m_router.match(req.method, req.path);
     if (!match.matched) {
         return m_router.any_method_matches(req.path)
@@ -360,6 +376,10 @@ inline asio::awaitable<response> app::endpoint_handler(request& req) {
         }
         auto res = co_await std::get<async>(std::move(*sub_result));
         co_return std::move(res).take();
+    }
+
+    if (auto builtin = try_builtin(req)) {
+        co_return std::move(*builtin);
     }
 
     auto match = m_router.match(req.method, req.path);

@@ -116,3 +116,8 @@ catch_discover_tests(fiasco_test_annotation_routes)
 add_executable(fiasco_test_descriptor descriptor_test.cpp)
 target_link_libraries(fiasco_test_descriptor PRIVATE Catch2::Catch2WithMain fiasco_app)
 catch_discover_tests(fiasco_test_descriptor)
+
+# ---- openapi_test ----
+add_executable(fiasco_test_openapi openapi_test.cpp)
+target_link_libraries(fiasco_test_openapi PRIVATE Catch2::Catch2WithMain fiasco_app)
+catch_discover_tests(fiasco_test_openapi)
