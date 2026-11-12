@@ -19,6 +19,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <string>
 
@@ -26,6 +27,13 @@ namespace {
 
 inline constexpr int graph_nodes = 19;
 inline constexpr int body_graph_nodes = 20;
+
+std::uint16_t example_port() {
+    if (const char* value = std::getenv("FIASCO_PORT")) {
+        return static_cast<std::uint16_t>(std::stoi(value));
+    }
+    return 8080;
+}
 
 std::atomic<int> g_calls{0};
 
@@ -328,5 +336,5 @@ int main() {
                  };
              });
 
-    app.run();
+    app.run(fiasco::server_config{.network = {.port = example_port()}});
 }

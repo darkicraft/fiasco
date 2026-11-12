@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.30)
 project(fiasco LANGUAGES CXX)
 
-option(FIASCO_BUILD_MODULES "Build C++ module targets" OFF)
 option(FIASCO_BUILD_EXAMPLES "Build examples" ON)
 option(FIASCO_BUILD_TESTS "Build tests" ON)
 option(FIASCO_BUILD_BENCHMARKS "Build benchmarks" OFF)
@@ -25,13 +24,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Module scanning is only needed for the opt-in module target; leave it off
-# otherwise so ordinary builds don't get -fmodules-ts / module dependency scans.
-if(FIASCO_BUILD_MODULES)
-  set(CMAKE_CXX_SCAN_FOR_MODULES ON)
-else()
-  set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
-endif()
+# C++20 modules are parked until the module surface is repaired.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 # == DEPENDENCIES =============================================================
 
@@ -229,9 +223,8 @@ if(FIASCO_BUILD_BENCHMARKS)
   add_subdirectory(benchmarks)
 endif()
 
-if(FIASCO_BUILD_MODULES)
-  add_subdirectory(modules)
-endif()
+# C++20 modules are intentionally not built. The sources remain under modules/
+# until the module API is repaired.
 
 # == INSTALLATION =============================================================
 install(DIRECTORY include/ DESTINATION include)

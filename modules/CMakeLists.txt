@@ -1,3 +1,5 @@
+// Parked C++20 module sources. Not referenced by the build while modules are
+// disabled.
 add_library(fiasco_modules)
 target_sources(fiasco_modules
   PUBLIC FILE_SET CXX_MODULES FILES

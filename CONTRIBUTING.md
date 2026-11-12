@@ -37,8 +37,10 @@ Optional flags:
 ```shell
 cmake -S . -B build -DFIASCO_BUILD_TESTS=OFF
 cmake -S . -B build -DFIASCO_BUILD_EXAMPLES=OFF
-cmake -S . -B build -DFIASCO_BUILD_MODULES=ON
 ```
+
+C++20 modules are parked for now; the sources remain under `modules/`, but
+there is no module build target.
 
 Sanitizer builds are useful for anything touching the server or the request
 lifecycle:

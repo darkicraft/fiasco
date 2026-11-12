@@ -34,8 +34,4 @@ fiasco_add_example(dependencies dependencies/basic.cpp)
 fiasco_add_example(dependency_caching dependencies/caching.cpp)
 fiasco_add_example(dependency_graph dependencies/graph.cpp)
 
-if(FIASCO_BUILD_MODULES)
-  add_executable(module modules/module.cpp)
-  target_link_libraries(module PRIVATE fiasco_modules)
-  set_target_properties(module PROPERTIES FOLDER "examples")
-endif()
+# The C++20 module example is parked with the module target.

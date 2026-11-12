@@ -5,16 +5,17 @@ that demonstrates one part of the API. Start with `hello`, then follow the
 categories below. `all_in_one` is intentionally different: it combines several
 features into a heavier workload and is not the place to learn a single API.
 
-Every example is self-contained. Most read `FIASCO_PORT` (default `8080`), so
-several can run at once without editing code:
+Every example is self-contained. All runnable examples read `FIASCO_PORT`
+(default `8080`), so several can run at once without editing code:
 
 ```shell
 FIASCO_PORT=9001 ./build/examples/path_params
 curl 'localhost:9001/items/42'
 ```
 
-`all_in_one` and `module` use their default port unless their own source or
-command-line flags say otherwise.
+`static_files` and `response_file` resolve their sample files relative to the
+repository root, so run those from the repository root. The parked module
+example is not built.
 
 Build a single target from the repository root:
 
@@ -122,9 +123,9 @@ cmake --build build --target hello
 
 ## Modules
 
-| Target | Source | Demonstrates |
-|---|---|---|
-| `module` | `modules/module.cpp` | `import fiasco.server;` with the opt-in C++20 module build. |
+C++20 modules are parked for now. The sources under `modules/` are retained,
+but the module target and example are not built until the module surface is
+repaired.
 
 ## All-in-one
 

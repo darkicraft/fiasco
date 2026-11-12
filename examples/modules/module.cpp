@@ -1,6 +1,10 @@
-// C++20 module import example (requires FIASCO_BUILD_MODULES=ON and Ninja).
+// C++20 module import example (parked; not built while modules are disabled).
 //
-//   cmake -S . -B build-modules -G Ninja -DFIASCO_BUILD_MODULES=ON
+// The module surface is retained under modules/ but is currently broken:
+// fiasco.logging references a removed logger header, and the exported aliases
+// do not cover the current application API.
+//
+//   cmake -S . -B build-modules -G Ninja
 //   cmake --build build-modules --target module
 //   FIASCO_PORT=8080 ./build-modules/examples/module
 //   curl localhost:8080/

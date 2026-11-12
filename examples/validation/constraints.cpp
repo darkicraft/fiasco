@@ -11,7 +11,7 @@
 //       "damping": 1.5,
 //       "code": "abc",
 //       "slug": "hello-world",
-//       "tags": ["x"],
+//       "tags": [1],
 //       "user-name": "ada"
 //     }'
 //

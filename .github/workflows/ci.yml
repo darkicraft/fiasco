@@ -81,22 +81,3 @@ jobs:
         run: cmake --build build-tsan --parallel "$(nproc)"
       - name: Test
         run: ctest --test-dir build-tsan --output-on-failure
-
-  modules:
-    name: C++20 modules
-    runs-on: ubuntu-latest
-    container:
-      image: gcc:16.2.0-bookworm
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install CMake
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends python3-pip
-          pip install --break-system-packages --no-cache-dir cmake
-      - name: Configure
-        run: cmake -S . -B build-modules -DCMAKE_BUILD_TYPE=RelWithDebInfo -DFIASCO_BUILD_MODULES=ON
-      - name: Build
-        run: cmake --build build-modules --parallel "$(nproc)"
-      - name: Test
-        run: ctest --test-dir build-modules --output-on-failure

@@ -557,9 +557,20 @@ static report analyze(bool strict, float ratio, long long multiplier, int seed, 
 // ROUTES
 // =============================================================================
 
+namespace {
+
+std::uint16_t example_port() {
+    if (const char* value = std::getenv("FIASCO_PORT")) {
+        return static_cast<std::uint16_t>(std::stoi(value));
+    }
+    return 8080;
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
     fiasco::server_config config{
-        .network = {.host = "0.0.0.0", .port = 8080, .workers = 4},
+        .network = {.host = "0.0.0.0", .port = example_port(), .workers = 4},
     };
 
     (void)argc;
