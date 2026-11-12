@@ -179,6 +179,48 @@ class app {
         return std::nullopt;
     }
 
+    [[nodiscard]] response method_not_allowed(const request& req) const {
+        response res = response::error("Method Not Allowed", 405);
+        const auto methods = m_router.allowed_methods(req.path);
+        if (!methods.empty()) {
+            std::string allow;
+            for (auto method : methods) {
+                if (!allow.empty()) {
+                    allow += ", ";
+                }
+                allow += method_to_string(method);
+            }
+            res.headers["Allow"] = std::move(allow);
+        }
+        return res;
+    }
+
+    [[nodiscard]] std::optional<response> try_redirect(const request& req) const {
+        if (!m_router.options().redirect_slashes || req.path.empty() || req.path == "/") {
+            return std::nullopt;
+        }
+
+        std::string alternate(req.path);
+        if (alternate.back() == '/') {
+            alternate.pop_back();
+        } else {
+            alternate.push_back('/');
+        }
+        if (!m_router.any_method_matches(alternate)) {
+            return std::nullopt;
+        }
+
+        response res;
+        res.status_code = 307;
+        std::string location = std::move(alternate);
+        if (!req.query_string.empty()) {
+            location += '?';
+            location.append(req.query_string);
+        }
+        res.headers["Location"] = std::move(location);
+        return res;
+    }
+
     [[nodiscard]] static response make_http_error_response(const http_error& error) {
         json_type body = json_type::object();
         body["detail"] = error.detail();
@@ -291,9 +333,13 @@ inline request_result app::dispatch(request req) {
 
     auto match = m_router.match(req.method, req.path);
     if (!match.matched) {
-        return m_router.any_method_matches(req.path)
-            ? response::error("Method Not Allowed", 405)
-            : response::error("Not Found", 404);
+        if (m_router.any_method_matches(req.path)) {
+            return method_not_allowed(req);
+        }
+        if (auto redirect = try_redirect(req)) {
+            return std::move(*redirect);
+        }
+        return response::error("Not Found", 404);
     }
 
     if (match.is_async) {
@@ -384,9 +430,13 @@ inline asio::awaitable<response> app::endpoint_handler(request& req) {
 
     auto match = m_router.match(req.method, req.path);
     if (!match.matched) {
-        co_return m_router.any_method_matches(req.path)
-            ? response::error("Method Not Allowed", 405)
-            : response::error("Not Found", 404);
+        if (m_router.any_method_matches(req.path)) {
+            co_return method_not_allowed(req);
+        }
+        if (auto redirect = try_redirect(req)) {
+            co_return std::move(*redirect);
+        }
+        co_return response::error("Not Found", 404);
     }
 
     req.path_params.clear();

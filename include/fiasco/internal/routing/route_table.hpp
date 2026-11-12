@@ -60,6 +60,7 @@ class route_table {
              route_descriptor descriptor = {});
     match_result match(http_method method, std::string_view path);
     bool any_method_matches(std::string_view path) const;
+    [[nodiscard]] std::vector<http_method> allowed_methods(std::string_view path) const;
     void merge_with_prefix(route_table&& other,
                            std::string_view prefix,
                            std::span<const std::string> extra_tags = {});

@@ -129,12 +129,16 @@ class router {
         m_routes.for_each_descriptor(std::forward<F>(f));
     }
 
+    [[nodiscard]] std::vector<http_method> allowed_methods(std::string_view path) const {
+        return m_routes.allowed_methods(path);
+    }
+
     match_result match(http_method method, std::string_view path) {
         return m_routes.match(method, path);
     }
 
     bool any_method_matches(std::string_view path) const {
-        return m_routes.any_method_matches(path);
+        return !allowed_methods(path).empty();
     }
 
   private:

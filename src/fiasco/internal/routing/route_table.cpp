@@ -185,21 +185,27 @@ match_result route_table::match(http_method method, std::string_view path) {
 }
 
 bool route_table::any_method_matches(std::string_view path) const {
+    return !allowed_methods(path).empty();
+}
+
+std::vector<http_method> route_table::allowed_methods(std::string_view path) const {
+    std::vector<http_method> methods;
     for (size_t mi = 0; mi < num_http_methods; ++mi) {
         if (m_static[mi].count(path)) {
-            return true;
+            methods.push_back(static_cast<http_method>(mi));
         }
     }
 
-    auto req_segs = split_path(path);
+    const auto req_segs = split_path(path);
     for (size_t mi = 0; mi < num_http_methods; ++mi) {
         for (const auto& entry : m_param[mi]) {
             if (match_param_route(entry, path, req_segs, nullptr)) {
-                return true;
+                methods.push_back(static_cast<http_method>(mi));
+                break;
             }
         }
     }
-    return false;
+    return methods;
 }
 
 void route_table::merge_with_prefix(route_table&& other,
