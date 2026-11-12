@@ -2,534 +2,102 @@
 
 An expressive C++26 web framework that brings FastAPI-like ergonomics to C++.
 
-> **Status**: Alpha: the core API is functional, but expect breaking changes as features mature.
-
-## Motivation
-
-Existing C++ web frameworks are either syntactically painful (Drogon's verbosity), outdated, poorly documented, or not attractive enough to adopt. Fiasco aims to prove that C++ can be just as enjoyable as Python or Rust for building HTTP services, with the performance you expect from native code.
+> **Status**: Alpha. The core API works, but expect breaking changes as the
+> surface matures.
 
 ## Requirements
 
-- **CMake** ≥ 3.30
-- **GCC ≥ 16** (C++26)
+- CMake ≥ 3.30
+- GCC ≥ 16 (C++26 reflection via `-freflection`)
 
-> Only GCC is supported for now: fiasco relies on C++26 reflection (`std::meta`),
-> which currently requires GCC 16's `-freflection`.
+Only GCC is supported for now.
 
 ## Build
 
 ```shell
-git clone https://github.com/darkicraft/fiasco
-cd fiasco
-cmake -S . -B build
-
-# Optional: skip tests
-# cmake -S . -B build -DFIASCO_BUILD_TESTS=OFF
-
-# Optional: skip examples
-# cmake -S . -B build -DFIASCO_BUILD_EXAMPLES=OFF
-
-# Optional: enable C++20 module support (experimental)
-# cmake -S . -B build -DFIASCO_BUILD_MODULES=ON
-
-cmake --build build
-
-# Run the test suite
-ctest --test-dir build
-
-# Optional: install
-cmake --install build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel "$(nproc)"
+ctest --test-dir build --output-on-failure
 ```
 
-## Features
+Useful options:
 
-| Feature | Status |
-|---------|--------|
-| HTTP/1.1 (GET, POST, PUT, PATCH, DELETE) | ✅ |
-| Path parameters bound **by name** with type conversion | ✅ |
-| Query parameters bound **by name** with type conversion | ✅ |
-| JSON request/response models (reflection, no macros) | ✅ |
-| Multiple body parameters, auto-embedded by name | ✅ |
-| Nested models, `vector`/`map`/`pair`/`tuple`/`optional` fields | ✅ |
-| Exact Pydantic required-vs-nullable rules | ✅ |
-| `[[= field{...}]]` constraints (`gt`/`ge`/`lt`/`le`/`multiple_of`, `min_length`/`max_length`, `pattern`, `alias`) | ✅ |
-| FastAPI-compatible `422` payloads (`{"detail": ...}`, `type`/`loc`/`msg`/`input`/`ctx`) | ✅ |
-| Type-erased JSON wrapper | ✅ |
-| Generic arithmetic parsing, including fixed-width `std::int*_t` / `std::uint*_t` | ✅ |
-| Declarative per-server configuration (`server_config`) | ✅ |
-| Sub-router mounting with path prefixes | ✅ |
-| Multi-threaded Asio-based async I/O | ✅ |
-| Keep-alive, `Connection: close`, and malformed-request handling | ✅ |
-| `SIGINT`/`SIGTERM` graceful shutdown | ✅ |
-| C++20 modules (experimental, opt-in) | ✅ |
-| Explicit parameter sources (`[[= query{}]]`, `[[= path{}]]`, `[[= body{}]]`, `[[= header{}]]`, `[[= cookie{}]]`) | ✅ |
-| Synchronous dependency injection with per-request caching (`[[= depends{^^fn}]]`) | ✅ |
-| `http_error` and custom exception handlers | ✅ |
-| Coroutine/async handlers (`fiasco::async`) | ✅ |
-| Application middleware (`app.middleware`) | ✅ |
-| Built-in CORS middleware (`fiasco::middleware::cors`) | ✅ |
-| Automatic API docs generation (OpenAPI / Swagger) | 🚧 Planned |
-| Static file serving | 🚧 Planned |
-| HTTPS / TLS | 🚧 Planned |
-| WebSocket | 🚧 Planned |
+```shell
+-DCMAKE_BUILD_TYPE=Debug
+-DFIASCO_BUILD_TESTS=OFF
+-DFIASCO_BUILD_EXAMPLES=OFF
+-DFIASCO_BUILD_BENCHMARKS=ON
+-DFIASCO_WITH_IO_URING=ON   # Linux, requires liburing
+```
 
-## Quick Start
+Examples are built by default:
+
+```shell
+./build/examples/hello
+```
+
+## Installation and consumption
+
+Fiasco is a CMake project with header-only public layers and compiled support
+targets. The simplest integration is a subdirectory or FetchContent:
+
+```cmake
+add_subdirectory(third_party/fiasco)
+target_link_libraries(my_app PRIVATE fiasco)
+```
+
+`cmake --install build` currently installs the public headers. A generated
+CMake package config is not provided yet, so `find_package(Fiasco)` is not
+available.
+
+## Basic usage
 
 ```cpp
 #include <fiasco/fiasco.hpp>
 
+#include <string>
+
+using fiasco::get;
+using fiasco::json;
+using fiasco::path;
+using fiasco::post;
+
+namespace api {
+
+struct create_item_request {
+    std::string name;
+};
+
+[[=get("/items/{id}", {.summary = "Read an item"})]]
+auto read_item(long id [[=path{.ge = 1}]]) -> std::string {
+    return "item " + std::to_string(id);
+}
+
+[[=post("/items")]]
+auto create_item(create_item_request input) -> json {
+    return json{{"name", input.name}};
+}
+
+}  // namespace api
+
 int main() {
     fiasco::app app;
-
-    app.get("/hello", []() {
-        return "Hello, World!";                 // text/plain
-    });
-
-    app.get("/json", []() {
-        return fiasco::json{{"message", "Hello, World!"}};  // application/json
-    });
-
-    app.run();
+    app.register_api<^^api>();
+    app.run();  // 0.0.0.0:8080, automatic worker count
 }
 ```
 
-## Examples
+Handlers can return strings, numbers, models, `fiasco::json`, or
+`fiasco::response`. Plain values are wrapped automatically.
 
-The [`examples/`](examples/README.md) directory contains a focused example for
-each feature, plus one `all_in_one` workload that combines them. Start with
-`hello`, then browse by category in the example index.
+## Configuration and lifecycle
 
-## Demo
-
-A 30-second tour is in [`demo/demo.sh`](demo/demo.sh). It starts two servers and
-prints a hello response, a reflected JSON body, and a validation error:
-
-```shell
-./demo/demo.sh
-```
-
-Record it with `asciinema rec -c ./demo/demo.sh demo.cast` and embed the GIF
-here at release time.
-
-## Async handlers
-
-Handlers stay synchronous by default. Add `-> fiasco::async` when the handler
-needs to `co_await`; ordinary values, models, and strings convert automatically:
-
-```cpp
-struct User {
-    std::string name;
-};
-
-app.get("/user", []() -> fiasco::async {
-    auto user = co_await load_user();
-    co_return user;
-});
-```
-
-Synchronous handlers keep the direct dispatch path. Returning
-`fiasco::response` remains the explicit escape hatch for custom status codes and
-headers.
-
-## Middleware
-
-Middleware runs for every request, including 404/405 responses, and is
-registered before `run()`:
-
-```cpp
-app.middleware([](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
-    auto res = co_await next(req);
-    res.headers["X-Request-ID"] = "example";
-    co_return res;
-});
-```
-
-The last middleware added is the outermost, matching FastAPI. Middleware can
-short-circuit by returning without calling `next`, and `next` may be called at
-most once. Applications without middleware keep the synchronous dispatch fast
-path.
-
-CORS is available as a built-in middleware factory:
-
-```cpp
-app.middleware(fiasco::middleware::cors({
-    .allow_origins = {"https://example.com"},
-    .allow_methods = {"GET", "POST"},
-    .allow_headers = {"X-Token"},
-    .allow_credentials = true,
-}));
-```
-
-## How requests are bound
-
-Handler arguments are bound **by name** using C++26 reflection, so the order of
-the parameters does not matter. A scalar parameter is resolved as a **path**
-parameter if the route captured its name, otherwise as a **query** parameter. A
-non-scalar JSON parameter is the **request body**.
-
-```cpp
-// POST /users/{user_id}?notify=true   body: {"name": "Ada"}
-app.post("/users/{user_id}",
-         [](bool notify, int user_id, CreateUser body) {
-             // user_id <- path, notify <- query, body <- JSON body
-             return body;
-         });
-```
-
-## Path Parameters
-
-Bound by name; argument order doesn't matter.
-
-```cpp
-app.post("/users/{user_id}/deposit/{amount}", [](double amount, int user_id) {
-    // user_id = 42, amount = 100.50 — order-independent
-    return fiasco::json{{"status", "ok"}};
-});
-```
-
-Supported types: any integral or floating-point type, plus `bool` and
-`std::string`. That includes the fixed-width `std::int*_t` / `std::uint*_t`
-types. Platform-width types such as `long` use their native width. A value that
-cannot be converted produces a `422` `*_parsing` error
-(`loc: ["path", "<name>"]`). Empty path parameter segments are rejected.
-
-## Query Parameters
-
-Scalar arguments whose name is **not** captured by the path are read from the
-query string, also by name.
-
-```cpp
-app.get("/search", [](std::string q, int page) {
-    // GET /search?q=cats&page=2
-    return fiasco::json{{"q", q}, {"page", page}};
-});
-```
-
-Query names and values are percent-decoded, `+` is treated as a space, and the
-first value wins for duplicate keys. A missing required parameter is a `422`
-`missing` error;
-`{"detail":[{"type":"missing","loc":["query","q"],"msg":"Field required",...}]}`.
-
-## Explicit Parameter Sources
-
-Inference is convenient, but a parameter can declare exactly where it comes
-from. Markers use the same constraint syntax as model fields, and `alias`
-changes the wire name:
-
-```cpp
-using fiasco::body;
-using fiasco::cookie;
-using fiasco::header;
-using fiasco::path;
-using fiasco::query;
-
-app.get("/items/{id}",
-        [](int id [[= path{.ge = 1}]],
-           std::string q [[= query{.min_length = 2, .alias = "search"}]],
-           std::string token [[= header{.alias = "X-Token"}]],
-           std::string session [[= cookie{.alias = "session_id"}]]) {
-            // GET /items/7?search=cats
-            // Header: x-token: abc
-            // Cookie: session_id=xyz
-            return fiasco::json{{"id", id}, {"q", q},
-                                {"token", token}, {"session", session}};
-        });
-```
-
-Supported sources:
-
-- `path` and `query` bind scalar parameters, exactly like inference but without
-  guessing.
-- `body` binds a scalar or a model from the JSON body. Multiple body parameters
-  are embedded under their `alias` (or parameter name), as usual.
-- `header` looks up a request header. Header names are case-insensitive.
-- `cookie` reads a cookie from the request's `Cookie` header.
-
-Scalar sources accept `std::optional<T>`; an absent value becomes
-`std::nullopt` instead of a `missing` error.
-
-`form` and `file` markers exist for the future multipart API, but currently
-fail at compile time rather than silently misbehaving.
-
-## Dependencies
-
-A parameter can be supplied by another function with `depends{^^fn}`. The
-dependency is resolved before the handler runs, and its parameters use the same
-binding rules as handler parameters:
-
-```cpp
-struct DbSession {
-    explicit DbSession(const fiasco::request&);
-    ~DbSession();                       // cleanup after the handler
-    DbSession(DbSession&&) = default;
-    DbSession& operator=(DbSession&&) = default;
-};
-
-DbSession get_db(const fiasco::request& req) {
-    return DbSession{req};
-}
-
-struct User {
-    std::string name;
-};
-
-User get_current_user(
-    DbSession& db [[= fiasco::depends{^^get_db}]],
-    std::string token [[= fiasco::header{.alias = "Authorization"}]]) {
-    return User{token};
-}
-
-app.get("/me",
-        [](User user [[= fiasco::depends{^^get_current_user}]]) {
-            return user;
-        });
-```
-
-Dependencies are cached per request. If both the handler and another
-dependency request `get_db`, it runs once and the same value is reused.
-
-Caching can be disabled per occurrence, matching FastAPI’s `use_cache=False`:
-
-```cpp
-[[= depends{^^get_timestamp, {.use_cache = false}}]]
-```
-
-The result still has request-scoped storage, so handlers may take it by
-reference. Each occurrence invokes the provider again.
-
-Provider results are cached by value, so take resources by reference:
-
-```cpp
-[](DbSession& db [[= depends{^^get_db}]]) { ... }
-```
-
-Body parameters are shared across the whole dependency graph. The body is
-parsed once. If there is one unique body field name, the whole body is used; if
-the handler and its dependencies declare multiple names, the body is embedded
-by name:
-
-```cpp
-struct SearchRequest { std::string query; };
-struct Options { int limit; };
-
-Options get_options(Options payload) { return payload; }
-
-app.post("/search",
-         [](SearchRequest request,
-            Options options [[= depends{^^get_options}]]) {
-             ...
-         });
-```
-
-```json
-{"request": {"query": "cats"}, "payload": {"limit": 10}}
-```
-
-RAII is the replacement for FastAPI's `yield` dependencies: the value lives
-until the handler returns, then its destructor performs cleanup. Dependencies
-are synchronous for now; async providers and runtime captured state are
-deferred.
-
-## Request Bodies
-
-Any aggregate `struct` is a model automatically. fiasco (de)serialises it
-member-wise via reflection — no macros, no boilerplate.
-
-```cpp
-struct CreateUser {
-    std::string username;
-    int         age;
-};
-
-app.post("/users", [](CreateUser body) {
-    return CreateUser{body.username, body.age + 1};   // a model response
-});
-```
-
-When a handler takes **more than one** body model, each is embedded under its
-parameter name (exactly like FastAPI):
-
-```cpp
-struct Payment { std::string card; int cents; };
-
-app.post("/orders/{order_id}", [](std::string order_id, CreateUser buyer, Payment pay) {
-    // order_id <- path
-    // body: {"buyer": {...}, "pay": {...}}
-    return fiasco::json{{"order_id", order_id}, {"paid", pay.cents}};
-});
-```
-
-### Supported field types
-
-- Primitive types (`int`, `double`, `bool`, `std::string`, …)
-- Nested aggregate structs (also serialised by reflection)
-- `std::vector<T>` and other sequence containers
-- `std::map<std::string, T>` and other map containers
-- `std::optional<T>` (a JSON `null` becomes `std::nullopt`)
-- `std::pair<T, U>`, `std::tuple<…>`
-
-Any aggregate `struct` is a model automatically; JSON keys are the member
-identifiers, and unnamed members (e.g. anonymous unions) are skipped.
-
-### Required vs. nullable (exactly like Pydantic)
-
-The two are independent:
-
-- a member is **required** iff it has **no default member initializer**;
-- `std::optional<T>` controls **nullability only** (whether `null` is accepted).
-
-```cpp
-struct M {
-    int a;                               // required, not nullable
-    int b = 0;                           // optional (default 0)
-    std::optional<int> c;                // required, nullable
-    std::optional<int> d = std::nullopt; // optional, nullable
-};
-```
-
-Absent + required ⇒ `missing`; absent + default ⇒ the default is used (and not
-validated); `null` on a non-nullable field is a type error.
-
-### Field constraints
-
-Attach Pydantic-style constraints with an annotation:
-
-```cpp
-using fiasco::field;
-
-struct Item {
-    int percent [[= field{.gt = 0, .le = 100}]];
-    int boxes [[= field{.multiple_of = 3}]];
-    std::string code [[= field{.min_length = 2}]];
-    std::string slug [[= field{.pattern = "^[a-z0-9-]+$"}]];
-    std::vector<int> tags [[= field{.min_length = 1}]];
-    std::string username [[= field{.alias = "user-name"}]];
-};
-```
-
-Supported now: `gt`, `ge`, `lt`, `le`, `multiple_of`, `min_length`, `max_length`,
-`pattern`, `alias`. `alias` changes the JSON key used for both reading and writing.
-
-`pattern` uses search semantics, matching Pydantic: `[a-z]+` accepts `123abc`.
-fiasco uses C++'s ECMAScript regex engine, so look-around, backreferences, and
-Unicode behavior may differ from Pydantic's Rust regex engine.
-
-Misuse (e.g. `.gt` on a string, a fractional bound on an `int`, or two `field`
-annotations on one member) is a **compile-time error** with a clear message.
-
-## Validation Errors
-
-Every failure produces FastAPI's `422` envelope. Errors are **collected**, not
-failed fast, and nested locations are reported with their full path:
-
-```json
-{
-  "detail": [
-    {"type": "greater_than", "loc": ["body", "age"],
-     "msg": "Input should be greater than 0", "input": -5, "ctx": {"gt": 0}},
-    {"type": "string_too_short", "loc": ["body", "home", "street"],
-     "msg": "String should have at least 2 characters", "input": "", "ctx": {"min_length": 2}},
-    {"type": "missing", "loc": ["body", "home", "zip-code"],
-     "msg": "Field required", "input": {"street": "", "number": 1}}
-  ]
-}
-```
-
-Notes:
-
-- `loc` starts with `"body"`, `"path"`, `"query"`, `"header"`, or `"cookie"`
-  (as in FastAPI).
-- `input` is the **raw** value as received (the string from the URL for path/query,
-  the JSON value for a body).
-- `ctx` carries the constraint parameters and is omitted when Pydantic has none.
-
-## Errors and Exception Handlers
-
-Throw `fiasco::http_error` from a handler or dependency to return an HTTP error
-directly:
-
-```cpp
-throw fiasco::http_error(
-    401,
-    "Not authenticated",
-    {{"WWW-Authenticate", "Bearer"}});
-```
-
-This produces `{"detail": "Not authenticated"}` with status `401` and the
-supplied headers.
-
-The detail may be any JSON value:
-
-```cpp
-throw fiasco::http_error(
-    422,
-    fiasco::json{{"field", "email"}, {"reason", "invalid"}});
-```
-
-Domain exceptions can be translated with a custom handler:
-
-```cpp
-struct Conflict : std::runtime_error {
-    using std::runtime_error::runtime_error;
-};
-
-app.add_exception_handler([](const Conflict& error) {
-    return fiasco::response::error(error.what(), 409);
-});
-```
-
-The exception type is inferred from the handler parameter. Handlers match the
-exact dynamic exception type; `add_exception_handler<E>(...)` remains available
-when the type needs to be stated explicitly. `request_validation_error` still
-maps to `422`, `json::exception` to `422`, and unhandled exceptions to `500`.
-
-## Response Types
-
-Every handler returns a `fiasco::response`. Returning a plain value (string, int,
-or a model struct) wraps it automatically. For full control, use the factories:
-
-```cpp
-app.get("/text", []() { return fiasco::response::text("plain text"); });
-app.get("/html", []() { return fiasco::response::html("<h1>Hello</h1>"); });
-app.get("/json", []() { return fiasco::response::json(R"({"key":"value"})"); });
-app.get("/redirect", []() { return fiasco::response::redirect("/new-location"); });
-app.get("/error", []() { return fiasco::response::error("something went wrong", 400); });
-app.get("/empty", []() { return fiasco::response::empty(204); });
-```
-
-- `std::string` / `const char*` → `text/plain`
-- a numeric primitive → its text form
-- a model struct or `fiasco::json` → `application/json`
-- a `void` handler → `200 OK` with a JSON `null` body (matching FastAPI)
-
-Status codes and headers can be set directly on the response struct after
-construction.
-
-## Sub-routers
-
-Mount groups of routes under a prefix.
-
-```cpp
-fiasco::router api("/v1");
-api.get("/status", []() { return "ok"; });
-
-fiasco::app app;
-app.include_router(std::move(api), "/api");
-// GET /api/v1/status now works
-```
-
-`app.print_routes()` prints every registered route (useful at start-up).
-
-## Configuration
-
-Server construction is declarative. `server_config` is entirely optional; with
-no config, Fiasco uses `0.0.0.0:8080` and automatic worker count.
+`app.run()` uses `0.0.0.0:8080` and automatic worker count. Override only what
+you need:
 
 ```cpp
 fiasco::app app;
-app.get("/hello", []() { return "Hello, World!"; });
-
-app.run(fiasco::server_config{
+app.run({
     .network = {
         .host = "0.0.0.0",
         .port = 8080,
@@ -538,51 +106,57 @@ app.run(fiasco::server_config{
 });
 ```
 
-A temporary config can be passed directly; a named config must be moved:
+For explicit lifecycle control, `fiasco::server` exposes `run()`, `port()`,
+`wait_until_started()`, and `stop()`.
 
-```cpp
-fiasco::server_config config{/* ... */};
-fiasco::app app;
-app.run(std::move(config));
+## OpenAPI and docs
+
+Every app serves an OpenAPI 3.1 document by default:
+
+- `GET /openapi.json`
+- `GET /docs` — Swagger UI
+- `GET /redoc` — ReDoc
+
+## Feature overview
+
+| Area | Available |
+|---|---|
+| Routing | Annotation routes, sub-routers, path/query/header/cookie/body binding, `:path` catch-all, 405 `Allow`, trailing-slash redirects |
+| Models | Reflected structs, nested models, `vector`/`map`/`pair`/`tuple`/`optional`, field constraints, FastAPI-style 422 errors |
+| Dependencies | `[[=depends{^^fn}]]`, request/header/path/query/body injection, per-request caching |
+| Middleware | Application middleware and built-in CORS |
+| OpenAPI | JSON document, parameters, request/response bodies, component schemas, `response_model`, typed async |
+| Docs | Swagger UI, ReDoc, configurable URLs and CDN/self-hosted assets |
+| Responses | Text/JSON/HTML/redirect/error helpers, cookies, file responses |
+| Static files | Mounted directories, MIME lookup, index files, HEAD, traversal protection |
+| Runtime | Asio HTTP/1.1, keep-alive, per-core workers, `SO_REUSEPORT`, optional io_uring |
+| Async | `fiasco::async` (untyped) and `fiasco::async_t<T>` (typed) |
+
+Not implemented yet: response/request streaming, SSE, WebSockets, TLS,
+multipart/file uploads, security helpers, `app.state`, dependency overrides,
+`url_path_for`, and imperative `add_route` registration. C++20 modules are
+parked: the sources remain under `modules/`, but there is no module build target.
+
+## Examples and demo
+
+The focused examples live in [`examples/`](examples/README.md). They cover
+routing, parameter sources, models, validation, DI, middleware, errors,
+responses, OpenAPI, static files, cookies, and file downloads.
+
+The 30-second tour is [`demo/demo.sh`](demo/demo.sh):
+
+```shell
+./demo/demo.sh
 ```
 
-For explicit lifecycle control, use `fiasco::server` directly:
+## Third-party dependencies
 
-```cpp
-fiasco::app app;
-fiasco::server server{app.handler(), fiasco::server_config{/* ... */}};
+Fetched at configure time:
 
-auto actual_port = server.port();  // useful when the config uses port 0
-server.wait_until_started();       // when run() is executing on another thread
-server.stop();
-```
-
-## Threading
-
-Workers are configured through `server_config`:
-
-```cpp
-fiasco::app app;
-app.run(fiasco::server_config{
-    .network = {.workers = 4},
-});
-```
-
-`workers = 0` uses `std::thread::hardware_concurrency()`, with a minimum of 2.
-
-## Signal Handling
-
-The server catches `SIGINT` and `SIGTERM` internally via Asio's `signal_set`.
-Pressing Ctrl+C shuts down all worker threads gracefully and returns from `run()`.
-
-## Dependencies
-
-All fetched automatically at configure time:
-
-- [nlohmann/json](https://github.com/nlohmann/json) post-v3.12.0 commit — JSON core
-- [llhttp](https://github.com/nodejs/llhttp) v9.4 — HTTP/1.1 parser
+- [nlohmann/json](https://github.com/nlohmann/json) pinned commit — JSON
+- [llhttp](https://github.com/nodejs/llhttp) v9.4.3 — HTTP/1.1 parser
 - [Asio](https://github.com/chriskohlhoff/asio) 1.38.2 — async I/O
-- [Catch2](https://github.com/catchorg/Catch2) v3.16 (tests only)
+- [Catch2](https://github.com/catchorg/Catch2) v3.16.1 — tests only
 
 ## License
 
