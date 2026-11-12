@@ -95,7 +95,13 @@ inline json_type build_openapi_parameter(const parameter_descriptor& parameter) 
     out["required"] = parameter.required;
 
     json_type schema = json_type::object();
-    schema["type"] = openapi_scalar_type(parameter.type);
+    if (parameter.converter == "int") {
+        schema["type"] = "integer";
+    } else if (parameter.converter == "path") {
+        schema["type"] = "string";
+    } else {
+        schema["type"] = openapi_scalar_type(parameter.type);
+    }
     apply_openapi_constraints(schema, parameter.constraints);
     out["schema"] = schema;
 

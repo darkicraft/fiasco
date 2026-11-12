@@ -10,6 +10,7 @@
 #include "fiasco/internal/http/request.hpp"
 #include "fiasco/internal/routing/descriptor.hpp"
 #include "fiasco/internal/routing/function_traits.hpp"
+#include "fiasco/internal/routing/pathing.hpp"
 
 namespace fiasco::detail {
 
@@ -93,6 +94,7 @@ class route_table {
         std::vector<std::string> segments;
         std::vector<std::string> names;
         std::vector<bool> is_param_seg;
+        std::vector<path_converter> converters;
         route_entry callable;
     };
 
@@ -100,6 +102,12 @@ class route_table {
                num_http_methods>
         m_static;
     std::array<std::vector<param_route_entry>, num_http_methods> m_param;
+
+    static bool match_param_route(
+        const param_route_entry& entry,
+        std::string_view path,
+        const std::vector<std::string_view>& request_segments,
+        std::vector<std::pair<std::string_view, std::string_view>>* path_params);
 
     void add_entry(http_method method, const std::string& pattern, route_entry entry);
 };

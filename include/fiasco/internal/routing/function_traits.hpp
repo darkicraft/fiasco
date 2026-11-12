@@ -127,6 +127,23 @@ inline bool descriptor_path_contains(std::string_view path, std::string_view nam
     return false;
 }
 
+inline std::string descriptor_path_converter(std::string_view path, std::string_view name) {
+    for (auto segment : split_path(path)) {
+        if (!is_param_segment(segment) || param_name(segment) != name) {
+            continue;
+        }
+        switch (param_converter(segment)) {
+        case path_converter::integer:
+            return "int";
+        case path_converter::path:
+            return "path";
+        default:
+            return {};
+        }
+    }
+    return {};
+}
+
 /// Materialise the metadata for one handler parameter. This runs at
 /// registration time, not per request.
 template <typename Traits, std::size_t I>
@@ -141,6 +158,7 @@ parameter_descriptor make_parameter_descriptor(std::string_view path) {
     descriptor.name = descriptor.constraints.alias.has
                           ? std::string(descriptor.constraints.alias.view())
                           : std::string(Traits::argument_name(I));
+    descriptor.converter = descriptor_path_converter(path, descriptor.name);
     descriptor.type = std::string(std::meta::display_string_of(meta::parameter_type(param)));
     descriptor.source = descriptor.declared_source;
 
@@ -177,7 +195,8 @@ route_descriptor describe_impl(http_method method,
 
     route_descriptor descriptor;
     descriptor.method = method;
-    descriptor.path = std::move(path);
+    descriptor.path = openapi_path(path);
+    const std::string pattern = std::move(path);
     descriptor.name = options.name.has ? std::string(options.name.view()) : std::string{};
     descriptor.summary =
         options.summary.has ? std::string(options.summary.view()) : std::string{};
@@ -191,7 +210,7 @@ route_descriptor describe_impl(http_method method,
     descriptor.parameters.reserve(traits::arity);
 
     (descriptor.parameters.push_back(
-         make_parameter_descriptor<traits, Is>(descriptor.path)),
+         make_parameter_descriptor<traits, Is>(pattern)),
      ...);
 
     return descriptor;

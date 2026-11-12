@@ -8,7 +8,7 @@
 
 namespace openapi_routes {
 
-[[= fiasco::get("/items/{id}",
+[[= fiasco::get("/items/{id:int}",
                 {.summary = "Fetch item", .operation_id = "fetch_item"})]]
 std::string fetch(long id [[= fiasco::path{.ge = 1}]],
                   std::optional<int> page [[= fiasco::query{.le = 10}]],

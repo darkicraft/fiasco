@@ -1,11 +1,16 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
 namespace fiasco::detail {
+
+/// Path segment converters. `{id}` is a string, `{id:int}` an integer, and
+/// `{rest:path}` a catch-all (must be the final segment).
+enum class path_converter { string, integer, path, unknown };
 
 /// Splits a path into segments, preserving emptiness information so that
 /// trailing/leading/double slashes remain meaningful.
@@ -47,9 +52,73 @@ inline bool is_param_segment(std::string_view seg) {
     return seg.size() >= 3 && seg.front() == '{' && seg.back() == '}';
 }
 
-/// Extracts "name" from "{name}". Caller must ensure is_param_segment(seg).
+/// Extracts "name" from "{name}" or "{name:converter}". Caller must ensure
+/// is_param_segment(seg).
 inline std::string_view param_name(std::string_view seg) {
-    return seg.substr(1, seg.size() - 2);
+    auto inner = seg.substr(1, seg.size() - 2);
+    const auto colon = inner.find(':');
+    return colon == std::string_view::npos ? inner : inner.substr(0, colon);
+}
+
+/// Converter declared by a param segment, or `string` when there is none.
+inline path_converter param_converter(std::string_view seg) {
+    auto inner = seg.substr(1, seg.size() - 2);
+    const auto colon = inner.find(':');
+    if (colon == std::string_view::npos) {
+        return path_converter::string;
+    }
+    const auto type = inner.substr(colon + 1);
+    if (type == "int") {
+        return path_converter::integer;
+    }
+    if (type == "path") {
+        return path_converter::path;
+    }
+    return path_converter::unknown;
+}
+
+inline bool is_integer_segment(std::string_view segment) {
+    if (segment.empty()) {
+        return false;
+    }
+    std::size_t i = 0;
+    if (segment.front() == '+' || segment.front() == '-') {
+        i = 1;
+    }
+    if (i == segment.size()) {
+        return false;
+    }
+    for (; i < segment.size(); ++i) {
+        if (segment[i] < '0' || segment[i] > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+
+/// Route patterns use `{id:int}` / `{rest:path}`; OpenAPI paths use the
+/// parameter name only (`{id}` / `{rest}`).
+inline std::string openapi_path(std::string_view path) {
+    std::string out;
+    out.reserve(path.size());
+    for (std::size_t i = 0; i < path.size();) {
+        if (path[i] == '{') {
+            const auto end = path.find('}', i + 1);
+            if (end != std::string_view::npos) {
+                const auto segment = path.substr(i, end - i + 1);
+                if (is_param_segment(segment)) {
+                    out.push_back('{');
+                    out.append(param_name(segment));
+                    out.push_back('}');
+                    i = end + 1;
+                    continue;
+                }
+            }
+        }
+        out.push_back(path[i]);
+        ++i;
+    }
+    return out;
 }
 
 /// Joins a prefix and a path with exactly one '/' between them

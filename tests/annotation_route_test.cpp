@@ -36,6 +36,16 @@ fiasco::response custom() {
     return fiasco::response::text("created", 201);
 }
 
+[[= fiasco::get("/annotation/converted/{id:int}")]]
+long converted(long id) {
+    return id;
+}
+
+[[= fiasco::get("/annotation/files/{rest:path}")]]
+std::string files(std::string rest) {
+    return rest;
+}
+
 }  // namespace annotation_routes
 
 TEST_CASE("annotation routes register with register_api", "[routing][annotations]") {
@@ -55,4 +65,18 @@ TEST_CASE("annotation routes register with register_api", "[routing][annotations
     const auto custom = client.handle(make_request("GET", "/annotation/custom"));
     REQUIRE(custom.status_code == 201);
     REQUIRE(custom.body == "created\n");
+
+    const auto converted =
+        client.handle(make_request("GET", "/annotation/converted/42"));
+    REQUIRE(converted.status_code == 200);
+    REQUIRE(converted.body == "42\n");
+
+    const auto bad_converted =
+        client.handle(make_request("GET", "/annotation/converted/nope"));
+    REQUIRE(bad_converted.status_code == 404);
+
+    const auto files =
+        client.handle(make_request("GET", "/annotation/files/a/b.txt"));
+    REQUIRE(files.status_code == 200);
+    REQUIRE(files.body == "a/b.txt\n");
 }

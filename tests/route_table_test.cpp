@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include "fiasco/internal/routing/route_table.hpp"
@@ -282,6 +283,47 @@ TEST_CASE("route_table add multiple methods same path", "[route_table]") {
 
     auto r3 = table.match(http_method::put, "/item");
     REQUIRE_FALSE(r3.matched);
+}
+
+// ============================================================
+// path converters
+// ============================================================
+
+TEST_CASE("route_table int converter only matches integers", "[route_table]") {
+    route_table table;
+    table.add(http_method::get, "/items/{id:int}", make_dummy_response(200, "int"));
+
+    auto ok = table.match(http_method::get, "/items/42");
+    REQUIRE(ok.matched);
+    REQUIRE(ok.path_params.size() == 1);
+    REQUIRE(ok.path_params[0].first == "id");
+    REQUIRE(ok.path_params[0].second == "42");
+
+    REQUIRE_FALSE(table.match(http_method::get, "/items/abc").matched);
+    REQUIRE_FALSE(table.match(http_method::get, "/items/42.5").matched);
+}
+
+TEST_CASE("route_table path converter captures remaining segments", "[route_table]") {
+    route_table table;
+    table.add(http_method::get, "/files/{rest:path}", make_dummy_response(200, "file"));
+
+    auto result = table.match(http_method::get, "/files/a/b/c.txt");
+    REQUIRE(result.matched);
+    REQUIRE(result.path_params.size() == 1);
+    REQUIRE(result.path_params[0].first == "rest");
+    REQUIRE(result.path_params[0].second == "a/b/c.txt");
+
+    REQUIRE_FALSE(table.match(http_method::get, "/files").matched);
+}
+
+TEST_CASE("route_table rejects invalid path converters", "[route_table]") {
+    route_table table;
+    REQUIRE_THROWS_AS(table.add(http_method::get, "/files/{rest:path}/tail",
+                                make_dummy_response(200, "")),
+                      std::logic_error);
+    REQUIRE_THROWS_AS(table.add(http_method::get, "/items/{id:uuid}",
+                                make_dummy_response(200, "")),
+                      std::logic_error);
 }
 
 // ============================================================

@@ -65,20 +65,86 @@ void route_table::add_entry(http_method method, const std::string& pattern, rout
     param_entry.segments.reserve(segs.size());
     param_entry.names.reserve(segs.size());
     param_entry.is_param_seg.reserve(segs.size());
+    param_entry.converters.reserve(segs.size());
 
-    for (auto seg : segs) {
+    for (std::size_t i = 0; i < segs.size(); ++i) {
+        const auto seg = segs[i];
         if (is_param_segment(seg)) {
+            const auto converter = param_converter(seg);
+            if (converter == path_converter::unknown) {
+                throw std::logic_error("unknown path converter in route: " + pattern);
+            }
+            if (converter == path_converter::path && i + 1 != segs.size()) {
+                throw std::logic_error("path converter must be the final segment: " + pattern);
+            }
             param_entry.is_param_seg.push_back(true);
             param_entry.names.emplace_back(param_name(seg));
+            param_entry.converters.push_back(converter);
         } else {
             param_entry.is_param_seg.push_back(false);
             param_entry.names.emplace_back();
+            param_entry.converters.push_back(path_converter::string);
         }
         param_entry.segments.emplace_back(seg);
     }
 
     param_entry.callable = std::move(entry);
     m_param[method_index(method)].push_back(std::move(param_entry));
+}
+
+bool route_table::match_param_route(
+    const param_route_entry& entry,
+    std::string_view path,
+    const std::vector<std::string_view>& request_segments,
+    std::vector<std::pair<std::string_view, std::string_view>>* path_params) {
+    bool has_catch_all = false;
+    std::size_t catch_all_index = 0;
+    for (std::size_t i = 0; i < entry.segments.size(); ++i) {
+        if (entry.is_param_seg[i] && entry.converters[i] == path_converter::path) {
+            has_catch_all = true;
+            catch_all_index = i;
+            break;
+        }
+    }
+
+    if (has_catch_all) {
+        if (request_segments.size() <= catch_all_index) {
+            return false;
+        }
+    } else if (entry.segments.size() != request_segments.size()) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < entry.segments.size(); ++i) {
+        if (entry.is_param_seg[i]) {
+            if (entry.converters[i] == path_converter::path) {
+                // Validated at registration: a catch-all is the final segment.
+                const auto* start = request_segments[i].data();
+                const auto* end = path.data() + path.size();
+                const auto value = std::string_view(start, static_cast<std::size_t>(end - start));
+                if (path_params != nullptr) {
+                    path_params->emplace_back(entry.names[i], value);
+                }
+                return true;
+            }
+
+            const auto value = request_segments[i];
+            if (value.empty()) {
+                return false;
+            }
+            if (entry.converters[i] == path_converter::integer &&
+                !is_integer_segment(value)) {
+                return false;
+            }
+            if (path_params != nullptr) {
+                path_params->emplace_back(entry.names[i], value);
+            }
+        } else if (entry.segments[i] != request_segments[i]) {
+            return false;
+        }
+    }
+
+    return !has_catch_all;
 }
 
 match_result route_table::match(http_method method, std::string_view path) {
@@ -102,39 +168,16 @@ match_result route_table::match(http_method method, std::string_view path) {
     auto req_segs = split_path(path);
 
     for (auto& entry : param_routes) {
-        if (entry.segments.size() != req_segs.size()) {
-            continue;
-        }
-
-        bool ok = true;
-        for (size_t i = 0; i < entry.segments.size(); ++i) {
-            if (entry.is_param_seg[i]) {
-                if (req_segs[i].empty()) {
-                    ok = false;
-                    break;
-                }
-            } else if (entry.segments[i] != req_segs[i]) {
-                ok = false;
-                break;
-            }
-        }
-
-        if (!ok) {
-            continue;
-        }
-
         match_result result;
+        if (!match_param_route(entry, path, req_segs, &result.path_params)) {
+            continue;
+        }
+
         result.matched = true;
         result.is_async = static_cast<bool>(entry.callable.async_handler);
         result.handler = &entry.callable.handler;
         result.async_handler = &entry.callable.async_handler;
         result.descriptor = &entry.callable.descriptor;
-        result.path_params.reserve(entry.segments.size());
-        for (size_t i = 0; i < entry.segments.size(); ++i) {
-            if (entry.is_param_seg[i]) {
-                result.path_params.emplace_back(std::string_view{entry.names[i]}, req_segs[i]);
-            }
-        }
         return result;
     }
 
@@ -151,22 +194,7 @@ bool route_table::any_method_matches(std::string_view path) const {
     auto req_segs = split_path(path);
     for (size_t mi = 0; mi < num_http_methods; ++mi) {
         for (const auto& entry : m_param[mi]) {
-            if (entry.segments.size() != req_segs.size()) {
-                continue;
-            }
-            bool ok = true;
-            for (size_t i = 0; i < entry.segments.size(); ++i) {
-                if (entry.is_param_seg[i]) {
-                    if (req_segs[i].empty()) {
-                        ok = false;
-                        break;
-                    }
-                } else if (entry.segments[i] != req_segs[i]) {
-                    ok = false;
-                    break;
-                }
-            }
-            if (ok) {
+            if (match_param_route(entry, path, req_segs, nullptr)) {
                 return true;
             }
         }
@@ -180,15 +208,16 @@ void route_table::merge_with_prefix(route_table&& other,
     for (size_t mi = 0; mi < num_http_methods; ++mi) {
         for (auto& [path, handler] : other.m_static[mi]) {
             std::string full = join_prefix(prefix, path);
-            handler.descriptor.path = full;
+            handler.descriptor.path = join_prefix(prefix, handler.descriptor.path);
             append_tags(handler.descriptor, extra_tags);
             m_static[mi][std::move(full)] = std::move(handler);
         }
         other.m_static[mi].clear();
 
         for (auto& entry : other.m_param[mi]) {
-            std::string full_pattern = join_prefix(prefix, entry.pattern);
-            entry.callable.descriptor.path = full_pattern;
+            const std::string full_pattern = join_prefix(prefix, entry.pattern);
+            entry.callable.descriptor.path =
+                join_prefix(prefix, entry.callable.descriptor.path);
             append_tags(entry.callable.descriptor, extra_tags);
             add_entry(static_cast<http_method>(mi), full_pattern, std::move(entry.callable));
         }

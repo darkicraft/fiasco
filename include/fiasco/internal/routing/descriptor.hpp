@@ -17,6 +17,8 @@ struct parameter_descriptor {
     fiasco::param_in source = fiasco::param_in::infer;
     fiasco::param_in declared_source = fiasco::param_in::infer;
     std::string type;
+    // Empty for ordinary params, "int" or "path" for converted path segments.
+    std::string converter;
     bool required = false;
     // request/dependency parameters are injected rather than read from the
     // wire, so they never appear in the OpenAPI parameter list.
