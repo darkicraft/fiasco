@@ -59,8 +59,8 @@ fiasco::async untyped_async() {
     co_return item_output{.name = "untyped", .quantity = 1};
 }
 
-[[= fiasco::get("/override-response")]]
-[[= fiasco::response_model(^^item_output)]]
+[[= fiasco::get("/override-response",
+                {.response_model = ^^item_output})]]
 item_input override_response() {
     return item_input{.name = "actual", .size = {1, 2}, .stock = 1, .tags = {"x"}};
 }

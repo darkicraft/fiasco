@@ -56,10 +56,8 @@ item create_item(item input) {
     return input;
 }
 
-// `fiasco::response` is opaque to schema inference; use response_model to
-// describe the JSON it actually returns.
-[[= fiasco::get("/items/{id}/raw")]]
-[[= fiasco::response_model(^^item)]]
+// `fiasco::response` is opaque to schema inference; use `.response_model`.
+[[= fiasco::get("/items/{id}/raw", {.response_model = ^^item})]]
 fiasco::response raw_item(long id) {
     return fiasco::response::json(
         fiasco::json{{"name", "item-" + std::to_string(id)}, {"quantity", 1}}.dump());

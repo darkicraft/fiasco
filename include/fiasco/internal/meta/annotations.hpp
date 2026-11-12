@@ -68,7 +68,8 @@ struct depends {
     depends_options options{};
 };
 
-/// Route metadata carried by an annotation on a handler function.
+/// Runtime route metadata. This type must stay free of consteval-only types;
+/// it is passed through `describe()` and `add()` at registration time.
 struct route_options {
     detail::lit summary{}, description{}, name{}, operation_id{};
     detail::opt<int> status_code{};
@@ -76,40 +77,42 @@ struct route_options {
     bool include_in_schema = true;
 };
 
-/// Explicit OpenAPI response model for a handler. Kept separate from
-/// `route_options` because `std::meta::info` is consteval-only and cannot be
-/// carried through the runtime registration path.
-struct response_model_annotation {
-    std::meta::info type{};
+/// Annotation payload. It adds the reflected response model on top of the
+/// runtime metadata. `register_api` converts the runtime fields into
+/// `route_options` before calling the runtime registration path.
+struct route_annotation_options {
+    detail::lit summary{}, description{}, name{}, operation_id{};
+    detail::opt<int> status_code{};
+    bool deprecated = false;
+    bool include_in_schema = true;
+    /// Reflected type used for the OpenAPI response schema. Overrides the
+    /// schema inferred from the handler return type.
+    std::meta::info response_model{};
 };
-
-consteval response_model_annotation response_model(std::meta::info type) {
-    return {type};
-}
 
 struct route_annotation {
     detail::http_method method = detail::http_method::get;
     detail::lit path{};
-    route_options options{};
+    route_annotation_options options{};
 };
 
-consteval route_annotation get(detail::lit path, route_options options = {}) {
+consteval route_annotation get(detail::lit path, route_annotation_options options = {}) {
     return {detail::http_method::get, path, options};
 }
 
-consteval route_annotation post(detail::lit path, route_options options = {}) {
+consteval route_annotation post(detail::lit path, route_annotation_options options = {}) {
     return {detail::http_method::post, path, options};
 }
 
-consteval route_annotation put(detail::lit path, route_options options = {}) {
+consteval route_annotation put(detail::lit path, route_annotation_options options = {}) {
     return {detail::http_method::put, path, options};
 }
 
-consteval route_annotation patch(detail::lit path, route_options options = {}) {
+consteval route_annotation patch(detail::lit path, route_annotation_options options = {}) {
     return {detail::http_method::patch, path, options};
 }
 
-consteval route_annotation del(detail::lit path, route_options options = {}) {
+consteval route_annotation del(detail::lit path, route_annotation_options options = {}) {
     return {detail::http_method::del, path, options};
 }
 

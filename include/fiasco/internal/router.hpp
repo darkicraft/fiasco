@@ -117,23 +117,27 @@ class router {
                 if constexpr (!annotations.empty()) {
                     constexpr auto annotation =
                         std::meta::extract<fiasco::route_annotation>(annotations[0]);
-                    constexpr auto response_models = std::define_static_array(
-                        std::meta::annotations_of_with_type(
-                            member, ^^fiasco::response_model_annotation));
-                    if constexpr (!response_models.empty()) {
-                        static_assert(response_models.size() == 1,
-                                      "only one response_model annotation is allowed per route");
-                        constexpr auto model_annotation =
-                            std::meta::extract<fiasco::response_model_annotation>(
-                                response_models[0]);
-                        static_assert(std::meta::is_type(model_annotation.type),
+                    constexpr fiasco::route_options runtime_options{
+                        .summary = annotation.options.summary,
+                        .description = annotation.options.description,
+                        .name = annotation.options.name,
+                        .operation_id = annotation.options.operation_id,
+                        .status_code = annotation.options.status_code,
+                        .deprecated = annotation.options.deprecated,
+                        .include_in_schema = annotation.options.include_in_schema,
+                    };
+                    constexpr auto route_method = annotation.method;
+                    constexpr auto route_path = annotation.path;
+                    constexpr auto model = annotation.options.response_model;
+                    if constexpr (model != std::meta::info{}) {
+                        static_assert(std::meta::is_type(model),
                                       "response_model must reference a type");
-                        add_with_response_model<model_annotation.type>(
-                            annotation.method, std::string(annotation.path.view()),
-                            meta::reflected_callable<member>{}, annotation.options);
+                        add_with_response_model<model>(
+                            route_method, std::string(route_path.view()),
+                            meta::reflected_callable<member>{}, runtime_options);
                     } else {
-                        add(annotation.method, std::string(annotation.path.view()),
-                            meta::reflected_callable<member>{}, annotation.options);
+                        add(route_method, std::string(route_path.view()),
+                            meta::reflected_callable<member>{}, runtime_options);
                     }
                 }
             }
