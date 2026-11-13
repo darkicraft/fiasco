@@ -18,6 +18,7 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 
 using fiasco::get;
 using fiasco::json;
@@ -70,11 +71,13 @@ int main() {
     options.license.name = "MIT";
     options.swagger_ui_parameters = json{{"syntaxHighlight", false}};
 
-    fiasco::router_options router_options;
-    router_options.tags = {"catalog"};
+    fiasco::app app({options});
 
-    fiasco::app app{options, router_options};
-    app.register_api<^^catalog>();
+    fiasco::router catalog_router({
+        .tags = {"catalog"},
+    });
+    catalog_router.register_api<^^catalog>();
+    app.include_router(std::move(catalog_router));
 
     app.print_routes();
     app.run();

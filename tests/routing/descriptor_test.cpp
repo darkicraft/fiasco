@@ -36,7 +36,7 @@ TEST_CASE("registration materialises a route descriptor", "[routing][descriptor]
     fiasco::router_options options;
     options.tags = {"api"};
 
-    fiasco::router router{options};
+    fiasco::router router(options);
     router.register_api<^^descriptor_routes>();
 
     const fiasco::detail::route_descriptor* found = nullptr;
@@ -74,13 +74,13 @@ TEST_CASE("router options cascade into merged routes", "[routing][descriptor]") 
     sub_options.prefix = "/v1";
     sub_options.tags = {"sub"};
 
-    fiasco::router sub{sub_options};
+    fiasco::router sub(sub_options);
     sub.register_api<^^prefixed_routes>();
 
     fiasco::router_options parent_options;
     parent_options.tags = {"api"};
 
-    fiasco::router parent{parent_options};
+    fiasco::router parent(parent_options);
     parent.include_router(std::move(sub));
 
     const fiasco::detail::route_descriptor* found = nullptr;

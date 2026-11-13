@@ -39,7 +39,7 @@ TEST_CASE("docs and redoc can be disabled independently", "[docs]") {
     options.docs_url.clear();
     options.redoc_url.clear();
 
-    fiasco::app app{options};
+    fiasco::app app(options);
     fiasco::test_client client{app};
 
     CHECK(client.handle(make_request("GET", "/docs")).status_code == 404);
@@ -50,7 +50,7 @@ TEST_CASE("disabling openapi disables the docs pages", "[docs]") {
     fiasco::app_options options;
     options.openapi_url.clear();
 
-    fiasco::app app{options};
+    fiasco::app app(options);
     fiasco::test_client client{app};
 
     CHECK(client.handle(make_request("GET", "/openapi.json")).status_code == 404);
@@ -67,7 +67,7 @@ TEST_CASE("docs URLs and assets are configurable", "[docs]") {
     options.redoc_js_url = "/assets/redoc.js";
     options.title = "Custom <API>";
 
-    fiasco::app app{options};
+    fiasco::app app(options);
     fiasco::test_client client{app};
 
     CHECK(client.handle(make_request("GET", "/docs")).status_code == 404);
@@ -89,7 +89,7 @@ TEST_CASE("swagger parameters and oauth initialization are rendered", "[docs]") 
         fiasco::json{{"syntaxHighlight", false}, {"displayRequestDuration", true}};
     options.swagger_ui_init_oauth = fiasco::json{{"clientId", "demo-client"}};
 
-    fiasco::app app{options};
+    fiasco::app app(options);
     fiasco::test_client client{app};
 
     const auto docs = client.handle(make_request("GET", "/docs"));

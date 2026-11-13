@@ -86,7 +86,7 @@ TEST_CASE("openapi document projects route descriptors", "[openapi]") {
     options.version = "9.9.9";
     options.description = "Generated from descriptors.";
 
-    fiasco::app app{options};
+    fiasco::app app(options);
     app.register_api<^^openapi_routes>();
 
     const auto document = app.openapi();
@@ -202,7 +202,7 @@ TEST_CASE("openapi route can be disabled", "[openapi]") {
     fiasco::app_options options;
     options.openapi_url.clear();
 
-    fiasco::app app{options};
+    fiasco::app app(options);
     fiasco::test_client client{app};
 
     const auto response = client.handle(make_request("GET", "/openapi.json"));

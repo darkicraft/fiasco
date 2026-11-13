@@ -48,6 +48,10 @@ struct app_options {
     detail::json_type swagger_ui_parameters = detail::json_type::object();
     /// Optional Swagger UI OAuth2 initialization config.
     detail::json_type swagger_ui_init_oauth = detail::json_type::object();
+
+    /// Whether requests without a trailing slash may redirect to the matching
+    /// route with one. Application-level behavior, like FastAPI's argument.
+    bool redirect_slashes = true;
 };
 
 }  // namespace fiasco

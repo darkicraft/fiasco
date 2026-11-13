@@ -173,11 +173,11 @@ auto health() -> json {
 }  // namespace admin
 
 int main() {
-    fiasco::app app{fiasco::app_options{
+    fiasco::app app({
         .title = "Fiasco All-in-One",
         .version = "0.1.0",
         .description = "Every major Fiasco feature in one demo application.",
-    }};
+    });
 
     app.middleware([](fiasco::request& request, const fiasco::next& next) -> fiasco::async {
         auto response = co_await next(request);

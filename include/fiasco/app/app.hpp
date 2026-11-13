@@ -42,9 +42,8 @@ class app {
     using exception_handler = std::move_only_function<response(std::exception_ptr)>;
 
     app() = default;
-    explicit app(fiasco::app_options options, fiasco::router_options routes = {})
-        : m_options(std::move(options)),
-          m_router(std::move(routes)) {}
+    explicit app(fiasco::app_options options)
+        : m_options(std::move(options)) {}
 
     void print_routes() const { m_router.print_routes(); }
 
@@ -194,7 +193,7 @@ class app {
     }
 
     [[nodiscard]] std::optional<response> try_redirect(const request& req) const {
-        if (!m_router.options().redirect_slashes || req.path.empty() || req.path == "/") {
+        if (!m_options.redirect_slashes || req.path.empty() || req.path == "/") {
             return std::nullopt;
         }
 

@@ -46,11 +46,9 @@ TEST_CASE("trailing slash policy redirects to the registered path", "[routing][h
 }
 
 TEST_CASE("trailing slash redirect can be disabled", "[routing][http]") {
-    fiasco::app_options options;
-    fiasco::router_options router_options;
-    router_options.redirect_slashes = false;
-
-    fiasco::app app{options, router_options};
+    fiasco::app app({
+        .redirect_slashes = false,
+    });
     fiasco_test::get(app, "/slash/", [] { return std::string{"ok"}; });
 
     fiasco::test_client client{app};
