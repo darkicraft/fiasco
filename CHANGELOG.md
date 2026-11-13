@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `delete_cookie`, and cookie attribute validation.
 - Static file mounts with MIME inference, optional `index.html`, `GET`/`HEAD`,
   traversal protection, and 405 responses.
-- Buffered file responses and attachment downloads via `response::file`.
+- Streamed file responses via `response::file`, with attachment downloads,
+  `ETag`, `Last-Modified`, `Accept-Ranges`, `Range` / `If-Range`, `206`, `416`,
+  and `HEAD`.
 - 405 `Allow` headers and trailing-slash redirects.
 - HTTP/1.1 server with keep-alive, `Connection: close`, and malformed-request
   handling.
@@ -46,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `http_error` and custom exception handlers.
 - Application middleware and a built-in CORS middleware.
 - Coroutine/async handlers.
+- Pull-based `fiasco::stream<T>` generators and `response::stream` for chunked
+  HTTP responses, with cancellation-safe destruction.
+- An integrated `all_in_one` example used by the demo script.
 - Sub-router mounting with path prefixes.
 - Mounted sub-applications.
 - In-process test client over the application exchange.
@@ -68,11 +73,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Examples use the zero-config `app.run()` form.
 - C++20 module targets and the module CI job are parked; the sources remain
   under `modules/` but are not built.
+- Public headers, sources and tests are grouped by layer/domain; example
+  binaries mirror their source directories under `build/examples/`.
 
 ### Removed
 
 - Per-server logging (`log_registry`) and access logging are removed from the
   runtime. Logging will return via spdlog/Quill at the runtime layer.
-- The redundant `all_in_one` example.
 
 [Unreleased]: https://github.com/darkicraft/fiasco/commits/main

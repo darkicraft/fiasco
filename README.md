@@ -30,10 +30,27 @@ Useful options:
 -DFIASCO_WITH_IO_URING=ON   # Linux, requires liburing
 ```
 
-Examples are built by default:
+Examples are built by default. The build mirrors the source tree:
+
+```text
+examples/basics/hello.cpp       -> build/examples/basics/hello
+examples/middleware/basic.cpp   -> build/examples/middleware/basic
+examples/all_in_one/main.cpp    -> build/examples/all_in_one/main
+```
+
+Run an example from the repository root:
 
 ```shell
-./build/examples/hello
+cmake --build build --target hello
+./build/examples/basics/hello
+curl localhost:8080/
+```
+
+Run the integrated demo:
+
+```shell
+cmake --build build --target all_in_one
+./demo/demo.sh
 ```
 
 ## Installation and consumption
@@ -131,25 +148,31 @@ Every app serves an OpenAPI 3.1 document by default:
 | Middleware | Application middleware and built-in CORS |
 | OpenAPI | JSON document, parameters, request/response bodies, component schemas, `response_model`, typed async |
 | Docs | Swagger UI, ReDoc, configurable URLs and CDN/self-hosted assets |
-| Responses | Text/JSON/HTML/redirect/error helpers, cookies, file responses |
+| Responses | Text/JSON/HTML/redirect/error helpers, cookies, file responses with ETag/Last-Modified/ranges |
+| Streaming | Pull-based `fiasco::stream<T>`, `response::stream`, chunked HTTP, SSE/JSON Lines via streamed text |
 | Static files | Mounted directories, MIME lookup, index files, HEAD, traversal protection |
 | Runtime | Asio HTTP/1.1, keep-alive, per-core workers, `SO_REUSEPORT`, optional io_uring |
 | Async | `fiasco::async` (untyped) and `fiasco::async_t<T>` (typed) |
 
-Not implemented yet: response/request streaming, SSE, WebSockets, TLS,
-multipart/file uploads, security helpers, `app.state`, dependency overrides,
-`url_path_for`, and imperative `add_route` registration. C++20 modules are
-parked: the sources remain under `modules/`, but there is no module build target.
+Not implemented yet: request body streaming, multipart/file uploads, SSE/JSON
+Lines convenience helpers, WebSockets, TLS, security helpers, `app.state`,
+dependency overrides, `url_path_for`, and imperative `add_route` registration.
+C++20 modules are parked: the sources remain under `modules/`, but there is no
+module build target.
 
 ## Examples and demo
 
 The focused examples live in [`examples/`](examples/README.md). They cover
 routing, parameter sources, models, validation, DI, middleware, errors,
-responses, OpenAPI, static files, cookies, and file downloads.
+responses, OpenAPI, static files, cookies, streaming and file downloads.
+[`examples/all_in_one/main.cpp`](examples/all_in_one/main.cpp) combines every
+major feature in one application.
 
-The 30-second tour is [`demo/demo.sh`](demo/demo.sh):
+The 30-second tour is [`demo/demo.sh`](demo/demo.sh). It starts the all-in-one
+server and exercises the endpoints:
 
 ```shell
+cmake --build build --target all_in_one
 ./demo/demo.sh
 ```
 
