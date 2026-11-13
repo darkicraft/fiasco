@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <string>
 #include <string_view>
 
@@ -13,7 +14,8 @@ struct static_fixture {
     std::filesystem::path dir;
 
     static_fixture()
-        : dir(std::filesystem::temp_directory_path() / "fiasco-static-test") {
+        : dir(std::filesystem::temp_directory_path() /
+              ("fiasco-static-test-" + std::to_string(std::random_device{}()))) {
         std::filesystem::remove_all(dir);
         std::filesystem::create_directories(dir / "nested");
         write("index.html", "<h1>home</h1>");
