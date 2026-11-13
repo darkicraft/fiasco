@@ -1,7 +1,7 @@
 // Basic dependency injection with per-request caching and RAII cleanup.
 //
 //   cmake --build build --target dependencies
-//   ./build/examples/dependencies
+//   ./build/examples/dependencies/basic
 //
 //   curl localhost:8080/me -H 'Authorization: Bearer ada'
 //   curl localhost:8080/me

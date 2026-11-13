@@ -1,7 +1,7 @@
 // Multiple body parameters are embedded by parameter name, like FastAPI.
 //
 //   cmake --build build --target multiple_bodies
-//   ./build/examples/multiple_bodies
+//   ./build/examples/models/multiple_bodies
 //
 //   curl -X POST localhost:8080/search \
 //     -H 'Content-Type: application/json' \

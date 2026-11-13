@@ -1,7 +1,7 @@
 // CORS middleware.
 //
 //   cmake --build build --target cors
-//   ./build/examples/cors
+//   ./build/examples/middleware/cors
 //
 //   curl -i localhost:8080/hello -H 'Origin: https://example.com'
 //

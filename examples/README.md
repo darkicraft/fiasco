@@ -8,8 +8,21 @@ categories below. All route examples use the annotation API and
 Every example is self-contained and runs on the default `8080` via
 `app.run()`. Run one at a time when they share a port.
 
+## Running examples
+
+The build mirrors the source layout. The binary is named after the source file,
+not after the CMake target:
+
+| Source | Binary |
+|---|---|
+| `examples/basics/hello.cpp` | `build/examples/basics/hello` |
+| `examples/middleware/basic.cpp` | `build/examples/middleware/basic` |
+| `examples/params/path.cpp` | `build/examples/params/path` |
+| `examples/all_in_one/main.cpp` | `build/examples/all_in_one/main` |
+
 ```shell
-./build/examples/path_params
+cmake --build build --target path_params
+./build/examples/params/path
 curl 'localhost:8080/items/42'
 ```
 
@@ -22,6 +35,22 @@ Build a single target from the repository root:
 ```shell
 cmake --build build --target hello
 ```
+
+## All-in-one demo
+
+`all_in_one` is the integrated demo server used by `demo/demo.sh`. It combines
+routing, parameters, models, validation, dependencies, middleware, CORS,
+cookies, response helpers, file ranges, static files, SSE, JSON Lines, typed
+async handlers, sub-routers and OpenAPI.
+
+```shell
+cmake --build build --target all_in_one
+./demo/demo.sh   # starts build/examples/all_in_one/main itself
+```
+
+| Target | Source | Demonstrates |
+|---|---|---|
+| `all_in_one` | `all_in_one/main.cpp` | Every major feature combined: sub-routers, dependencies, middleware/CORS, errors, cookies, files/ranges, static files, SSE, JSON Lines, typed async and OpenAPI. |
 
 ## Basics
 

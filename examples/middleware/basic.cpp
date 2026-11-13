@@ -2,7 +2,7 @@
 // response mutation.
 //
 //   cmake --build build --target middleware
-//   ./build/examples/middleware
+//   ./build/examples/middleware/basic
 //
 //   curl -i localhost:8080/hello
 //   curl -i localhost:8080/whoami

@@ -1,7 +1,7 @@
 // Pydantic-style field constraints, including pattern and alias.
 //
 //   cmake --build build --target constraints
-//   ./build/examples/constraints
+//   ./build/examples/validation/constraints
 //
 //   curl -X POST localhost:8080/constrained \
 //     -H 'Content-Type: application/json' \

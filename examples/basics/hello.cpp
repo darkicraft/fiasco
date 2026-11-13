@@ -1,7 +1,7 @@
 // The smallest useful Fiasco server.
 //
 //   cmake --build build --target hello
-//   ./build/examples/hello
+//   ./build/examples/basics/hello
 //   curl localhost:8080/
 
 #include <fiasco/fiasco.hpp>

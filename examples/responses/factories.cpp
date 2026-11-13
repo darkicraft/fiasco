@@ -1,7 +1,7 @@
 // Response factories, automatic wrapping, and response mutation.
 //
 //   cmake --build build --target responses
-//   ./build/examples/responses
+//   ./build/examples/responses/factories
 //
 //   curl -i localhost:8080/auto/text
 //   curl -i localhost:8080/auto/number

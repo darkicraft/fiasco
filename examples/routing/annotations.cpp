@@ -1,7 +1,7 @@
 // Namespace-annotated routes.
 //
 //   cmake --build build --target annotation_routes
-//   ./build/examples/annotation_routes
+//   ./build/examples/routing/annotations
 //
 //   curl localhost:8080/
 //   curl localhost:8080/items/42

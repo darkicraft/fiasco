@@ -1,7 +1,7 @@
 // Translate domain exceptions with a custom exception handler.
 //
 //   cmake --build build --target exception_handlers
-//   ./build/examples/exception_handlers
+//   ./build/examples/errors/custom_handler
 //
 //   curl -i localhost:8080/conflict
 //   curl -i localhost:8080/boom

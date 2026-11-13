@@ -1,7 +1,7 @@
 // The type-erased fiasco::json wrapper.
 //
 //   cmake --build build --target json_wrapper
-//   ./build/examples/json_wrapper
+//   ./build/examples/json/wrapper
 //
 //   curl localhost:8080/nest/4
 //   curl localhost:8080/object

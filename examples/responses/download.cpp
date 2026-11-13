@@ -1,7 +1,7 @@
 // File responses and download disposition.
 //
 //   cmake --build build --target response_file
-//   ./build/examples/response_file
+//   ./build/examples/responses/download
 //
 //   curl -i localhost:8080/inline
 //   curl -OJ localhost:8080/download

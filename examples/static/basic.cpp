@@ -1,7 +1,7 @@
 // Static file mounts.
 //
 //   cmake --build build --target static_files
-//   ./build/examples/static_files
+//   ./build/examples/static/basic
 //
 //   curl localhost:8080/static/
 //   curl localhost:8080/static/style.css

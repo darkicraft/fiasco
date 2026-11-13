@@ -1,7 +1,7 @@
 // Path parameters are bound by name, not position.
 //
 //   cmake --build build --target path_params
-//   ./build/examples/path_params
+//   ./build/examples/params/path
 //
 //   curl 'localhost:8080/types/7/9000000000/1234567890123/0.25/9.5/true/hello'
 //   curl 'localhost:8080/fixed/127/65535/2147483647/9000000000'

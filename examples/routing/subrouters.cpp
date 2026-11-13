@@ -1,7 +1,7 @@
 // Sub-routers mounted under path prefixes.
 //
 //   cmake --build build --target subrouters
-//   ./build/examples/subrouters
+//   ./build/examples/routing/subrouters
 //
 //   curl localhost:8080/api/v1/status
 //   curl localhost:8080/api/v1/users/7

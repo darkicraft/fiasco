@@ -1,7 +1,7 @@
 // Query parameters are bound by name and converted to the parameter type.
 //
 //   cmake --build build --target query_params
-//   ./build/examples/query_params
+//   ./build/examples/params/query
 //
 //   curl 'localhost:8080/search?q=cats&page=2&verbose=true'
 //   curl 'localhost:8080/search?q=cats'                 # page/verbose are null

@@ -1,7 +1,7 @@
 // OpenAPI metadata from app_options, router_options, and route annotations.
 //
 //   cmake --build build --target openapi
-//   ./build/examples/openapi
+//   ./build/examples/openapi/basic
 //
 //   curl localhost:8080/items/7
 //   curl localhost:8080/items/7/raw

@@ -1,7 +1,7 @@
 // HTTP method routing and automatic 404/405 responses.
 //
 //   cmake --build build --target routing_methods
-//   ./build/examples/routing_methods
+//   ./build/examples/routing/methods
 //
 //   curl localhost:8080/items
 //   curl -X POST localhost:8080/items

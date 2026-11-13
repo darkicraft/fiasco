@@ -1,7 +1,7 @@
 // Nested models and standard collection fields, in both directions.
 //
 //   cmake --build build --target collections
-//   ./build/examples/collections
+//   ./build/examples/models/collections
 //
 //   curl -X POST localhost:8080/collections \
 //     -H 'Content-Type: application/json' \

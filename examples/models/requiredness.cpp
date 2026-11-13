@@ -1,7 +1,7 @@
 // Pydantic's required-vs-nullable rules, exactly.
 //
 //   cmake --build build --target requiredness
-//   ./build/examples/requiredness
+//   ./build/examples/models/requiredness
 //
 //   curl -X POST localhost:8080/requiredness \
 //     -H 'Content-Type: application/json' \

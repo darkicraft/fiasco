@@ -1,7 +1,7 @@
 // Synchronous and asynchronous handlers.
 //
 //   cmake --build build --target async_handlers
-//   ./build/examples/async_handlers
+//   ./build/examples/async/basic
 //
 //   curl localhost:8080/sync
 //   curl localhost:8080/async

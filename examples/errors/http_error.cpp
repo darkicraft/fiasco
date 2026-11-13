@@ -1,7 +1,7 @@
 // Throwing http_error for direct HTTP responses.
 //
 //   cmake --build build --target http_errors
-//   ./build/examples/http_errors
+//   ./build/examples/errors/http_error
 //
 //   curl -i localhost:8080/private
 //   curl -i localhost:8080/private -H 'Authorization: Bearer secret'

@@ -1,9 +1,21 @@
+# Examples are arranged by feature. Mirror each source's relative directory in
+# the build tree and name the binary after the source file:
+#
+#   examples/middleware/basic.cpp  ->  build/examples/middleware/basic
+#   examples/all_in_one/main.cpp   ->  build/examples/all_in_one/main
 function(fiasco_add_example name source)
-  add_executable(${name} ${source})
-  target_link_libraries(${name} PRIVATE fiasco)
-  set_target_properties(${name} PROPERTIES FOLDER "examples")
+    add_executable(${name} ${source})
+    target_link_libraries(${name} PRIVATE fiasco)
+
+    get_filename_component(source_dir "${source}" DIRECTORY)
+    get_filename_component(source_name "${source}" NAME_WE)
+    set_target_properties(${name} PROPERTIES
+        OUTPUT_NAME "${source_name}"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/examples/${source_dir}"
+        FOLDER "examples")
 endfunction()
 
+fiasco_add_example(all_in_one all_in_one/main.cpp)
 fiasco_add_example(hello basics/hello.cpp)
 fiasco_add_example(routing_methods routing/methods.cpp)
 fiasco_add_example(annotation_routes routing/annotations.cpp)

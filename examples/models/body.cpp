@@ -1,7 +1,7 @@
 // Reflected request and response models: no macros, no boilerplate.
 //
 //   cmake --build build --target body_model
-//   ./build/examples/body_model
+//   ./build/examples/models/body
 //
 //   curl -X POST localhost:8080/users \
 //     -H 'Content-Type: application/json' \

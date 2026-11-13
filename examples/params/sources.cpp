@@ -1,7 +1,7 @@
 // Explicit parameter sources: path, query, body, header, and cookie.
 //
 //   cmake --build build --target param_sources
-//   ./build/examples/param_sources
+//   ./build/examples/params/sources
 //
 //   curl -X POST 'localhost:8080/items/7?search=cats' \
 //     -H 'X-Token: abc' \

@@ -1,7 +1,7 @@
 // Per-request dependency caching, and how to bypass it per occurrence.
 //
 //   cmake --build build --target dependency_caching
-//   ./build/examples/dependency_caching
+//   ./build/examples/dependencies/caching
 //
 //   curl localhost:8080/reset
 //   curl localhost:8080/cached      # calls=1, both values are the same

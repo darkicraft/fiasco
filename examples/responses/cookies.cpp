@@ -1,7 +1,7 @@
 // Response cookies.
 //
 //   cmake --build build --target response_cookies
-//   ./build/examples/response_cookies
+//   ./build/examples/responses/cookies
 //
 //   curl -i localhost:8080/set
 //   curl -i localhost:8080/prefs

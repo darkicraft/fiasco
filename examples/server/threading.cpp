@@ -1,7 +1,7 @@
 // Worker threads and concurrent request handling.
 //
 //   cmake --build build --target threading
-//   ./build/examples/threading
+//   ./build/examples/server/threading
 //
 //   for i in 1 2 3 4; do curl -s localhost:8080/sleep/1000 & done; wait
 //   for i in 1 2 3 4 5 6; do curl -s localhost:8080/whoami; done
