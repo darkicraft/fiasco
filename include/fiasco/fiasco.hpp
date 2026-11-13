@@ -11,6 +11,7 @@
 #include "fiasco/internal/router.hpp"
 #include "fiasco/middleware/cors.hpp"
 #include "fiasco/server.hpp"
+#include "fiasco/stream.hpp"
 
 namespace fiasco {
 
