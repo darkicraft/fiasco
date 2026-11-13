@@ -92,22 +92,26 @@ Handlers can return strings, numbers, models, `fiasco::json`, or
 
 ## Configuration and lifecycle
 
-`app.run()` uses `0.0.0.0:8080` and automatic worker count. Override only what
-you need:
+`app.run()` uses `0.0.0.0:8080` and automatic worker count. Runtime config
+belongs to `fiasco::server`:
 
 ```cpp
 fiasco::app app;
-app.run({
+app.register_api<^^api>();
+
+fiasco::server server(app.handler(), {
     .network = {
         .host = "0.0.0.0",
         .port = 8080,
         .workers = 4,  // 0 = hardware concurrency, minimum 2
     },
 });
+
+server.run();
 ```
 
-For explicit lifecycle control, `fiasco::server` exposes `run()`, `port()`,
-`wait_until_started()`, and `stop()`.
+`fiasco::server` also exposes `port()`, `wait_until_started()`, and `stop()`
+for dynamic ports and programmatic lifecycle control.
 
 ## OpenAPI and docs
 

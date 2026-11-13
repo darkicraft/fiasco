@@ -1,7 +1,7 @@
 // Sub-routers mounted under path prefixes.
 //
 //   cmake --build build --target subrouters
-//   FIASCO_PORT=8080 ./build/examples/subrouters
+//   ./build/examples/subrouters
 //
 //   curl localhost:8080/api/v1/status
 //   curl localhost:8080/api/v1/users/7
@@ -9,40 +9,61 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <string>
 
-namespace {
+using fiasco::get;
+using fiasco::json;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
+namespace api_routes {
+
+[[=get("/status")]]
+auto status() -> std::string {
+    return "ok";
 }
 
-}  // namespace
+[[=get("/users/{id}")]]
+auto user(int id) -> json {
+    return json{{"id", id}};
+}
+
+}  // namespace api_routes
+
+namespace user_routes {
+
+[[=get("/")]]
+auto all_users() -> json {
+    return json{{"users", "all"}};
+}
+
+}  // namespace user_routes
+
+namespace admin_routes {
+
+[[=get("/health")]]
+auto health() -> std::string {
+    return "healthy";
+}
+
+}  // namespace admin_routes
 
 int main() {
     fiasco::app app;
 
     fiasco::router api("/v1");
-    api.get("/status", []() { return "ok"; });
-    api.get("/users/{id}", [](int id) { return fiasco::json{{"id", id}}; });
+    api.register_api<^^api_routes>();
 
     // A router may itself contain another router.
     fiasco::router users("/users");
-    users.get("/", []() { return fiasco::json{{"users", "all"}}; });
+    users.register_api<^^user_routes>();
     api.include_router(std::move(users), "/v2");
-    // GET /api/v1/v2/users
+    // GET /api/v1/v2/users/
 
     fiasco::router admin("/admin");
-    admin.get("/health", []() { return "healthy"; });
+    admin.register_api<^^admin_routes>();
 
     app.include_router(std::move(api), "/api");
     app.include_router(std::move(admin));
 
     app.print_routes();
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.run();
 }

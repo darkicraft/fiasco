@@ -304,11 +304,10 @@ TEST_CASE("route_table path converter captures remaining segments", "[route_tabl
 
 TEST_CASE("route_table rejects unsupported path converters", "[route_table]") {
     route_table table;
-    REQUIRE_THROWS_AS(table.add(http_method::get, "/files/{rest:path}/tail",
-                                make_dummy_response(200, "")),
-                      std::logic_error);
-    REQUIRE_THROWS_AS(table.add(http_method::get, "/items/{id:uuid}",
-                                make_dummy_response(200, "")),
+    REQUIRE_THROWS_AS(
+        table.add(http_method::get, "/files/{rest:path}/tail", make_dummy_response(200, "")),
+        std::logic_error);
+    REQUIRE_THROWS_AS(table.add(http_method::get, "/items/{id:uuid}", make_dummy_response(200, "")),
                       std::logic_error);
 }
 

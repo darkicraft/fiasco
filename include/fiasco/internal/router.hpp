@@ -15,6 +15,8 @@
 
 namespace fiasco::detail {
 
+struct test_route_access;
+
 class router {
   public:
     router() = default;
@@ -30,31 +32,6 @@ class router {
         std::cout << "\n\n";
     }
 
-    template <typename F>
-    void get(const std::string& path, F&& f) {
-        add(http_method::get, path, std::forward<F>(f));
-    }
-
-    template <typename F>
-    void post(const std::string& path, F&& f) {
-        add(http_method::post, path, std::forward<F>(f));
-    }
-
-    template <typename F>
-    void put(const std::string& path, F&& f) {
-        add(http_method::put, path, std::forward<F>(f));
-    }
-
-    template <typename F>
-    void del(const std::string& path, F&& f) {
-        add(http_method::del, path, std::forward<F>(f));
-    }
-
-    template <typename F>
-    void patch(const std::string& path, F&& f) {
-        add(http_method::patch, path, std::forward<F>(f));
-    }
-
     void include_router(router sub, const std::string& prefix = "") {
         std::string full_prefix = join_prefix(prefix, sub.m_options.prefix);
         m_routes.merge_with_prefix(std::move(sub.m_routes), full_prefix, m_options.tags);
@@ -63,8 +40,7 @@ class router {
     template <std::meta::info Ns>
     static consteval std::size_t annotated_route_count() {
         std::size_t count = 0;
-        for (auto member :
-             std::meta::members_of(Ns, std::meta::access_context::current())) {
+        for (auto member : std::meta::members_of(Ns, std::meta::access_context::current())) {
             if (!std::meta::is_function(member)) {
                 continue;
             }
@@ -78,8 +54,7 @@ class router {
     template <std::meta::info Ns>
     static consteval bool has_duplicate_routes() {
         std::vector<std::pair<http_method, std::string_view>> routes;
-        for (auto member :
-             std::meta::members_of(Ns, std::meta::access_context::current())) {
+        for (auto member : std::meta::members_of(Ns, std::meta::access_context::current())) {
             if (!std::meta::is_function(member)) {
                 continue;
             }
@@ -93,8 +68,7 @@ class router {
         }
         for (std::size_t i = 0; i < routes.size(); ++i) {
             for (std::size_t j = i + 1; j < routes.size(); ++j) {
-                if (routes[i].first == routes[j].first &&
-                    routes[i].second == routes[j].second) {
+                if (routes[i].first == routes[j].first && routes[i].second == routes[j].second) {
                     return true;
                 }
             }
@@ -108,8 +82,7 @@ class router {
                       "register_api: namespace contains no functions annotated with a route");
         static_assert(!has_duplicate_routes<Ns>(),
                       "register_api: duplicate method and path in namespace");
-        template for (constexpr auto member :
-                      std::define_static_array(
+        template for (constexpr auto member : std::define_static_array(
                           std::meta::members_of(Ns, std::meta::access_context::current()))) {
             if constexpr (std::meta::is_function(member)) {
                 constexpr auto annotations = std::define_static_array(
@@ -132,12 +105,15 @@ class router {
                     if constexpr (model != std::meta::info{}) {
                         static_assert(std::meta::is_type(model),
                                       "response_model must reference a type");
-                        add_with_response_model<model>(
-                            route_method, std::string(route_path.view()),
-                            meta::reflected_callable<member>{}, runtime_options);
+                        add_with_response_model<model>(route_method,
+                                                       std::string(route_path.view()),
+                                                       meta::reflected_callable<member>{},
+                                                       runtime_options);
                     } else {
-                        add(route_method, std::string(route_path.view()),
-                            meta::reflected_callable<member>{}, runtime_options);
+                        add(route_method,
+                            std::string(route_path.view()),
+                            meta::reflected_callable<member>{},
+                            runtime_options);
                     }
                 }
             }
@@ -157,13 +133,13 @@ class router {
         return m_routes.match(method, path);
     }
 
-    bool any_method_matches(std::string_view path) const {
-        return !allowed_methods(path).empty();
-    }
+    bool any_method_matches(std::string_view path) const { return !allowed_methods(path).empty(); }
 
   private:
     route_table m_routes;
     fiasco::router_options m_options;
+
+    friend struct test_route_access;
 
     template <std::meta::info Model, typename F>
     void add_with_response_model(http_method method,
@@ -172,7 +148,11 @@ class router {
                                  const fiasco::route_options& options) {
         using ModelType = [:Model:];
         auto schema = make_json_schema<ModelType>();
-        add(method, pattern, std::forward<F>(f), options, &schema,
+        add(method,
+            pattern,
+            std::forward<F>(f),
+            options,
+            &schema,
             response_media_type_for<ModelType>());
     }
 
@@ -189,11 +169,9 @@ class router {
             descriptor.response_media_type = std::move(response_media_type);
             descriptor.has_response_schema = true;
         }
-        descriptor.tags.insert(descriptor.tags.end(), m_options.tags.begin(),
-                               m_options.tags.end());
+        descriptor.tags.insert(descriptor.tags.end(), m_options.tags.begin(), m_options.tags.end());
         descriptor.deprecated = descriptor.deprecated || m_options.deprecated;
-        descriptor.include_in_schema =
-            descriptor.include_in_schema && m_options.include_in_schema;
+        descriptor.include_in_schema = descriptor.include_in_schema && m_options.include_in_schema;
 
         if constexpr (returns_async_handler<F>()) {
             auto handler = make_async_handler(std::forward<F>(f));
@@ -213,7 +191,8 @@ class router {
             if (options.status_code.has) {
                 auto inner = std::move(handler);
                 const int status = options.status_code.value;
-                handler = [inner = std::move(inner), status](const request& req) mutable -> response {
+                handler = [inner = std::move(inner),
+                           status](const request& req) mutable -> response {
                     response res = inner(req);
                     res.status_code = status;
                     return res;

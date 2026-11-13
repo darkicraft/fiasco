@@ -4,6 +4,7 @@
 
 #include "fiasco/fiasco.hpp"
 #include "support/http_client.hpp"
+#include "support/test_routes.hpp"
 #include "support/test_server.hpp"
 
 TEST_CASE("server handles sequential requests on one connection", "[http][keep-alive]") {
@@ -11,8 +12,8 @@ TEST_CASE("server handles sequential requests on one connection", "[http][keep-a
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/one", []() { return "one"; });
-    app.get("/two", []() { return "two"; });
+    fiasco_test::get(app, "/one", []() { return "one"; });
+    fiasco_test::get(app, "/two", []() { return "two"; });
     server.start();
 
     fiasco_test::http_connection connection(server.port());
@@ -33,7 +34,7 @@ TEST_CASE("server closes the connection when requested", "[http][connection]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/one", []() { return "one"; });
+    fiasco_test::get(app, "/one", []() { return "one"; });
     server.start();
 
     fiasco_test::http_connection connection(server.port());
@@ -62,7 +63,7 @@ TEST_CASE("server closes the connection when the response says close", "[http][c
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/close", []() {
+    fiasco_test::get(app, "/close", []() {
         auto response = fiasco::response::text("bye");
         response.headers["Connection"] = "close";
         return response;

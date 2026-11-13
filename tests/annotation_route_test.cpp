@@ -7,8 +7,7 @@
 
 namespace {
 
-fiasco::request make_request(std::string_view method, std::string url,
-                             std::string body = {}) {
+fiasco::request make_request(std::string_view method, std::string url, std::string body = {}) {
     fiasco::request req;
     req.method = fiasco::detail::string_to_method(std::string(method));
     req.url = std::move(url);
@@ -21,27 +20,28 @@ fiasco::request make_request(std::string_view method, std::string url,
 
 namespace annotation_routes {
 
-[[= fiasco::get("/annotation/hello")]]
+[[=fiasco::get("/annotation/hello")]]
 std::string hello() {
     return "hello";
 }
 
-[[= fiasco::post("/annotation/echo")]]
+[[=fiasco::post("/annotation/echo")]]
 std::string echo(std::string name) {
     return name;
 }
 
-[[= fiasco::get("/annotation/custom", {.summary = "custom", .status_code = 201})]]
+[[=fiasco::get("/annotation/custom",
+                {.summary = "custom", .status_code = 201})]]
 fiasco::response custom() {
     return fiasco::response::text("created", 201);
 }
 
-[[= fiasco::get("/annotation/files/{rest:path}")]]
+[[=fiasco::get("/annotation/files/{rest:path}")]]
 std::string files(std::string rest) {
     return rest;
 }
 
-[[= fiasco::get("/annotation/status", {.status_code = 202})]]
+[[=fiasco::get("/annotation/status", {.status_code = 202})]]
 std::string status_route() {
     return "accepted";
 }
@@ -66,13 +66,11 @@ TEST_CASE("annotation routes register with register_api", "[routing][annotations
     REQUIRE(custom.status_code == 201);
     REQUIRE(custom.body == "created\n");
 
-    const auto files =
-        client.handle(make_request("GET", "/annotation/files/a/b.txt"));
+    const auto files = client.handle(make_request("GET", "/annotation/files/a/b.txt"));
     REQUIRE(files.status_code == 200);
     REQUIRE(files.body == "a/b.txt\n");
 
-    const auto status =
-        client.handle(make_request("GET", "/annotation/status"));
+    const auto status = client.handle(make_request("GET", "/annotation/status"));
     REQUIRE(status.status_code == 202);
     REQUIRE(status.body == "accepted\n");
 }

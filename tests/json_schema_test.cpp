@@ -18,7 +18,7 @@ struct address {
 };
 
 struct profile {
-    std::string name [[= fiasco::field{.min_length = 2}]];
+    std::string name [[=fiasco::field{.min_length = 2}]];
     std::optional<int> age;
     address home;
     std::vector<std::string> tags;
@@ -66,8 +66,7 @@ TEST_CASE("JSON Schema expands reflected models into components", "[json_schema]
     CHECK((*profile_schema)["properties"]["tags"]["type"] == "array");
     CHECK((*profile_schema)["properties"]["tags"]["items"]["type"] == "string");
     CHECK((*profile_schema)["properties"]["scores"]["type"] == "object");
-    CHECK((*profile_schema)["properties"]["scores"]["additionalProperties"]["type"] ==
-          "integer");
+    CHECK((*profile_schema)["properties"]["scores"]["additionalProperties"]["type"] == "integer");
     CHECK((*profile_schema)["properties"]["window"]["type"] == "array");
     CHECK((*profile_schema)["properties"]["window"]["prefixItems"].size() == 2);
     CHECK((*profile_schema)["properties"]["window"]["minItems"] == 2);

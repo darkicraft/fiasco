@@ -4,13 +4,13 @@
 #include "fiasco/internal/http/http_error.hpp"
 #include "fiasco/internal/http/response.hpp"
 
+#include "fiasco/app/app.hpp"
+#include "fiasco/app/test_client.hpp"
 #include "fiasco/internal/json.hpp"
 #include "fiasco/internal/middleware.hpp"
 #include "fiasco/internal/router.hpp"
 #include "fiasco/middleware/cors.hpp"
-#include "fiasco/internal/server.hpp"
-#include "fiasco/app/app.hpp"
-#include "fiasco/app/test_client.hpp"
+#include "fiasco/server.hpp"
 
 namespace fiasco {
 
@@ -26,7 +26,6 @@ using next = detail::next_handler;
 using request = detail::request;
 using response = detail::response;
 using router = detail::router;
-using server = detail::server;
 using static_options = detail::static_options;
 using test_client = detail::test_client;
 
@@ -34,10 +33,8 @@ using test_client = detail::test_client;
 
 namespace fiasco::detail {
 
-inline void app::run() { run(server_config{}); }
-
-inline void app::run(server_config config) {
-    server srv{handler(), std::move(config)};
+inline void app::run() {
+    fiasco::server srv(handler(), fiasco::server_config{});
     srv.run();
 }
 

@@ -2,15 +2,15 @@
 
 The examples are split by feature: each target is a small, standalone program
 that demonstrates one part of the API. Start with `hello`, then follow the
-categories below. `all_in_one` is intentionally different: it combines several
-features into a heavier workload and is not the place to learn a single API.
+categories below. All route examples use the annotation API and
+`app.register_api<^^ns>()`.
 
-Every example is self-contained. All runnable examples read `FIASCO_PORT`
-(default `8080`), so several can run at once without editing code:
+Every example is self-contained and runs on the default `8080` via
+`app.run()`. Run one at a time when they share a port.
 
 ```shell
-FIASCO_PORT=9001 ./build/examples/path_params
-curl 'localhost:9001/items/42'
+./build/examples/path_params
+curl 'localhost:8080/items/42'
 ```
 
 `static_files` and `response_file` resolve their sample files relative to the
@@ -112,8 +112,7 @@ cmake --build build --target hello
 
 | Target | Source | Demonstrates |
 |---|---|---|
-| `server_configuration` | `server/configuration.cpp` | `server_config`, host/port/workers, port `0`, and `wait_until_started`/`port()` lifecycle helpers. |
-| `threading` | `server/threading.cpp` | Worker configuration and concurrent sleep/CPU/thread-identity probes. |
+| `threading` | `server/threading.cpp` | Concurrent sleep/CPU/thread-identity probes. |
 
 ## JSON
 
@@ -127,33 +126,5 @@ C++20 modules are parked for now. The sources under `modules/` are retained,
 but the module target and example are not built until the module surface is
 repaired.
 
-## All-in-one
-
-| Target | Source | Demonstrates |
-|---|---|---|
-| `all_in_one` | `all_in_one/main.cpp` | A heavier analytics/batch workload combining models, constraints, sub-routers, responses, JSON, and threading. |
-
-A representative request:
-
-```shell
-curl -X POST 'localhost:8080/v1/analyze/7/3/0.1/true?page=3&verbose=true&q=hi' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "req": {
-      "label": "aabbbcc",
-      "user-name": "ada",
-      "weights": [1, 2, 3],
-      "offsets": {"a": 1.5, "b": -2.0},
-      "window": [2, 9],
-      "meta": [7, "x", true],
-      "regions": [{"x": 5, "y": 5, "note": null}],
-      "focus": null
-    },
-    "tuning": {"percent": 50, "boxes": 9, "damping": 1.5, "code": "abc", "matrix_n": 5}
-  }'
-```
-
-The other focused examples are the reference for each feature used here.
-
-Each example's source header also contains the exact `curl` commands for the
-routes it registers.
+Each example's source header contains the exact `curl` commands for the routes
+it registers.

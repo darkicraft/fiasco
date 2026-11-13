@@ -20,10 +20,7 @@ using endpoint_fn = std::move_only_function<asio::awaitable<response>(request&)>
 
 class next_handler {
   public:
-    next_handler(middleware_chain& chain,
-                 std::size_t index,
-                 endpoint_fn& endpoint,
-                 bool& called)
+    next_handler(middleware_chain& chain, std::size_t index, endpoint_fn& endpoint, bool& called)
         : m_chain(&chain),
           m_index(index),
           m_endpoint(&endpoint),

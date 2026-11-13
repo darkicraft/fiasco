@@ -383,8 +383,7 @@ void from_json(const json_type& j, T& val) {
         if constexpr (std::signed_integral<T>) {
             std::int64_t parsed{};
             from_json(j, parsed);
-            if (parsed < std::numeric_limits<T>::min() ||
-                parsed > std::numeric_limits<T>::max()) {
+            if (parsed < std::numeric_limits<T>::min() || parsed > std::numeric_limits<T>::max()) {
                 throw request_validation_error({make_type_error<T>({}, j)});
             }
             val = static_cast<T>(parsed);
@@ -588,7 +587,9 @@ template <class D>
 }
 
 template <fiasco::field<> Spec, class D>
-void apply_field_constraints(const D& value, const json_type& raw, const std::string& loc_key,
+void apply_field_constraints(const D& value,
+                             const json_type& raw,
+                             const std::string& loc_key,
                              std::vector<validation_error>& errors) {
     using U = std::remove_cvref_t<D>;
     constexpr bool is_bool = std::same_as<U, bool>;
@@ -643,8 +644,7 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
             }
             if (!ok) {
                 raise("multiple_of",
-                      "Input should be a multiple of " +
-                          constraint_number(Spec.multiple_of.value),
+                      "Input should be a multiple of " + constraint_number(Spec.multiple_of.value),
                       numeric_ctx<D>("multiple_of", Spec.multiple_of.value));
                 return;
             }
@@ -656,7 +656,8 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
             return;
         }
         if (Spec.lt.has && !(v < Spec.lt.value)) {
-            raise("less_than", "Input should be less than " + constraint_number(Spec.lt.value),
+            raise("less_than",
+                  "Input should be less than " + constraint_number(Spec.lt.value),
                   numeric_ctx<D>("lt", Spec.lt.value));
             return;
         }
@@ -667,7 +668,8 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
             return;
         }
         if (Spec.gt.has && !(v > Spec.gt.value)) {
-            raise("greater_than", "Input should be greater than " + constraint_number(Spec.gt.value),
+            raise("greater_than",
+                  "Input should be greater than " + constraint_number(Spec.gt.value),
                   numeric_ctx<D>("gt", Spec.gt.value));
             return;
         }
@@ -718,8 +720,8 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
             raise("too_short",
                   std::string(field_type) + " should have at least " +
                       std::to_string(Spec.min_length.value) +
-                      plural(Spec.min_length.value, " item", " items") +
-                      " after validation, not " + std::to_string(value.size()),
+                      plural(Spec.min_length.value, " item", " items") + " after validation, not " +
+                      std::to_string(value.size()),
                   std::move(ctx));
             return;
         }
@@ -731,8 +733,8 @@ void apply_field_constraints(const D& value, const json_type& raw, const std::st
             raise("too_long",
                   std::string(field_type) + " should have at most " +
                       std::to_string(Spec.max_length.value) +
-                      plural(Spec.max_length.value, " item", " items") +
-                      " after validation, not " + std::to_string(value.size()),
+                      plural(Spec.max_length.value, " item", " items") + " after validation, not " +
+                      std::to_string(value.size()),
                   std::move(ctx));
             return;
         }

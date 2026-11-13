@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include "fiasco/fiasco.hpp"
+#include "support/test_routes.hpp"
 
 namespace {
 
@@ -48,32 +49,26 @@ TEST_CASE("response::file reads a file and infers its media type", "[file_respon
 TEST_CASE("response::file sets Content-Disposition for downloads", "[file_response]") {
     file_fixture fixture{"report"};
 
-    const auto res = fiasco::response::file(
-        fixture.path, {.filename = "report.txt"});
-    CHECK(res.headers.at("Content-Disposition") ==
-          "attachment; filename=\"report.txt\"");
+    const auto res = fiasco::response::file(fixture.path, {.filename = "report.txt"});
+    CHECK(res.headers.at("Content-Disposition") == "attachment; filename=\"report.txt\"");
 }
 
 TEST_CASE("response::file supports inline and media type overrides", "[file_response]") {
     file_fixture fixture{"report"};
 
-    const auto res = fiasco::response::file(
-        fixture.path,
-        {.filename = "report.txt",
-         .media_type = "application/custom",
-         .content_disposition_type = "inline"});
+    const auto res = fiasco::response::file(fixture.path,
+                                            {.filename = "report.txt",
+                                             .media_type = "application/custom",
+                                             .content_disposition_type = "inline"});
     CHECK(res.headers.at("Content-Type") == "application/custom");
-    CHECK(res.headers.at("Content-Disposition") ==
-          "inline; filename=\"report.txt\"");
+    CHECK(res.headers.at("Content-Disposition") == "inline; filename=\"report.txt\"");
 }
 
 TEST_CASE("response::file escapes quoted filenames", "[file_response]") {
     file_fixture fixture{"report"};
 
-    const auto res = fiasco::response::file(
-        fixture.path, {.filename = "a\"b.txt"});
-    CHECK(res.headers.at("Content-Disposition") ==
-          "attachment; filename=\"a\\\"b.txt\"");
+    const auto res = fiasco::response::file(fixture.path, {.filename = "a\"b.txt"});
+    CHECK(res.headers.at("Content-Disposition") == "attachment; filename=\"a\\\"b.txt\"");
 }
 
 TEST_CASE("response::file rejects missing files", "[file_response]") {
@@ -86,7 +81,7 @@ TEST_CASE("response::file works through the application seam", "[file_response]"
     file_fixture fixture{"download me"};
 
     fiasco::app app;
-    app.get("/download", [path = fixture.path] {
+    fiasco_test::get(app, "/download", [path = fixture.path] {
         return fiasco::response::file(path, {.filename = "download.txt"});
     });
 
@@ -95,6 +90,5 @@ TEST_CASE("response::file works through the application seam", "[file_response]"
 
     REQUIRE(res.status_code == 200);
     CHECK(res.body == "download me");
-    CHECK(res.headers.at("Content-Disposition") ==
-          "attachment; filename=\"download.txt\"");
+    CHECK(res.headers.at("Content-Disposition") == "attachment; filename=\"download.txt\"");
 }

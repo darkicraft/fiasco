@@ -126,27 +126,25 @@ struct session : std::enable_shared_from_this<session> {
                         out->headers[std::string(key)] = std::string(value);
                     }
                 },
-            .write =
-                [out](std::span<const std::byte> bytes) -> task<void> {
-                    out->body.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-                    co_return;
-                },
+            .write = [out](std::span<const std::byte> bytes) -> task<void> {
+                out->body.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+                co_return;
+            },
             .end = []() -> task<void> { co_return; },
         };
 
         std::string_view body_view = req->body;
         state->body = body_source{
-            .read =
-                [body_view, pos = std::size_t{0}]() mutable
+            .read = [body_view, pos = std::size_t{0}]() mutable
                 -> task<std::optional<std::span<const std::byte>>> {
-                    if (pos >= body_view.size()) {
-                        co_return std::nullopt;
-                    }
-                    auto chunk =
-                        std::as_bytes(std::span(body_view.data() + pos, body_view.size() - pos));
-                    pos = body_view.size();
-                    co_return chunk;
-                },
+                if (pos >= body_view.size()) {
+                    co_return std::nullopt;
+                }
+                auto chunk =
+                    std::as_bytes(std::span(body_view.data() + pos, body_view.size() - pos));
+                pos = body_view.size();
+                co_return chunk;
+            },
         };
 
         auto self = shared_from_this();
@@ -193,7 +191,9 @@ struct tcp_server::impl {
     std::unique_ptr<asio::signal_set> m_signals;
     unsigned int m_workers;
 
-    impl(uint16_t port, const std::string& host, application_handler handler,
+    impl(uint16_t port,
+         const std::string& host,
+         application_handler handler,
          unsigned int num_threads)
         : m_handler(std::move(handler)),
           m_workers(num_threads == 0 ? std::max(std::thread::hardware_concurrency(), 2u)
@@ -226,17 +226,16 @@ struct tcp_server::impl {
     void accept_at(std::size_t index) {
         auto& context = *m_contexts[index];
         auto& acceptor = *m_acceptors[index];
-        acceptor.async_accept(
-            context, [this, index](asio::error_code ec, tcp::socket socket) {
-                if (!ec) {
-                    std::make_shared<session>(std::move(socket),
-                                              m_contexts[index]->get_executor(), m_handler)
-                        ->start();
-                }
-                if (m_acceptors[index]->is_open()) {
-                    accept_at(index);
-                }
-            });
+        acceptor.async_accept(context, [this, index](asio::error_code ec, tcp::socket socket) {
+            if (!ec) {
+                std::make_shared<session>(
+                    std::move(socket), m_contexts[index]->get_executor(), m_handler)
+                    ->start();
+            }
+            if (m_acceptors[index]->is_open()) {
+                accept_at(index);
+            }
+        });
     }
 
     void run() {

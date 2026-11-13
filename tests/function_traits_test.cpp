@@ -43,8 +43,7 @@ TEST_CASE("convert_path_param fixed-width integers", "[function_traits]") {
     REQUIRE(convert_path_param<std::int32_t>("-123456") == -123456);
     REQUIRE(convert_path_param<std::uint32_t>("4294967295") == 4294967295u);
     REQUIRE(convert_path_param<std::int64_t>("2147483648") == 2147483648LL);
-    REQUIRE(convert_path_param<std::uint64_t>("18446744073709551615") ==
-            18446744073709551615ULL);
+    REQUIRE(convert_path_param<std::uint64_t>("18446744073709551615") == 18446744073709551615ULL);
 }
 
 TEST_CASE("convert_path_param float", "[function_traits]") {

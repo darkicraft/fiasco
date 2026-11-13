@@ -18,34 +18,33 @@
 #include <fiasco/fiasco.hpp>
 
 #include <atomic>
-#include <cstdint>
-#include <cstdlib>
 #include <optional>
 #include <string>
+
+using fiasco::body;
+using fiasco::depends;
+using fiasco::get;
+using fiasco::header;
+using fiasco::json;
+using fiasco::post;
+using fiasco::query;
 
 namespace {
 
 inline constexpr int graph_nodes = 19;
 inline constexpr int body_graph_nodes = 20;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
-
 std::atomic<int> g_calls{0};
 
-void count_call() {
+auto count_call() -> void {
     g_calls.fetch_add(1, std::memory_order_relaxed);
 }
 
-int graph_calls() {
+auto graph_calls() -> int {
     return g_calls.load(std::memory_order_relaxed);
 }
 
-void reset_graph() {
+auto reset_graph() -> void {
     g_calls.store(0, std::memory_order_relaxed);
 }
 
@@ -135,56 +134,54 @@ struct payload {
     int seed = 1;
 };
 
-request_id get_request_id(
-    const fiasco::request& request,
-    std::optional<std::string> trace [[= fiasco::header{.alias = "X-Trace"}]]) {
+auto get_request_id(const fiasco::request& request,
+                    std::optional<std::string> trace [[=header{.alias = "X-Trace"}]])
+    -> request_id {
     count_call();
     return request_id{trace.value_or(request.client_address)};
 }
 
-tenant get_tenant(std::optional<std::string> value
-                  [[= fiasco::header{.alias = "X-Tenant"}]]) {
+auto get_tenant(std::optional<std::string> value [[=header{.alias = "X-Tenant"}]]) -> tenant {
     count_call();
     return tenant{value.value_or("public")};
 }
 
-config get_config() {
+auto get_config() -> config {
     count_call();
     return config{};
 }
 
-flags get_flags() {
+auto get_flags() -> flags {
     count_call();
     return flags{};
 }
 
-db_session get_db(const fiasco::request& request) {
+auto get_db(const fiasco::request& request) -> db_session {
     (void)request;
     count_call();
     return db_session{};
 }
 
-cache_client get_cache() {
+auto get_cache() -> cache_client {
     count_call();
     return cache_client{};
 }
 
-metrics get_metrics() {
+auto get_metrics() -> metrics {
     count_call();
     return metrics{};
 }
 
-int get_limit(std::optional<int> limit [[= fiasco::query{.ge = 1, .alias = "limit"}]]) {
+auto get_limit(std::optional<int> limit [[=query{.ge = 1, .alias = "limit"}]]) -> int {
     count_call();
     return limit.value_or(10);
 }
 
-auth get_auth(
-    const fiasco::request& request,
-    request_id& id [[= fiasco::depends{^^get_request_id}]],
-    tenant& current_tenant [[= fiasco::depends{^^get_tenant}]],
-    std::optional<std::string> authorization
-    [[= fiasco::header{.alias = "Authorization"}]]) {
+auto get_auth(const fiasco::request& request,
+              request_id& id [[=depends{^^get_request_id}]],
+              tenant& current_tenant [[=depends{^^get_tenant}]],
+              std::optional<std::string> authorization [[=header{.alias = "Authorization"}]])
+    -> auth {
     (void)request;
     (void)id;
     (void)current_tenant;
@@ -192,149 +189,144 @@ auth get_auth(
     return auth{authorization.has_value()};
 }
 
-user get_user(
-    auth& current_auth [[= fiasco::depends{^^get_auth}]],
-    config& current_config [[= fiasco::depends{^^get_config}]],
-    request_id& id [[= fiasco::depends{^^get_request_id}]]) {
+auto get_user(auth& current_auth [[=depends{^^get_auth}]],
+              config& current_config [[=depends{^^get_config}]],
+              request_id& id [[=depends{^^get_request_id}]]) -> user {
     count_call();
     return user{current_auth.ok ? id.value : "anonymous-" + std::to_string(current_config.version)};
 }
 
-permissions get_permissions(
-    user& current_user [[= fiasco::depends{^^get_user}]],
-    flags& current_flags [[= fiasco::depends{^^get_flags}]]) {
+auto get_permissions(user& current_user [[=depends{^^get_user}]],
+                     flags& current_flags [[=depends{^^get_flags}]]) -> permissions {
     count_call();
-    return permissions{.read = true, .write = current_user.name != "anonymous-1" && current_flags.audit};
+    return permissions{.read = true,
+                       .write = current_user.name != "anonymous-1" && current_flags.audit};
 }
 
-rate_limit get_rate_limit(
-    cache_client& cache [[= fiasco::depends{^^get_cache}]],
-    flags& current_flags [[= fiasco::depends{^^get_flags}]],
-    int limit [[= fiasco::depends{^^get_limit}]]) {
+auto get_rate_limit(cache_client& cache [[=depends{^^get_cache}]],
+                    flags& current_flags [[=depends{^^get_flags}]],
+                    int limit [[=depends{^^get_limit}]]) -> rate_limit {
     (void)cache;
     count_call();
     return rate_limit{current_flags.beta ? limit : limit / 2};
 }
 
-trace get_trace(
-    metrics& current_metrics [[= fiasco::depends{^^get_metrics}]],
-    request_id& id [[= fiasco::depends{^^get_request_id}]]) {
+auto get_trace(metrics& current_metrics [[=depends{^^get_metrics}]],
+               request_id& id [[=depends{^^get_request_id}]]) -> trace {
     count_call();
     return trace{id.value, current_metrics.base};
 }
 
-quota get_quota(
-    rate_limit& limit [[= fiasco::depends{^^get_rate_limit}]],
-    config& current_config [[= fiasco::depends{^^get_config}]],
-    trace& current_trace [[= fiasco::depends{^^get_trace}]]) {
+auto get_quota(rate_limit& limit [[=depends{^^get_rate_limit}]],
+               config& current_config [[=depends{^^get_config}]],
+               trace& current_trace [[=depends{^^get_trace}]]) -> quota {
     count_call();
-    const int capped = limit.remaining < current_config.max_items ? limit.remaining
-                                                                  : current_config.max_items;
+    const int capped =
+        limit.remaining < current_config.max_items ? limit.remaining : current_config.max_items;
     return quota{capped + current_trace.depth};
 }
 
-audit get_audit(
-    db_session& db [[= fiasco::depends{^^get_db}]],
-    user& current_user [[= fiasco::depends{^^get_user}]],
-    trace& current_trace [[= fiasco::depends{^^get_trace}]]) {
+auto get_audit(db_session& db [[=depends{^^get_db}]],
+               user& current_user [[=depends{^^get_user}]],
+               trace& current_trace [[=depends{^^get_trace}]]) -> audit {
     (void)db;
     count_call();
     return audit{static_cast<int>(current_user.name.size() + current_trace.id.size())};
 }
 
-feature get_feature(
-    flags& current_flags [[= fiasco::depends{^^get_flags}]],
-    config& current_config [[= fiasco::depends{^^get_config}]],
-    permissions& current_permissions [[= fiasco::depends{^^get_permissions}]]) {
+auto get_feature(flags& current_flags [[=depends{^^get_flags}]],
+                 config& current_config [[=depends{^^get_config}]],
+                 permissions& current_permissions [[=depends{^^get_permissions}]]) -> feature {
     count_call();
     return feature{current_flags.beta && current_permissions.read && current_config.version > 0};
 }
 
-authorization get_authorization(
-    auth& current_auth [[= fiasco::depends{^^get_auth}]],
-    permissions& current_permissions [[= fiasco::depends{^^get_permissions}]],
-    quota& current_quota [[= fiasco::depends{^^get_quota}]],
-    trace& current_trace [[= fiasco::depends{^^get_trace}]]) {
+auto get_authorization(auth& current_auth [[=depends{^^get_auth}]],
+                       permissions& current_permissions [[=depends{^^get_permissions}]],
+                       quota& current_quota [[=depends{^^get_quota}]],
+                       trace& current_trace [[=depends{^^get_trace}]]) -> authorization {
     count_call();
     return authorization{current_auth.ok && current_permissions.write && current_quota.limit > 0 &&
                          current_trace.depth > 0};
 }
 
-policy get_policy(
-    feature& current_feature [[= fiasco::depends{^^get_feature}]],
-    quota& current_quota [[= fiasco::depends{^^get_quota}]],
-    config& current_config [[= fiasco::depends{^^get_config}]]) {
+auto get_policy(feature& current_feature [[=depends{^^get_feature}]],
+                quota& current_quota [[=depends{^^get_quota}]],
+                config& current_config [[=depends{^^get_config}]]) -> policy {
     count_call();
     return policy{current_config.version + (current_feature.enabled ? 1 : 0) +
                   (current_quota.limit > 0 ? 1 : 0)};
 }
 
-request_context get_request_context(
-    authorization& current_authorization [[= fiasco::depends{^^get_authorization}]],
-    policy& current_policy [[= fiasco::depends{^^get_policy}]],
-    audit& current_audit [[= fiasco::depends{^^get_audit}]],
-    trace& current_trace [[= fiasco::depends{^^get_trace}]]) {
+auto get_request_context(authorization& current_authorization [[=depends{^^get_authorization}]],
+                         policy& current_policy [[=depends{^^get_policy}]],
+                         audit& current_audit [[=depends{^^get_audit}]],
+                         trace& current_trace [[=depends{^^get_trace}]]) -> request_context {
     (void)current_authorization;
     count_call();
     return request_context{current_trace.id, current_audit.entries + current_policy.version};
 }
 
-payload get_payload(payload graph [[= fiasco::body{.alias = "graph"}]]) {
+auto get_payload(payload graph [[=body{.alias = "graph"}]]) -> payload {
     count_call();
     return graph;
 }
 
 }  // namespace
 
-int main() {
+namespace routes {
+
+[[=get("/graph/reset")]]
+auto graph_reset() -> json {
+    reset_graph();
+    return json{{"calls", graph_calls()}};
+}
+
+[[=get("/graph")]]
+auto graph(const request_context& context [[=depends{^^get_request_context}]],
+                               const authorization& authorization [[=depends{^^get_authorization}]],
+                               const policy& policy [[=depends{^^get_policy}]],
+                               const audit& audit [[=depends{^^get_audit}]],
+                               const trace& trace [[=depends{^^get_trace}]],
+                               const user& user [[=depends{^^get_user}]],
+                               const request_id& id [[=depends{^^get_request_id}]],
+                               const tenant& tenant [[=depends{^^get_tenant}]],
+                               int limit [[=depends{^^get_limit}]]) -> json {
+    return json{
+        {"calls", graph_calls()},
+        {"expected", graph_nodes},
+        {"request_id", id.value},
+        {"tenant", tenant.value},
+        {"user", user.name},
+        {"limit", limit},
+        {"context", context.id},
+        {"depth", context.depth},
+        {"allowed", authorization.allowed},
+        {"policy", policy.version},
+        {"audit_entries", audit.entries},
+        {"trace_depth", trace.depth},
+    };
+}
+
+[[=post("/graph/body")]]
+auto graph_body(
+    const request_context& context [[=depends{^^get_request_context}]],
+    const payload& request [[=body{.alias = "request"}]],
+    const payload& graph [[=depends{^^get_payload}]],
+    int limit [[=depends{^^get_limit}]]) -> json {
+    return json{
+        {"calls", graph_calls()},
+        {"expected", body_graph_nodes},
+        {"sum", request.seed + graph.seed},
+        {"limit", limit},
+        {"context", context.id},
+    };
+}
+
+}  // namespace routes
+
+auto main() -> int {
     fiasco::app app;
-
-    app.get("/graph/reset", []() {
-        reset_graph();
-        return fiasco::json{{"calls", graph_calls()}};
-    });
-
-    app.get("/graph", [](const request_context& context
-                         [[= fiasco::depends{^^get_request_context}]],
-                         const authorization& authorization
-                         [[= fiasco::depends{^^get_authorization}]],
-                         const policy& policy [[= fiasco::depends{^^get_policy}]],
-                         const audit& audit [[= fiasco::depends{^^get_audit}]],
-                         const trace& trace [[= fiasco::depends{^^get_trace}]],
-                         const user& user [[= fiasco::depends{^^get_user}]],
-                         const request_id& id [[= fiasco::depends{^^get_request_id}]],
-                         const tenant& tenant [[= fiasco::depends{^^get_tenant}]],
-                         int limit [[= fiasco::depends{^^get_limit}]]) {
-        return fiasco::json{
-            {"calls", graph_calls()},
-            {"expected", graph_nodes},
-            {"request_id", id.value},
-            {"tenant", tenant.value},
-            {"user", user.name},
-            {"limit", limit},
-            {"context", context.id},
-            {"depth", context.depth},
-            {"allowed", authorization.allowed},
-            {"policy", policy.version},
-            {"audit_entries", audit.entries},
-            {"trace_depth", trace.depth},
-        };
-    });
-
-    app.post("/graph/body",
-             [](const request_context& context
-                    [[= fiasco::depends{^^get_request_context}]],
-                const payload& request [[= fiasco::body{.alias = "request"}]],
-                const payload& graph [[= fiasco::depends{^^get_payload}]],
-                int limit [[= fiasco::depends{^^get_limit}]]) {
-                 return fiasco::json{
-                     {"calls", graph_calls()},
-                     {"expected", body_graph_nodes},
-                     {"sum", request.seed + graph.seed},
-                     {"limit", limit},
-                     {"context", context.id},
-                 };
-             });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

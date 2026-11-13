@@ -40,8 +40,7 @@ struct app_options {
     std::string swagger_ui_css_url =
         "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css";
     std::string swagger_ui_favicon_url;
-    std::string redoc_js_url =
-        "https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js";
+    std::string redoc_js_url = "https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js";
     std::string redoc_favicon_url;
     bool redoc_with_google_fonts = true;
 

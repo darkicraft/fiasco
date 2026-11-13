@@ -20,9 +20,7 @@ class http_connection {
     http_connection(const http_connection&) = delete;
     http_connection& operator=(const http_connection&) = delete;
 
-    void send(std::string_view raw) {
-        asio::write(m_socket, asio::buffer(raw.data(), raw.size()));
-    }
+    void send(std::string_view raw) { asio::write(m_socket, asio::buffer(raw.data(), raw.size())); }
 
     std::string read_response() {
         while (true) {

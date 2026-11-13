@@ -1,7 +1,7 @@
 // Reflected request and response models: no macros, no boilerplate.
 //
 //   cmake --build build --target body_model
-//   FIASCO_PORT=8080 ./build/examples/body_model
+//   ./build/examples/body_model
 //
 //   curl -X POST localhost:8080/users \
 //     -H 'Content-Type: application/json' \
@@ -15,18 +15,11 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <string>
 
-namespace {
+using fiasco::post;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
+namespace {
 
 struct create_user {
     std::string username;
@@ -40,12 +33,17 @@ struct user_view {
 
 }  // namespace
 
+namespace routes {
+
+[[=post("/users")]]
+auto create_user_route(create_user input) -> user_view {
+    return {input.username, input.age + 1};
+}
+
+}  // namespace routes
+
 int main() {
     fiasco::app app;
-
-    app.post("/users", [](create_user input) -> user_view {
-        return {input.username, input.age + 1};
-    });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

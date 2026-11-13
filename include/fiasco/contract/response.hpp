@@ -1,7 +1,7 @@
 #pragma once
 
-#include <chrono>
 #include <cctype>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <format>
@@ -37,7 +37,8 @@ namespace response_detail {
 
 inline std::string media_type_for_path(std::string_view path) {
     const auto dot = path.rfind('.');
-    std::string extension = (dot == std::string_view::npos) ? std::string{} : std::string(path.substr(dot));
+    std::string extension =
+        (dot == std::string_view::npos) ? std::string{} : std::string(path.substr(dot));
     for (char& c : extension) {
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
@@ -150,10 +151,9 @@ inline std::string http_date(std::chrono::system_clock::time_point point) {
     const weekday day_of_week{whole_days};
     const hh_mm_ss time{whole_seconds - whole_days};
 
-    static constexpr const char* weekdays[] = {"Sun", "Mon", "Tue", "Wed",
-                                               "Thu", "Fri", "Sat"};
-    static constexpr const char* months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    static constexpr const char* weekdays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    static constexpr const char* months[] = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
     return std::format("{}, {:02} {} {:04} {:02}:{:02}:{:02} GMT",
                        weekdays[day_of_week.c_encoding()],
@@ -280,8 +280,7 @@ struct response {
     response& set_cookie(std::string_view name,
                          std::string_view value,
                          const cookie_options& options = {}) {
-        set_cookie_headers.push_back(
-            response_detail::make_cookie_header(name, value, options));
+        set_cookie_headers.push_back(response_detail::make_cookie_header(name, value, options));
         return *this;
     }
 
@@ -297,8 +296,7 @@ struct response {
         return r;
     }
 
-    static response file(const std::filesystem::path& path,
-                         const file_options& options = {}) {
+    static response file(const std::filesystem::path& path, const file_options& options = {}) {
         std::error_code ec;
         if (!std::filesystem::is_regular_file(path, ec)) {
             throw std::runtime_error("file does not exist: " + path.string());
@@ -310,16 +308,14 @@ struct response {
         }
 
         response r;
-        r.headers["Content-Type"] =
-            options.media_type.has_value()
-                ? *options.media_type
-                : response_detail::media_type_for_path(path.string());
+        r.headers["Content-Type"] = options.media_type.has_value()
+                                        ? *options.media_type
+                                        : response_detail::media_type_for_path(path.string());
         const auto disposition = response_detail::content_disposition(options);
         if (!disposition.empty()) {
             r.headers["Content-Disposition"] = disposition;
         }
-        r.body.assign(std::istreambuf_iterator<char>(input),
-                      std::istreambuf_iterator<char>());
+        r.body.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
         return r;
     }
 

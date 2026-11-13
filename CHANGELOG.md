@@ -61,7 +61,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The transport now drives a type-erased application handler; the handler is
   still free of sockets and Asio beyond the temporary `task` alias.
 - `fiasco_http` owns the HTTP session and parser; `fiasco_core` is Asio only.
-- All runnable examples honor `FIASCO_PORT`.
+- Route declaration is annotation-only: public `app.get/post/...` and
+  `router.get/...` shortcuts were removed. Imperative `add_route` is deferred.
+- `fiasco::server` and `server_config` are public; `app.run()` is zero-config
+  sugar, and runtime configuration is passed to `fiasco::server`.
+- Examples use the zero-config `app.run()` form.
 - C++20 module targets and the module CI job are parked; the sources remain
   under `modules/` but are not built.
 
@@ -69,5 +73,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Per-server logging (`log_registry`) and access logging are removed from the
   runtime. Logging will return via spdlog/Quill at the runtime layer.
+- The redundant `all_in_one` example.
 
 [Unreleased]: https://github.com/darkicraft/fiasco/commits/main

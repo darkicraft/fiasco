@@ -5,6 +5,7 @@
 
 #include "fiasco/fiasco.hpp"
 #include "support/http_client.hpp"
+#include "support/test_routes.hpp"
 #include "support/test_server.hpp"
 
 namespace fiasco::detail {
@@ -21,7 +22,7 @@ struct RequiredInput {
 };
 
 struct ConstrainedInput {
-    int a [[= field{.gt = 0, .le = 10}]] = 0;
+    int a [[=field{.gt = 0, .le = 10}]] = 0;
 };
 
 struct ExtraInput {
@@ -41,26 +42,26 @@ int uncached_dependency_value() {
     return uncached_dependency_calls;
 }
 
-int uncached_parent(int value [[= depends{^^uncached_dependency_value, {.use_cache = false}}]]) {
+int uncached_parent(int value [[=depends{^^uncached_dependency_value, {.use_cache = false}}]]) {
     return value * 10;
 }
 
 struct uncached_nested_handler {
-    std::string operator()(int first [[= depends{^^uncached_parent, {.use_cache = false}}]],
-                           int second [[= depends{^^uncached_parent, {.use_cache = false}}]]) const {
+    std::string operator()(int first [[=depends{^^uncached_parent, {.use_cache = false}}]],
+                           int second [[=depends{^^uncached_parent, {.use_cache = false}}]]) const {
         return std::to_string(first) + ":" + std::to_string(second);
     }
 };
 
-int nested_dependency(int base [[= depends{^^dependency_value}]]) {
+int nested_dependency(int base [[=depends{^^dependency_value}]]) {
     return base + 2;
 }
 
-int header_dependency(std::string token [[= fiasco::header{.alias = "X-Dep"}]]) {
+int header_dependency(std::string token [[=fiasco::header{.alias = "X-Dep"}]]) {
     return static_cast<int>(token.size());
 }
 
-int query_dependency(int n [[= fiasco::query{.ge = 1, .alias = "n"}]]) {
+int query_dependency(int n [[=fiasco::query{.ge = 1, .alias = "n"}]]) {
     return n;
 }
 
@@ -95,7 +96,7 @@ struct handler_body {
 };
 
 dependency_body get_dependency_body(
-    dependency_body payload [[= fiasco::body{.alias = "dependency"}]]) {
+    dependency_body payload [[=fiasco::body{.alias = "dependency"}]]) {
     return payload;
 }
 
@@ -108,7 +109,7 @@ dependency_body get_shared_body(dependency_body payload) {
 }
 
 struct constrained_body {
-    int n [[= field{.ge = 1}]] = 0;
+    int n [[=field{.ge = 1}]] = 0;
 };
 
 struct async_user {
@@ -131,7 +132,7 @@ TEST_CASE("integration GET returns 200", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/hello", []() -> std::string { return "world"; });
+    fiasco_test::get(app, "/hello", []() -> std::string { return "world"; });
 
     server.start();
 
@@ -146,7 +147,7 @@ TEST_CASE("integration 404 not found", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/exists", []() -> std::string { return "ok"; });
+    fiasco_test::get(app, "/exists", []() -> std::string { return "ok"; });
 
     server.start();
 
@@ -161,7 +162,7 @@ TEST_CASE("integration 405 method not allowed", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/resource", []() -> std::string { return "ok"; });
+    fiasco_test::get(app, "/resource", []() -> std::string { return "ok"; });
 
     server.start();
 
@@ -175,7 +176,8 @@ TEST_CASE("integration invalid JSON body returns 422", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
+    fiasco_test::post(
+        app, "/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
 
     server.start();
 
@@ -195,7 +197,7 @@ TEST_CASE("integration 500 internal error from handler", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/crash", []() -> std::string { throw std::runtime_error("boom"); });
+    fiasco_test::get(app, "/crash", []() -> std::string { throw std::runtime_error("boom"); });
 
     server.start();
 
@@ -209,7 +211,8 @@ TEST_CASE("integration path parameters", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/users/{uid}", [](int uid) -> std::string { return "user:" + std::to_string(uid); });
+    fiasco_test::get(
+        app, "/users/{uid}", [](int uid) -> std::string { return "user:" + std::to_string(uid); });
 
     server.start();
 
@@ -224,7 +227,7 @@ TEST_CASE("integration JSON body deserialization", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/sum", [](const fiasco::detail::SumInput& input) -> std::string {
+    fiasco_test::post(app, "/sum", [](const fiasco::detail::SumInput& input) -> std::string {
         return std::to_string(input.a + input.b);
     });
 
@@ -246,7 +249,8 @@ TEST_CASE("integration POST empty body with JSON model returns 422", "[integrati
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
+    fiasco_test::post(
+        app, "/sum", [](const fiasco::detail::SumInput&) -> std::string { return ""; });
 
     server.start();
 
@@ -266,7 +270,8 @@ TEST_CASE("integration POST missing field returns 422 with the field name", "[in
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/sum", [](const fiasco::detail::RequiredInput&) -> std::string { return ""; });
+    fiasco_test::post(
+        app, "/sum", [](const fiasco::detail::RequiredInput&) -> std::string { return ""; });
 
     server.start();
 
@@ -288,7 +293,8 @@ TEST_CASE("integration POST constraint violation returns Pydantic 422 with ctx",
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/c", [](const fiasco::detail::ConstrainedInput&) -> std::string { return ""; });
+    fiasco_test::post(
+        app, "/c", [](const fiasco::detail::ConstrainedInput&) -> std::string { return ""; });
 
     server.start();
 
@@ -310,7 +316,7 @@ TEST_CASE("integration query parameter", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/greet", [](std::string name) -> std::string { return "hi " + name; });
+    fiasco_test::get(app, "/greet", [](std::string name) -> std::string { return "hi " + name; });
 
     server.start();
 
@@ -325,9 +331,10 @@ TEST_CASE("integration query parameters are decoded", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/echo", [](std::string name, std::string empty, std::string flag) -> std::string {
-        return name + "|" + empty + "|" + flag;
-    });
+    fiasco_test::get(
+        app, "/echo", [](std::string name, std::string empty, std::string flag) -> std::string {
+            return name + "|" + empty + "|" + flag;
+        });
 
     server.start();
 
@@ -343,7 +350,7 @@ TEST_CASE("integration missing query parameter returns 422", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/greet", [](std::string name) -> std::string { return "hi " + name; });
+    fiasco_test::get(app, "/greet", [](std::string name) -> std::string { return "hi " + name; });
 
     server.start();
 
@@ -359,7 +366,7 @@ TEST_CASE("integration path params bind by name, not position", "[integration]")
     };
     auto& app = server.app();
     // parameter order is the reverse of the path placeholders
-    app.get("/{a}/{b}", [](int b, int a) -> std::string {
+    fiasco_test::get(app, "/{a}/{b}", [](int b, int a) -> std::string {
         return "a=" + std::to_string(a) + " b=" + std::to_string(b);
     });
 
@@ -376,9 +383,10 @@ TEST_CASE("integration multiple body params are embedded by name", "[integration
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/embed", [](fiasco::detail::SumInput s, fiasco::detail::ExtraInput o) -> std::string {
-        return std::to_string(s.a + s.b + o.c);
-    });
+    fiasco_test::post(
+        app, "/embed", [](fiasco::detail::SumInput s, fiasco::detail::ExtraInput o) -> std::string {
+            return std::to_string(s.a + s.b + o.c);
+        });
 
     server.start();
 
@@ -398,9 +406,10 @@ TEST_CASE("integration path scalar + body model is not embedded", "[integration]
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/sum/{label}", [](std::string label, fiasco::detail::SumInput input) -> std::string {
-        return label + ":" + std::to_string(input.a + input.b);
-    });
+    fiasco_test::post(
+        app, "/sum/{label}", [](std::string label, fiasco::detail::SumInput input) -> std::string {
+            return label + ":" + std::to_string(input.a + input.b);
+        });
 
     server.start();
 
@@ -418,8 +427,9 @@ TEST_CASE("integration explicit path parameter with constraint", "[integration]"
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/items/{id}",
-            [](int id [[= fiasco::path{.ge = 5}]]) -> std::string { return std::to_string(id); });
+    fiasco_test::get(app, "/items/{id}", [](int id [[=fiasco::path{.ge = 5}]]) -> std::string {
+        return std::to_string(id);
+    });
 
     server.start();
 
@@ -441,10 +451,12 @@ TEST_CASE("integration explicit query parameter with alias and constraint", "[in
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/search",
-            [](std::string term [[= fiasco::query{.min_length = 2, .alias = "q"}]]) -> std::string {
-                return term;
-            });
+    fiasco_test::get(
+        app,
+        "/search",
+        [](std::string term [[=fiasco::query{.min_length = 2, .alias = "q"}]]) -> std::string {
+            return term;
+        });
 
     server.start();
 
@@ -470,15 +482,16 @@ TEST_CASE("integration explicit query parameter with pattern", "[integration]") 
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/code",
-            [](std::string code [[= fiasco::query{.pattern = "^[a-z]+$"}]]) -> std::string {
-                return code;
-            });
+    fiasco_test::get(app,
+                     "/code",
+                     [](std::string code [[=fiasco::query{.pattern = "^[a-z]+$"}]]) -> std::string {
+                         return code;
+                     });
 
     server.start();
 
-    auto valid =
-        fiasco_test::send_request(server.port(), "GET /code?code=abc HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    auto valid = fiasco_test::send_request(
+        server.port(), "GET /code?code=abc HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(fiasco_test::extract_status(valid) == 200);
     REQUIRE(fiasco_test::extract_body(valid) == "abc\n");
 
@@ -496,9 +509,11 @@ TEST_CASE("integration explicit header parameter is case-insensitive", "[integra
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/token", [](std::string token [[= fiasco::header{.alias = "X-Token"}]]) -> std::string {
-        return token;
-    });
+    fiasco_test::get(app,
+                     "/token",
+                     [](std::string token [[=fiasco::header{.alias = "X-Token"}]]) -> std::string {
+                         return token;
+                     });
 
     server.start();
 
@@ -519,10 +534,12 @@ TEST_CASE("integration explicit cookie parameter", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/session",
-            [](std::string session [[= fiasco::cookie{.alias = "session_id"}]]) -> std::string {
-                return session;
-            });
+    fiasco_test::get(
+        app,
+        "/session",
+        [](std::string session [[=fiasco::cookie{.alias = "session_id"}]]) -> std::string {
+            return session;
+        });
 
     server.start();
 
@@ -544,9 +561,10 @@ TEST_CASE("integration explicit body parameter", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/sum", [](const fiasco::detail::SumInput& input [[= fiasco::body{}]]) -> std::string {
-        return std::to_string(input.a + input.b);
-    });
+    fiasco_test::post(
+        app, "/sum", [](const fiasco::detail::SumInput& input [[=fiasco::body{}]]) -> std::string {
+            return std::to_string(input.a + input.b);
+        });
 
     server.start();
 
@@ -564,8 +582,9 @@ TEST_CASE("integration explicit scalar body parameter with constraint", "[integr
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/double",
-             [](int n [[= fiasco::body{.ge = 1}]]) -> std::string { return std::to_string(n * 2); });
+    fiasco_test::post(app, "/double", [](int n [[=fiasco::body{.ge = 1}]]) -> std::string {
+        return std::to_string(n * 2);
+    });
 
     server.start();
 
@@ -591,11 +610,13 @@ TEST_CASE("integration explicit multiple body parameters use aliases", "[integra
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/combine",
-             [](fiasco::detail::SumInput s [[= fiasco::body{.alias = "left"}]],
-                fiasco::detail::ExtraInput o [[= fiasco::body{.alias = "right"}]]) -> std::string {
-                 return std::to_string(s.a + s.b + o.c);
-             });
+    fiasco_test::post(
+        app,
+        "/combine",
+        [](fiasco::detail::SumInput s [[=fiasco::body{.alias = "left"}]],
+           fiasco::detail::ExtraInput o [[=fiasco::body{.alias = "right"}]]) -> std::string {
+            return std::to_string(s.a + s.b + o.c);
+        });
 
     server.start();
 
@@ -613,8 +634,9 @@ TEST_CASE("integration optional query parameter", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/optional",
-            [](std::optional<int> n) -> std::string { return n ? std::to_string(*n) : "none"; });
+    fiasco_test::get(app, "/optional", [](std::optional<int> n) -> std::string {
+        return n ? std::to_string(*n) : "none";
+    });
 
     server.start();
 
@@ -634,9 +656,10 @@ TEST_CASE("integration explicit optional query parameter with constraint", "[int
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/optional", [](std::optional<int> n [[= fiasco::query{.ge = 1}]]) -> std::string {
-        return n ? std::to_string(*n) : "none";
-    });
+    fiasco_test::get(
+        app, "/optional", [](std::optional<int> n [[=fiasco::query{.ge = 1}]]) -> std::string {
+            return n ? std::to_string(*n) : "none";
+        });
 
     server.start();
 
@@ -658,10 +681,12 @@ TEST_CASE("integration dependency value", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/dependency",
-            [](int value [[= fiasco::depends{^^fiasco::detail::dependency_value}]]) -> std::string {
-                return std::to_string(value);
-            });
+    fiasco_test::get(
+        app,
+        "/dependency",
+        [](int value [[=fiasco::depends{^^fiasco::detail::dependency_value}]]) -> std::string {
+            return std::to_string(value);
+        });
 
     server.start();
 
@@ -677,10 +702,11 @@ TEST_CASE("integration dependency cache reuses nested providers", "[integration]
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get(
+    fiasco_test::get(
+        app,
         "/dependency",
-        [](int base [[= fiasco::depends{^^fiasco::detail::dependency_value}]],
-           int nested [[= fiasco::depends{^^fiasco::detail::nested_dependency}]]) -> std::string {
+        [](int base [[=fiasco::depends{^^fiasco::detail::dependency_value}]],
+           int nested [[=fiasco::depends{^^fiasco::detail::nested_dependency}]]) -> std::string {
             return std::to_string(base) + ":" + std::to_string(nested);
         });
 
@@ -705,10 +731,12 @@ TEST_CASE("integration dependency parameters use request annotations", "[integra
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/dependency",
-            [](int size [[= fiasco::depends{^^fiasco::detail::header_dependency}]]) -> std::string {
-                return std::to_string(size);
-            });
+    fiasco_test::get(
+        app,
+        "/dependency",
+        [](int size [[=fiasco::depends{^^fiasco::detail::header_dependency}]]) -> std::string {
+            return std::to_string(size);
+        });
 
     server.start();
 
@@ -725,12 +753,13 @@ TEST_CASE("integration dependency RAII cleanup", "[integration]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/cleanup",
-            [](fiasco::detail::cleanup_resource& resource
-                   [[= fiasco::depends{^^fiasco::detail::make_cleanup_resource}]]) -> std::string {
-                (void)resource;
-                return "ok";
-            });
+    fiasco_test::get(app,
+                     "/cleanup",
+                     [](fiasco::detail::cleanup_resource& resource [[=fiasco::depends{
+                         ^^fiasco::detail::make_cleanup_resource}]]) -> std::string {
+                         (void)resource;
+                         return "ok";
+                     });
 
     server.start();
 
@@ -746,10 +775,12 @@ TEST_CASE("integration dependency can short-circuit with http_error", "[integrat
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/protected",
-            [](int user [[= fiasco::depends{^^fiasco::detail::auth_dependency}]]) -> std::string {
-                return std::to_string(user);
-            });
+    fiasco_test::get(
+        app,
+        "/protected",
+        [](int user [[=fiasco::depends{^^fiasco::detail::auth_dependency}]]) -> std::string {
+            return std::to_string(user);
+        });
 
     server.start();
 
@@ -772,12 +803,13 @@ TEST_CASE("integration dependency RAII cleanup when the handler throws", "[integ
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/cleanup-throw",
-            [](fiasco::detail::cleanup_resource& resource
-                   [[= fiasco::depends{^^fiasco::detail::make_cleanup_resource}]]) -> std::string {
-                (void)resource;
-                throw std::runtime_error("handler failed");
-            });
+    fiasco_test::get(app,
+                     "/cleanup-throw",
+                     [](fiasco::detail::cleanup_resource& resource [[=fiasco::depends{
+                         ^^fiasco::detail::make_cleanup_resource}]]) -> std::string {
+                         (void)resource;
+                         throw std::runtime_error("handler failed");
+                     });
 
     server.start();
 
@@ -793,10 +825,12 @@ TEST_CASE("integration dependency parameters use constraints", "[integration]") 
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/dependency",
-            [](int n [[= fiasco::depends{^^fiasco::detail::query_dependency}]]) -> std::string {
-                return std::to_string(n);
-            });
+    fiasco_test::get(
+        app,
+        "/dependency",
+        [](int n [[=fiasco::depends{^^fiasco::detail::query_dependency}]]) -> std::string {
+            return std::to_string(n);
+        });
 
     server.start();
 
@@ -818,12 +852,13 @@ TEST_CASE("integration body parameters are shared with dependencies", "[integrat
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/body-dependency",
-             [](fiasco::detail::handler_body handler [[= fiasco::body{.alias = "handler"}]],
-                fiasco::detail::dependency_body dependency
-                    [[= fiasco::depends{^^fiasco::detail::get_dependency_body}]]) -> std::string {
-                 return std::to_string(handler.value + dependency.value);
-             });
+    fiasco_test::post(app,
+                      "/body-dependency",
+                      [](fiasco::detail::handler_body handler [[=fiasco::body{.alias = "handler"}]],
+                         fiasco::detail::dependency_body dependency [[=fiasco::depends{
+                             ^^fiasco::detail::get_dependency_body}]]) -> std::string {
+                          return std::to_string(handler.value + dependency.value);
+                      });
 
     server.start();
 
@@ -853,11 +888,12 @@ TEST_CASE("integration dependency can be the only body parameter", "[integration
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/body-dependency",
-             [](fiasco::detail::dependency_body dependency
-                    [[= fiasco::depends{^^fiasco::detail::get_only_dependency_body}]]) -> std::string {
-                 return std::to_string(dependency.value);
-             });
+    fiasco_test::post(app,
+                      "/body-dependency",
+                      [](fiasco::detail::dependency_body dependency [[=fiasco::depends{
+                          ^^fiasco::detail::get_only_dependency_body}]]) -> std::string {
+                          return std::to_string(dependency.value);
+                      });
 
     server.start();
 
@@ -875,12 +911,14 @@ TEST_CASE("integration same-name body parameters are not embedded", "[integratio
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/body-dependency",
-             [](fiasco::detail::dependency_body payload,
-                fiasco::detail::dependency_body dependency
-                    [[= fiasco::depends{^^fiasco::detail::get_shared_body}]]) -> std::string {
-                 return std::to_string(payload.value + dependency.value);
-             });
+    fiasco_test::post(
+        app,
+        "/body-dependency",
+        [](fiasco::detail::dependency_body payload,
+           fiasco::detail::dependency_body
+               dependency [[=fiasco::depends{^^fiasco::detail::get_shared_body}]]) -> std::string {
+            return std::to_string(payload.value + dependency.value);
+        });
 
     server.start();
 
@@ -898,11 +936,12 @@ TEST_CASE("integration dependency body validation errors use body locations", "[
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.post("/body-dependency",
-             [](fiasco::detail::constrained_body dependency
-                    [[= fiasco::depends{^^fiasco::detail::get_constrained_body}]]) -> std::string {
-                 return std::to_string(dependency.n);
-             });
+    fiasco_test::post(app,
+                      "/body-dependency",
+                      [](fiasco::detail::constrained_body dependency [[=fiasco::depends{
+                          ^^fiasco::detail::get_constrained_body}]]) -> std::string {
+                          return std::to_string(dependency.n);
+                      });
 
     server.start();
 
@@ -923,13 +962,14 @@ TEST_CASE("integration dependency use_cache false runs each occurrence", "[integ
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/uncached",
-            [](int first [[= fiasco::depends{^^fiasco::detail::uncached_dependency_value,
-                                            {.use_cache = false}}]],
-               int second [[= fiasco::depends{^^fiasco::detail::uncached_dependency_value,
-                                             {.use_cache = false}}]]) -> std::string {
-                return std::to_string(first) + ":" + std::to_string(second);
-            });
+    fiasco_test::get(app,
+                     "/uncached",
+                     [](int first [[=fiasco::depends{^^fiasco::detail::uncached_dependency_value,
+                                                     {.use_cache = false}}]],
+                        int second [[=fiasco::depends{^^fiasco::detail::uncached_dependency_value,
+                                                      {.use_cache = false}}]]) -> std::string {
+                         return std::to_string(first) + ":" + std::to_string(second);
+                     });
 
     server.start();
 
@@ -947,12 +987,14 @@ TEST_CASE("integration use_cache false keeps RAII dependency storage alive", "[i
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/uncached-cleanup",
-            [](fiasco::detail::cleanup_resource& resource [[= fiasco::depends{
-                ^^fiasco::detail::make_cleanup_resource, {.use_cache = false}}]]) -> std::string {
-                (void)resource;
-                return "ok";
-            });
+    fiasco_test::get(
+        app,
+        "/uncached-cleanup",
+        [](fiasco::detail::cleanup_resource& resource [[=fiasco::depends{
+            ^^fiasco::detail::make_cleanup_resource, {.use_cache = false}}]]) -> std::string {
+            (void)resource;
+            return "ok";
+        });
 
     server.start();
 
@@ -969,7 +1011,7 @@ TEST_CASE("integration nested use_cache false reruns its provider", "[integratio
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/uncached-nested", fiasco::detail::uncached_nested_handler{});
+    fiasco_test::get(app, "/uncached-nested", fiasco::detail::uncached_nested_handler{});
 
     server.start();
 
@@ -986,12 +1028,14 @@ TEST_CASE("integration cached and uncached occurrences do not share a slot", "[i
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/mixed-cache",
-            [](int cached [[= fiasco::depends{^^fiasco::detail::uncached_dependency_value}]],
-               int uncached [[= fiasco::depends{^^fiasco::detail::uncached_dependency_value,
-                                               {.use_cache = false}}]]) -> std::string {
-                return std::to_string(cached) + ":" + std::to_string(uncached);
-            });
+    fiasco_test::get(
+        app,
+        "/mixed-cache",
+        [](int cached [[=fiasco::depends{^^fiasco::detail::uncached_dependency_value}]],
+           int uncached [[=fiasco::depends{^^fiasco::detail::uncached_dependency_value,
+                                           {.use_cache = false}}]]) -> std::string {
+            return std::to_string(cached) + ":" + std::to_string(uncached);
+        });
 
     server.start();
 
@@ -1007,16 +1051,17 @@ TEST_CASE("integration async handler returns a model", "[integration][async]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/async-user", []() -> fiasco::async {
+    fiasco_test::get(app, "/async-user", []() -> fiasco::async {
         co_return fiasco::detail::async_user{"ada", 36};
     });
 
     server.start();
 
-    auto resp =
-        fiasco_test::send_request(server.port(), "GET /async-user HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /async-user HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(fiasco_test::extract_status(resp) == 200);
-    REQUIRE(fiasco_test::extract_body(resp) == R"({"name":"ada","age":36})" "\n");
+    REQUIRE(fiasco_test::extract_body(resp) == R"({"name":"ada","age":36})"
+                                               "\n");
 }
 
 TEST_CASE("integration async handler binds path and query parameters", "[integration][async]") {
@@ -1024,7 +1069,7 @@ TEST_CASE("integration async handler binds path and query parameters", "[integra
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/async-items/{id}", [](std::string q, int id) -> fiasco::async {
+    fiasco_test::get(app, "/async-items/{id}", [](std::string q, int id) -> fiasco::async {
         co_return fiasco::json{{"id", id}, {"q", q}};
     });
 
@@ -1033,7 +1078,8 @@ TEST_CASE("integration async handler binds path and query parameters", "[integra
     auto resp = fiasco_test::send_request(
         server.port(), "GET /async-items/7?q=cats HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(fiasco_test::extract_status(resp) == 200);
-    REQUIRE(fiasco_test::extract_body(resp) == R"({"id":7,"q":"cats"})" "\n");
+    REQUIRE(fiasco_test::extract_body(resp) == R"({"id":7,"q":"cats"})"
+                                               "\n");
 }
 
 TEST_CASE("integration async handler validation uses body locations", "[integration][async]") {
@@ -1041,8 +1087,9 @@ TEST_CASE("integration async handler validation uses body locations", "[integrat
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/async-constrained/{id}",
-            [](int id [[= fiasco::path{.ge = 1}]]) -> fiasco::async { co_return id; });
+    fiasco_test::get(app,
+                     "/async-constrained/{id}",
+                     [](int id [[=fiasco::path{.ge = 1}]]) -> fiasco::async { co_return id; });
 
     server.start();
 
@@ -1057,17 +1104,18 @@ TEST_CASE("integration async handler translates http_error", "[integration][asyn
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/async-error", []() -> fiasco::async {
+    fiasco_test::get(app, "/async-error", []() -> fiasco::async {
         throw fiasco::http_error(401, "Not authenticated");
         co_return 1;
     });
 
     server.start();
 
-    auto resp = fiasco_test::send_request(
-        server.port(), "GET /async-error HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /async-error HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(fiasco_test::extract_status(resp) == 401);
-    REQUIRE(fiasco_test::extract_body(resp) == R"({"detail":"Not authenticated"})" "\n");
+    REQUIRE(fiasco_test::extract_body(resp) == R"({"detail":"Not authenticated"})"
+                                               "\n");
 }
 
 TEST_CASE("integration async handler translates unhandled exceptions", "[integration][async]") {
@@ -1075,15 +1123,15 @@ TEST_CASE("integration async handler translates unhandled exceptions", "[integra
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/async-boom", []() -> fiasco::async {
+    fiasco_test::get(app, "/async-boom", []() -> fiasco::async {
         throw std::runtime_error("boom");
         co_return 1;
     });
 
     server.start();
 
-    auto resp = fiasco_test::send_request(
-        server.port(), "GET /async-boom HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    auto resp = fiasco_test::send_request(server.port(),
+                                          "GET /async-boom HTTP/1.1\r\nHost: localhost\r\n\r\n");
     REQUIRE(fiasco_test::extract_status(resp) == 500);
     REQUIRE(fiasco_test::extract_body(resp).find("boom") != std::string::npos);
 }

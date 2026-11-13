@@ -19,7 +19,8 @@ void route_table::add(http_method method,
                       const std::string& pattern,
                       handler_fn handler,
                       route_descriptor descriptor) {
-    add_entry(method, pattern,
+    add_entry(method,
+              pattern,
               route_entry{.handler = std::move(handler), .descriptor = std::move(descriptor)});
 }
 
@@ -27,9 +28,10 @@ void route_table::add(http_method method,
                       const std::string& pattern,
                       async_handler_fn handler,
                       route_descriptor descriptor) {
-    add_entry(method, pattern,
-              route_entry{.async_handler = std::move(handler),
-                          .descriptor = std::move(descriptor)});
+    add_entry(
+        method,
+        pattern,
+        route_entry{.async_handler = std::move(handler), .descriptor = std::move(descriptor)});
 }
 
 void route_table::add_entry(http_method method, const std::string& pattern, route_entry entry) {
@@ -218,8 +220,7 @@ void route_table::merge_with_prefix(route_table&& other,
 
         for (auto& entry : other.m_param[mi]) {
             const std::string full_pattern = join_prefix(prefix, entry.pattern);
-            entry.callable.descriptor.path =
-                join_prefix(prefix, entry.callable.descriptor.path);
+            entry.callable.descriptor.path = join_prefix(prefix, entry.callable.descriptor.path);
             append_tags(entry.callable.descriptor, extra_tags);
             add_entry(static_cast<http_method>(mi), full_pattern, std::move(entry.callable));
         }

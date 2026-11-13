@@ -1,7 +1,7 @@
 // The type-erased fiasco::json wrapper.
 //
 //   cmake --build build --target json_wrapper
-//   FIASCO_PORT=8080 ./build/examples/json_wrapper
+//   ./build/examples/json_wrapper
 //
 //   curl localhost:8080/nest/4
 //   curl localhost:8080/object
@@ -13,24 +13,18 @@
 #include <fiasco/fiasco.hpp>
 
 #include <algorithm>
-#include <cstdint>
-#include <cstdlib>
 #include <string>
+
+using fiasco::get;
+using fiasco::json;
 
 namespace {
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
-
-fiasco::json nest(int depth) {
+auto nest(int depth) -> json {
     if (depth <= 0) {
         return fiasco::json("leaf");
     }
-    return fiasco::json{
+    return json{
         {"depth", depth},
         {"child", nest(depth - 1)},
     };
@@ -38,31 +32,40 @@ fiasco::json nest(int depth) {
 
 }  // namespace
 
+namespace routes {
+
+[[=get("/nest/{depth}")]]
+auto nested(int depth) -> json {
+    return nest(std::clamp(depth, 0, 32));
+}
+
+[[=get("/object")]]
+auto object() -> json {
+    json result = json::object();
+    result["name"] = "fiasco";
+    result["numbers"] = json::array({1, 2, 3});
+    result["nested"] = json{{"ok", true}, {"count", 2}};
+    return result;
+}
+
+[[=get("/roundtrip")]]
+auto roundtrip() -> json {
+    json original{{"answer", 42}, {"items", json::array({"a", "b"})}};
+    const std::string text = original.dump();
+    const json parsed = json::parse(text);
+
+    return json{
+        {"dumped", text},
+        {"answer", parsed["answer"].get<int>()},
+        {"first_item", parsed["items"][0].get<std::string>()},
+        {"has_items", parsed.contains("items")},
+    };
+}
+
+}  // namespace routes
+
 int main() {
     fiasco::app app;
-
-    app.get("/nest/{depth}", [](int depth) { return nest(std::clamp(depth, 0, 32)); });
-
-    app.get("/object", []() {
-        fiasco::json object = fiasco::json::object();
-        object["name"] = "fiasco";
-        object["numbers"] = fiasco::json::array({1, 2, 3});
-        object["nested"] = fiasco::json{{"ok", true}, {"count", 2}};
-        return object;
-    });
-
-    app.get("/roundtrip", []() {
-        fiasco::json original{{"answer", 42}, {"items", fiasco::json::array({"a", "b"})}};
-        const std::string text = original.dump();
-        const fiasco::json parsed = fiasco::json::parse(text);
-
-        return fiasco::json{
-            {"dumped", text},
-            {"answer", parsed["answer"].get<int>()},
-            {"first_item", parsed["items"][0].get<std::string>()},
-            {"has_items", parsed.contains("items")},
-        };
-    });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

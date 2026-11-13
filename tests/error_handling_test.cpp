@@ -5,6 +5,7 @@
 
 #include "fiasco/fiasco.hpp"
 #include "support/http_client.hpp"
+#include "support/test_routes.hpp"
 #include "support/test_server.hpp"
 
 namespace fiasco::detail {
@@ -24,7 +25,7 @@ TEST_CASE("http_error becomes an HTTP response", "[error_handling]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/auth", []() -> std::string {
+    fiasco_test::get(app, "/auth", []() -> std::string {
         throw fiasco::http_error(401, "Not authenticated", {{"WWW-Authenticate", "Bearer"}});
     });
 
@@ -46,7 +47,8 @@ TEST_CASE("custom exception handler", "[error_handling]") {
     app.add_exception_handler([](const fiasco::detail::app_error& error) {
         return fiasco::response::error(error.what(), 409);
     });
-    app.get("/conflict", []() -> std::string { throw fiasco::detail::app_error("conflict"); });
+    fiasco_test::get(
+        app, "/conflict", []() -> std::string { throw fiasco::detail::app_error("conflict"); });
 
     server.start();
 
@@ -66,7 +68,8 @@ TEST_CASE("explicit exception handler type remains supported", "[error_handling]
         [](const fiasco::detail::explicit_error& error) {
             return fiasco::response::error(error.what(), 410);
         });
-    app.get("/gone", []() -> std::string { throw fiasco::detail::explicit_error("gone"); });
+    fiasco_test::get(
+        app, "/gone", []() -> std::string { throw fiasco::detail::explicit_error("gone"); });
 
     server.start();
 
@@ -82,7 +85,7 @@ TEST_CASE("http_error accepts structured JSON detail", "[error_handling]") {
         fiasco::server_config{},
     };
     auto& app = server.app();
-    app.get("/structured", []() -> std::string {
+    fiasco_test::get(app, "/structured", []() -> std::string {
         throw fiasco::http_error(422, fiasco::json{{"field", "email"}, {"reason", "invalid"}});
     });
 

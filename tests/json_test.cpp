@@ -38,9 +38,9 @@ static_assert(JsonSerializable<Aggregate>);  // aggregate -> reflection model
 static_assert(JsonDeserializable<Aggregate>);
 static_assert(!JsonSerializable<NotAnAggregate>);
 static_assert(!JsonDeserializable<NotAnAggregate>);
-static_assert(JsonSerializable<WithToJson>);                  // ADL to_json found
-static_assert(JsonSerializable<int>);                         // primitive overload
-static_assert(JsonSerializable<std::int8_t>);                 // fixed-width overloads
+static_assert(JsonSerializable<WithToJson>);   // ADL to_json found
+static_assert(JsonSerializable<int>);          // primitive overload
+static_assert(JsonSerializable<std::int8_t>);  // fixed-width overloads
 static_assert(JsonSerializable<std::uint8_t>);
 static_assert(JsonSerializable<std::int16_t>);
 static_assert(JsonSerializable<std::uint16_t>);

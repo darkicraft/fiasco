@@ -2,32 +2,37 @@
 // response mutation.
 //
 //   cmake --build build --target middleware
-//   FIASCO_PORT=8080 ./build/examples/middleware
+//   ./build/examples/middleware
 //
 //   curl -i localhost:8080/hello
 //   curl -i localhost:8080/whoami
 //   curl -i localhost:8080/blocked
 //
-// Middleware is registered with app.middleware(). The last one added is the outermost:
-// request_id wraps guard, so short-circuited responses still get an ID.
+// Middleware is registered with app.middleware(). The last one added is the
+// outermost: request_id wraps guard, so short-circuited responses still get an
+// ID.
 
 #include <fiasco/fiasco.hpp>
 
 #include <atomic>
-#include <cstdint>
-#include <cstdlib>
 #include <string>
 
-namespace {
+using fiasco::get;
+using fiasco::json;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
+namespace routes {
+
+[[=get("/hello")]]
+auto hello() -> std::string {
+    return "hello";
 }
 
-}  // namespace
+[[=get("/whoami")]]
+auto whoami(const fiasco::request& req) -> json {
+    return json{{"request_id", req.header("X-Request-ID")}};
+}
+
+}  // namespace routes
 
 int main() {
     fiasco::app app;
@@ -43,21 +48,17 @@ int main() {
     });
 
     // Outer middleware: give every request an ID and echo it back.
-    app.middleware([&next_request_id](fiasco::request& req,
-                               const fiasco::next& next) -> fiasco::async {
-        const std::string id =
-            "req-" + std::to_string(next_request_id.fetch_add(1, std::memory_order_relaxed));
-        req.headers["X-Request-ID"] = id;
+    app.middleware(
+        [&next_request_id](fiasco::request& req, const fiasco::next& next) -> fiasco::async {
+            const std::string id =
+                "req-" + std::to_string(next_request_id.fetch_add(1, std::memory_order_relaxed));
+            req.headers["X-Request-ID"] = id;
 
-        auto res = co_await next(req);
-        res.headers["X-Request-ID"] = id;
-        co_return res;
-    });
+            auto res = co_await next(req);
+            res.headers["X-Request-ID"] = id;
+            co_return res;
+        });
 
-    app.get("/hello", []() { return "hello"; });
-    app.get("/whoami", [](const fiasco::request& req) {
-        return fiasco::json{{"request_id", req.header("X-Request-ID")}};
-    });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

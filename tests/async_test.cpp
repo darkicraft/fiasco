@@ -62,8 +62,7 @@ TEST_CASE("async_result converts a collection of models", "[async]") {
 }
 
 TEST_CASE("typed_async_result carries its value type", "[async]") {
-    static_assert(std::same_as<typename typed_async_result<async_user>::value_type,
-                               async_user>);
+    static_assert(std::same_as<typename typed_async_result<async_user>::value_type, async_user>);
 
     typed_async_result<async_user> result{async_user{"ada", 36}};
     const response res = std::move(result).take();

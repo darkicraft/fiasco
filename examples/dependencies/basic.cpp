@@ -1,7 +1,7 @@
 // Basic dependency injection with per-request caching and RAII cleanup.
 //
 //   cmake --build build --target dependencies
-//   FIASCO_PORT=8080 ./build/examples/dependencies
+//   ./build/examples/dependencies
 //
 //   curl localhost:8080/me -H 'Authorization: Bearer ada'
 //   curl localhost:8080/me
@@ -12,20 +12,16 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <optional>
 #include <string>
 #include <utility>
 
-namespace {
+using fiasco::depends;
+using fiasco::get;
+using fiasco::header;
+using fiasco::json;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
+namespace {
 
 struct db_session {
     explicit db_session(const fiasco::request& request)
@@ -44,30 +40,33 @@ struct user {
     std::string name;
 };
 
-db_session get_db(const fiasco::request& request) {
+auto get_db(const fiasco::request& request) {
     return db_session{request};
 }
 
-user get_current_user(
-    db_session& db [[= fiasco::depends{^^get_db}]],
-    std::optional<std::string> authorization
-    [[= fiasco::header{.alias = "Authorization"}]]) {
+auto get_current_user(
+    db_session& db [[=depends{^^get_db}]],
+    std::optional<std::string> authorization [[=header{.alias = "Authorization"}]]) {
     return user{authorization.value_or("anonymous@" + db.client)};
 }
 
 }  // namespace
 
+namespace routes {
+
+[[=get("/me")]]
+auto me(db_session& db [[=depends{^^get_db}]],
+                         user& current [[=depends{^^get_current_user}]]) -> json {
+    return json{
+        {"user", current.name},
+        {"client", db.client},
+    };
+}
+
+}  // namespace routes
+
 int main() {
     fiasco::app app;
-
-    app.get("/me",
-            [](db_session& db [[= fiasco::depends{^^get_db}]],
-               user& current [[= fiasco::depends{^^get_current_user}]]) {
-                return fiasco::json{
-                    {"user", current.name},
-                    {"client", db.client},
-                };
-            });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

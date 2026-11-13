@@ -22,9 +22,8 @@ template <typename T>
 concept ResponseConvertible =
     std::same_as<clean_type_t<T>, response> || std::same_as<clean_type_t<T>, std::string> ||
     std::same_as<clean_type_t<T>, const char*> || std::same_as<clean_type_t<T>, char*> ||
-    is_char_array_v<T> || std::same_as<clean_type_t<T>, bool> ||
-    std::integral<clean_type_t<T>> || std::floating_point<clean_type_t<T>> ||
-    JsonSerializable<clean_type_t<T>>;
+    is_char_array_v<T> || std::same_as<clean_type_t<T>, bool> || std::integral<clean_type_t<T>> ||
+    std::floating_point<clean_type_t<T>> || JsonSerializable<clean_type_t<T>>;
 
 /// Convert a handler return value into an HTTP response. This is shared by
 /// synchronous handlers and the async coroutine result type so both accept the

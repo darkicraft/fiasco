@@ -181,11 +181,10 @@ parameter_descriptor make_parameter_descriptor(std::string_view path) {
         descriptor.required = false;
     } else if constexpr (ScalarParam<CleanArg>) {
         if (descriptor.source == param_in::infer) {
-            descriptor.source = descriptor_path_contains(path, descriptor.name) ? param_in::path
-                                                                                : param_in::query;
+            descriptor.source =
+                descriptor_path_contains(path, descriptor.name) ? param_in::path : param_in::query;
         }
-        descriptor.required =
-            descriptor.source == param_in::path || !OptionalPrimitive<CleanArg>;
+        descriptor.required = descriptor.source == param_in::path || !OptionalPrimitive<CleanArg>;
     } else if constexpr (FromJson<CleanArg>) {
         if (descriptor.source == param_in::infer) {
             descriptor.source = param_in::body;
@@ -204,8 +203,7 @@ template <typename T>
 constexpr const char* response_media_type_for() {
     using R = std::remove_cvref_t<T>;
     if constexpr (std::same_as<R, std::string> || std::same_as<R, const char*> ||
-                  std::same_as<R, char*> || is_char_array_v<R> ||
-                  std::is_arithmetic_v<R>) {
+                  std::same_as<R, char*> || is_char_array_v<R> || std::is_arithmetic_v<R>) {
         return "text/plain";
     } else {
         return "application/json";
@@ -217,10 +215,8 @@ void apply_response_schema(route_descriptor& descriptor) {
     using R = std::remove_cvref_t<T>;
     if constexpr (std::same_as<R, response> || std::is_void_v<R>) {
         // Explicit responses and void handlers expose no inferred schema.
-    } else if constexpr (std::same_as<R, std::string> ||
-                         std::same_as<R, const char*> ||
-                         std::same_as<R, char*> || is_char_array_v<R> ||
-                         std::is_arithmetic_v<R>) {
+    } else if constexpr (std::same_as<R, std::string> || std::same_as<R, const char*> ||
+                         std::same_as<R, char*> || is_char_array_v<R> || std::is_arithmetic_v<R>) {
         descriptor.response_media_type = response_media_type_for<R>();
         json_type schema = json_type::object();
         schema["type"] = "string";
@@ -245,8 +241,7 @@ route_descriptor describe_impl(http_method method,
     descriptor.path = openapi_path(path);
     const std::string pattern = std::move(path);
     descriptor.name = options.name.has ? std::string(options.name.view()) : std::string{};
-    descriptor.summary =
-        options.summary.has ? std::string(options.summary.view()) : std::string{};
+    descriptor.summary = options.summary.has ? std::string(options.summary.view()) : std::string{};
     descriptor.description =
         options.description.has ? std::string(options.description.view()) : std::string{};
     descriptor.operation_id =
@@ -256,9 +251,7 @@ route_descriptor describe_impl(http_method method,
     descriptor.include_in_schema = options.include_in_schema;
     descriptor.parameters.reserve(traits::arity);
 
-    (descriptor.parameters.push_back(
-         make_parameter_descriptor<traits, Is>(pattern)),
-     ...);
+    (descriptor.parameters.push_back(make_parameter_descriptor<traits, Is>(pattern)), ...);
 
     using Return = std::remove_cvref_t<typename traits::return_type>;
     using Async = async_return_traits<Return>;
@@ -282,8 +275,8 @@ route_descriptor describe(http_method method,
                           std::string path,
                           const fiasco::route_options& options = {}) {
     using traits = meta::callable_traits<std::decay_t<F>>;
-    return describe_impl<F>(method, std::move(path), options,
-                            std::make_index_sequence<traits::arity>{});
+    return describe_impl<F>(
+        method, std::move(path), options, std::make_index_sequence<traits::arity>{});
 }
 
 inline constexpr std::size_t max_body_params = 64;
@@ -708,7 +701,8 @@ response dispatch_impl(F& fn,
 
 template <typename F, typename ArgsTuple, typename Args, size_t... Is>
 async invoke_async_handler(F& fn, Args& args, std::index_sequence<Is...>) {
-    auto result = co_await fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
+    auto result =
+        co_await fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
     co_return std::move(result).take();
 }
 
@@ -757,8 +751,7 @@ template <typename F>
         body_context body{req};
         std::size_t path_idx = 0;
         auto args = resolve_arguments<decltype(fn), args_tuple>(
-            fn, req, path_idx, body, embed_body, cache,
-            std::make_index_sequence<traits::arity>{});
+            fn, req, path_idx, body, embed_body, cache, std::make_index_sequence<traits::arity>{});
         co_return co_await invoke_async_handler<decltype(fn), args_tuple>(
             fn, args, std::make_index_sequence<traits::arity>{});
     };

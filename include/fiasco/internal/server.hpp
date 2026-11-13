@@ -19,7 +19,8 @@ namespace fiasco::detail {
 class server {
   public:
     explicit server(application_handler handler, fiasco::server_config config = {})
-        : m_handler(std::move(handler)), m_config(std::move(config)) {}
+        : m_handler(std::move(handler)),
+          m_config(std::move(config)) {}
 
     server(const server&) = delete;
     server& operator=(const server&) = delete;

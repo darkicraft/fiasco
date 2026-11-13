@@ -21,7 +21,8 @@ namespace fiasco::detail {
 /// are driven on a local `io_context`.
 class test_client {
   public:
-    explicit test_client(app& app) : m_app(app) {}
+    explicit test_client(app& app)
+        : m_app(app) {}
 
     response handle(request req) {
         response out;
@@ -35,27 +36,25 @@ class test_client {
                         out.headers[std::string(key)] = std::string(value);
                     }
                 },
-            .write =
-                [&out](std::span<const std::byte> bytes) -> task<void> {
-                    out.body.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-                    co_return;
-                },
+            .write = [&out](std::span<const std::byte> bytes) -> task<void> {
+                out.body.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+                co_return;
+            },
             .end = []() -> task<void> { co_return; },
         };
 
         std::string_view body_view = req.body;
         body_source body{
-            .read =
-                [body_view, pos = std::size_t{0}]() mutable
+            .read = [body_view, pos = std::size_t{0}]() mutable
                 -> task<std::optional<std::span<const std::byte>>> {
-                    if (pos >= body_view.size()) {
-                        co_return std::nullopt;
-                    }
-                    auto chunk =
-                        std::as_bytes(std::span(body_view.data() + pos, body_view.size() - pos));
-                    pos = body_view.size();
-                    co_return chunk;
-                },
+                if (pos >= body_view.size()) {
+                    co_return std::nullopt;
+                }
+                auto chunk =
+                    std::as_bytes(std::span(body_view.data() + pos, body_view.size() - pos));
+                pos = body_view.size();
+                co_return chunk;
+            },
         };
 
         exchange ex{req, body, sink};

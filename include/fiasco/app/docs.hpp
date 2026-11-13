@@ -122,8 +122,7 @@ const ui = SwaggerUIBundle({
 });
 )";
 
-    if (options.swagger_ui_init_oauth.is_object() &&
-        options.swagger_ui_init_oauth.size() > 0) {
+    if (options.swagger_ui_init_oauth.is_object() && options.swagger_ui_init_oauth.size() > 0) {
         html += "ui.initOAuth(";
         html += html_safe_json(options.swagger_ui_init_oauth);
         html += ");\n";
@@ -146,7 +145,8 @@ inline std::string redoc_html(const fiasco::app_options& options) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 )";
     if (options.redoc_with_google_fonts) {
-        html += R"(<link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
+        html +=
+            R"(<link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
 )";
     }
     if (!options.redoc_favicon_url.empty()) {

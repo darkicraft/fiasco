@@ -1,30 +1,26 @@
-// The smallest useful fiasco server.
+// The smallest useful Fiasco server.
 //
 //   cmake --build build --target hello
-//   FIASCO_PORT=8080 ./build/examples/hello
+//   ./build/examples/hello
 //   curl localhost:8080/
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <string>
 
-namespace {
+using fiasco::get;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
+namespace api {
+
+[[=get("/")]]
+auto hello() -> std::string {
+    return "Hello, World!";
 }
 
-}  // namespace
+}  // namespace api
 
 int main() {
     fiasco::app app;
-
-    app.get("/", []() { return "Hello, World!"; });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^api>();
+    app.run();
 }

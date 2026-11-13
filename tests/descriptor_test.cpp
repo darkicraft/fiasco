@@ -5,15 +5,17 @@
 #include <string>
 
 #include "fiasco/fiasco.hpp"
+#include "support/test_routes.hpp"
 
 namespace descriptor_routes {
 
-[[= fiasco::get("/items/{id}",
+[[=fiasco::get("/items/{id}",
                 {.summary = "Fetch item",
                  .description = "Returns one item.",
                  .name = "fetch_item",
                  .operation_id = "fetch_item_operation"})]]
-std::string fetch(long id, std::optional<int> page, fiasco::request req) {
+std::string
+    fetch(long id, std::optional<int> page, fiasco::request req) {
     (void)page;
     (void)req;
     return std::to_string(id);
@@ -23,7 +25,7 @@ std::string fetch(long id, std::optional<int> page, fiasco::request req) {
 
 namespace prefixed_routes {
 
-[[= fiasco::get("/ping")]]
+[[=fiasco::get("/ping")]]
 std::string ping() {
     return "pong";
 }
@@ -91,8 +93,8 @@ TEST_CASE("router options cascade into merged routes", "[routing][descriptor]") 
 
 TEST_CASE("duplicate method and path are rejected", "[routing][descriptor]") {
     fiasco::router router;
-    router.get("/dup", [] { return std::string{"first"}; });
+    fiasco_test::get(router, "/dup", [] { return std::string{"first"}; });
 
-    REQUIRE_THROWS_AS(router.get("/dup", [] { return std::string{"second"}; }),
+    REQUIRE_THROWS_AS(fiasco_test::get(router, "/dup", [] { return std::string{"second"}; }),
                       std::logic_error);
 }

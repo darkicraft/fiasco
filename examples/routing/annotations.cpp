@@ -1,7 +1,7 @@
 // Namespace-annotated routes.
 //
 //   cmake --build build --target annotation_routes
-//   FIASCO_PORT=8080 ./build/examples/annotation_routes
+//   ./build/examples/annotation_routes
 //
 //   curl localhost:8080/
 //   curl localhost:8080/items/42
@@ -15,20 +15,12 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <string>
 
-namespace {
-
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
-
-}  // namespace
+using fiasco::get;
+using fiasco::json;
+using fiasco::path;
+using fiasco::post;
 
 namespace api {
 
@@ -37,25 +29,25 @@ struct item_input {
     int quantity = 1;
 };
 
-[[= fiasco::get("/")]]
-std::string root() {
+[[=get("/")]]
+auto root() -> std::string {
     return "annotation routing";
 }
 
-[[= fiasco::get("/items/{id}",
-                {.summary = "Read an item", .operation_id = "read_item"})]]
-fiasco::json read_item(long id [[= fiasco::path{.ge = 1}]]) {
-    return fiasco::json{{"id", id}, {"name", "item-" + std::to_string(id)}};
+[[=get("/items/{id}", {.summary = "Read an item", .operation_id = "read_item"})]]
+auto read_item(
+    long id [[=path{.ge = 1}]]) -> json {
+    return json{{"id", id}, {"name", "item-" + std::to_string(id)}};
 }
 
-[[= fiasco::post("/items")]]
-fiasco::json create_item(item_input item) {
-    return fiasco::json{{"name", item.name}, {"quantity", item.quantity}};
+[[=post("/items")]]
+auto create_item(item_input item) -> json {
+    return json{{"name", item.name}, {"quantity", item.quantity}};
 }
 
 // :path captures the remaining path, including slashes.
-[[= fiasco::get("/files/{rest:path}")]]
-std::string read_file(std::string rest) {
+[[=get("/files/{rest:path}")]]
+auto read_file(std::string rest) -> std::string {
     return "requested: " + rest;
 }
 
@@ -66,5 +58,5 @@ int main() {
     app.register_api<^^api>();
 
     app.print_routes();
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.run();
 }

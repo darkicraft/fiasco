@@ -14,60 +14,90 @@ using namespace fiasco::detail;
 namespace fiasco::detail {
 
 // ---- constraint fixtures ---------------------------------------------------
-struct CIntGt  { int v [[= field{.gt = 5}]] = 0; };
-struct CIntGe  { int v [[= field{.ge = 5}]] = 0; };
-struct CIntLt  { int v [[= field{.lt = 5}]] = 0; };
-struct CIntLe  { int v [[= field{.le = 5}]] = 0; };
-struct CIntMul { int v [[= field{.multiple_of = 3}]] = 0; };
-struct CFloatGt { double v [[= field{.gt = 5}]] = 0.0; };
+struct CIntGt {
+    int v [[=field{.gt = 5}]] = 0;
+};
+struct CIntGe {
+    int v [[=field{.ge = 5}]] = 0;
+};
+struct CIntLt {
+    int v [[=field{.lt = 5}]] = 0;
+};
+struct CIntLe {
+    int v [[=field{.le = 5}]] = 0;
+};
+struct CIntMul {
+    int v [[=field{.multiple_of = 3}]] = 0;
+};
+struct CFloatGt {
+    double v [[=field{.gt = 5}]] = 0.0;
+};
 
-struct CStrMin  { std::string v [[= field{.min_length = 3}]]; };
-struct CStrMax  { std::string v [[= field{.max_length = 2}]]; };
+struct CStrMin {
+    std::string v [[=field{.min_length = 3}]];
+};
+struct CStrMax {
+    std::string v [[=field{.max_length = 2}]];
+};
 struct CStrPattern {
-    std::string v [[= field{.pattern = "^[a-z]+$"}]];
+    std::string v [[=field{.pattern = "^[a-z]+$"}]];
 };
 struct CStrPatternSearch {
-    std::string v [[= field{.pattern = "[a-z]+"}]];
+    std::string v [[=field{.pattern = "[a-z]+"}]];
 };
 struct CStrPatternEscaped {
-    std::string v [[= field{.pattern = "^\\d+$"}]];
+    std::string v [[=field{.pattern = "^\\d+$"}]];
 };
 struct CStrPatternOrder {
-    std::string v [[= field{.min_length = 3, .max_length = 5, .pattern = "^[a-z]+$"}]];
+    std::string v [[=field{.min_length = 3, .max_length = 5, .pattern = "^[a-z]+$"}]];
 };
 struct COptStrPattern {
-    std::optional<std::string> v [[= field{.pattern = "^[a-z]+$"}]] = std::nullopt;
+    std::optional<std::string> v [[=field{.pattern = "^[a-z]+$"}]] = std::nullopt;
 };
-struct CListMin { std::vector<int> v [[= field{.min_length = 2}]]; };
-struct CListMax { std::vector<int> v [[= field{.max_length = 2}]]; };
+struct CListMin {
+    std::vector<int> v [[=field{.min_length = 2}]];
+};
+struct CListMax {
+    std::vector<int> v [[=field{.max_length = 2}]];
+};
 
 // singular bounds
-struct CStrMin1  { std::string v [[= field{.min_length = 1}]]; };
-struct CStrMax1  { std::string v [[= field{.max_length = 1}]]; };
-struct CListMin1 { std::vector<int> v [[= field{.min_length = 1}]]; };
-struct CListMax1 { std::vector<int> v [[= field{.max_length = 1}]]; };
+struct CStrMin1 {
+    std::string v [[=field{.min_length = 1}]];
+};
+struct CStrMax1 {
+    std::string v [[=field{.max_length = 1}]];
+};
+struct CListMin1 {
+    std::vector<int> v [[=field{.min_length = 1}]];
+};
+struct CListMax1 {
+    std::vector<int> v [[=field{.max_length = 1}]];
+};
 
-struct COptInt { std::optional<int> v [[= field{.gt = 5}]] = std::nullopt; };
+struct COptInt {
+    std::optional<int> v [[=field{.gt = 5}]] = std::nullopt;
+};
 
 struct CWithAlias {
-    std::string lname [[= field{.alias = "last-name"}]] = "";
+    std::string lname [[=field{.alias = "last-name"}]] = "";
 };
 
 struct CWithRequiredAlias {
-    std::string lname [[= field{.alias = "last-name"}]];
+    std::string lname [[=field{.alias = "last-name"}]];
 };
 
 struct CInt32Gt {
-    std::int32_t v [[= field{.gt = 5}]] = 0;
+    std::int32_t v [[=field{.gt = 5}]] = 0;
 };
 
 struct CMapMin {
-    std::map<std::string, int> v [[= field{.min_length = 2}]];
+    std::map<std::string, int> v [[=field{.min_length = 2}]];
 };
 
 struct CAll {
-    int percent [[= field{.gt = 0, .le = 100}]] = 0;
-    std::string code [[= field{.min_length = 2}]] = "";
+    int percent [[=field{.gt = 0, .le = 100}]] = 0;
+    std::string code [[=field{.min_length = 2}]] = "";
 };
 
 // ---- helper ----------------------------------------------------------------
@@ -90,43 +120,51 @@ json_type obj_with(const char* key, json_type value) {
 }  // namespace fiasco::detail
 
 TEST_CASE("field gt emits Pydantic greater_than", "[field]") {
-    REQUIRE(must_fail<CIntGt>(obj_with("v", json_type(5))) ==
-            R"({"detail":[{"type":"greater_than","loc":["v"],"msg":"Input should be greater than 5","input":5,"ctx":{"gt":5}}]})");
+    REQUIRE(
+        must_fail<CIntGt>(obj_with("v", json_type(5))) ==
+        R"({"detail":[{"type":"greater_than","loc":["v"],"msg":"Input should be greater than 5","input":5,"ctx":{"gt":5}}]})");
 }
 
 TEST_CASE("field ge emits Pydantic greater_than_equal", "[field]") {
-    REQUIRE(must_fail<CIntGe>(obj_with("v", json_type(4))) ==
-            R"({"detail":[{"type":"greater_than_equal","loc":["v"],"msg":"Input should be greater than or equal to 5","input":4,"ctx":{"ge":5}}]})");
+    REQUIRE(
+        must_fail<CIntGe>(obj_with("v", json_type(4))) ==
+        R"({"detail":[{"type":"greater_than_equal","loc":["v"],"msg":"Input should be greater than or equal to 5","input":4,"ctx":{"ge":5}}]})");
 }
 
 TEST_CASE("field lt emits Pydantic less_than", "[field]") {
-    REQUIRE(must_fail<CIntLt>(obj_with("v", json_type(5))) ==
-            R"({"detail":[{"type":"less_than","loc":["v"],"msg":"Input should be less than 5","input":5,"ctx":{"lt":5}}]})");
+    REQUIRE(
+        must_fail<CIntLt>(obj_with("v", json_type(5))) ==
+        R"({"detail":[{"type":"less_than","loc":["v"],"msg":"Input should be less than 5","input":5,"ctx":{"lt":5}}]})");
 }
 
 TEST_CASE("field le emits Pydantic less_than_equal", "[field]") {
-    REQUIRE(must_fail<CIntLe>(obj_with("v", json_type(6))) ==
-            R"({"detail":[{"type":"less_than_equal","loc":["v"],"msg":"Input should be less than or equal to 5","input":6,"ctx":{"le":5}}]})");
+    REQUIRE(
+        must_fail<CIntLe>(obj_with("v", json_type(6))) ==
+        R"({"detail":[{"type":"less_than_equal","loc":["v"],"msg":"Input should be less than or equal to 5","input":6,"ctx":{"le":5}}]})");
 }
 
 TEST_CASE("field multiple_of emits Pydantic multiple_of", "[field]") {
-    REQUIRE(must_fail<CIntMul>(obj_with("v", json_type(4))) ==
-            R"({"detail":[{"type":"multiple_of","loc":["v"],"msg":"Input should be a multiple of 3","input":4,"ctx":{"multiple_of":3}}]})");
+    REQUIRE(
+        must_fail<CIntMul>(obj_with("v", json_type(4))) ==
+        R"({"detail":[{"type":"multiple_of","loc":["v"],"msg":"Input should be a multiple of 3","input":4,"ctx":{"multiple_of":3}}]})");
 }
 
 TEST_CASE("field bound on a float field renders ctx as a float", "[field]") {
-    REQUIRE(must_fail<CFloatGt>(obj_with("v", json_type(0.0))) ==
-            R"({"detail":[{"type":"greater_than","loc":["v"],"msg":"Input should be greater than 5","input":0.0,"ctx":{"gt":5.0}}]})");
+    REQUIRE(
+        must_fail<CFloatGt>(obj_with("v", json_type(0.0))) ==
+        R"({"detail":[{"type":"greater_than","loc":["v"],"msg":"Input should be greater than 5","input":0.0,"ctx":{"gt":5.0}}]})");
 }
 
 TEST_CASE("field min_length on a string emits string_too_short", "[field]") {
-    REQUIRE(must_fail<CStrMin>(obj_with("v", json_type("ab"))) ==
-            R"({"detail":[{"type":"string_too_short","loc":["v"],"msg":"String should have at least 3 characters","input":"ab","ctx":{"min_length":3}}]})");
+    REQUIRE(
+        must_fail<CStrMin>(obj_with("v", json_type("ab"))) ==
+        R"({"detail":[{"type":"string_too_short","loc":["v"],"msg":"String should have at least 3 characters","input":"ab","ctx":{"min_length":3}}]})");
 }
 
 TEST_CASE("field max_length on a string emits string_too_long", "[field]") {
-    REQUIRE(must_fail<CStrMax>(obj_with("v", json_type("abc"))) ==
-            R"({"detail":[{"type":"string_too_long","loc":["v"],"msg":"String should have at most 2 characters","input":"abc","ctx":{"max_length":2}}]})");
+    REQUIRE(
+        must_fail<CStrMax>(obj_with("v", json_type("abc"))) ==
+        R"({"detail":[{"type":"string_too_long","loc":["v"],"msg":"String should have at most 2 characters","input":"abc","ctx":{"max_length":2}}]})");
 }
 
 TEST_CASE("field pattern accepts a matching string", "[field]") {
@@ -135,8 +173,9 @@ TEST_CASE("field pattern accepts a matching string", "[field]") {
 }
 
 TEST_CASE("field pattern emits Pydantic string_pattern_mismatch", "[field]") {
-    REQUIRE(must_fail<CStrPattern>(obj_with("v", json_type("abc1"))) ==
-            R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^[a-z]+$'","input":"abc1","ctx":{"pattern":"^[a-z]+$"}}]})");
+    REQUIRE(
+        must_fail<CStrPattern>(obj_with("v", json_type("abc1"))) ==
+        R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^[a-z]+$'","input":"abc1","ctx":{"pattern":"^[a-z]+$"}}]})");
 }
 
 TEST_CASE("field pattern uses search semantics like Pydantic", "[field]") {
@@ -145,41 +184,49 @@ TEST_CASE("field pattern uses search semantics like Pydantic", "[field]") {
 }
 
 TEST_CASE("field pattern supports escaped expressions", "[field]") {
-    REQUIRE(must_fail<CStrPatternEscaped>(obj_with("v", json_type("12a"))) ==
-            R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^\\d+$'","input":"12a","ctx":{"pattern":"^\\d+$"}}]})");
+    REQUIRE(
+        must_fail<CStrPatternEscaped>(obj_with("v", json_type("12a"))) ==
+        R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^\\d+$'","input":"12a","ctx":{"pattern":"^\\d+$"}}]})");
 }
 
 TEST_CASE("field pattern runs after string length checks", "[field]") {
-    REQUIRE(must_fail<CStrPatternOrder>(obj_with("v", json_type("AB"))) ==
-            R"({"detail":[{"type":"string_too_short","loc":["v"],"msg":"String should have at least 3 characters","input":"AB","ctx":{"min_length":3}}]})");
-    REQUIRE(must_fail<CStrPatternOrder>(obj_with("v", json_type("ABCDEF"))) ==
-            R"({"detail":[{"type":"string_too_long","loc":["v"],"msg":"String should have at most 5 characters","input":"ABCDEF","ctx":{"max_length":5}}]})");
-    REQUIRE(must_fail<CStrPatternOrder>(obj_with("v", json_type("ABC"))) ==
-            R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^[a-z]+$'","input":"ABC","ctx":{"pattern":"^[a-z]+$"}}]})");
+    REQUIRE(
+        must_fail<CStrPatternOrder>(obj_with("v", json_type("AB"))) ==
+        R"({"detail":[{"type":"string_too_short","loc":["v"],"msg":"String should have at least 3 characters","input":"AB","ctx":{"min_length":3}}]})");
+    REQUIRE(
+        must_fail<CStrPatternOrder>(obj_with("v", json_type("ABCDEF"))) ==
+        R"({"detail":[{"type":"string_too_long","loc":["v"],"msg":"String should have at most 5 characters","input":"ABCDEF","ctx":{"max_length":5}}]})");
+    REQUIRE(
+        must_fail<CStrPatternOrder>(obj_with("v", json_type("ABC"))) ==
+        R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^[a-z]+$'","input":"ABC","ctx":{"pattern":"^[a-z]+$"}}]})");
 }
 
 TEST_CASE("field pattern applies to the inner value of an optional", "[field]") {
-    REQUIRE(must_fail<COptStrPattern>(obj_with("v", json_type("ABC"))) ==
-            R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^[a-z]+$'","input":"ABC","ctx":{"pattern":"^[a-z]+$"}}]})");
+    REQUIRE(
+        must_fail<COptStrPattern>(obj_with("v", json_type("ABC"))) ==
+        R"({"detail":[{"type":"string_pattern_mismatch","loc":["v"],"msg":"String should match pattern '^[a-z]+$'","input":"ABC","ctx":{"pattern":"^[a-z]+$"}}]})");
     json_type absent = json_type::object();
     REQUIRE_FALSE(absent.get<COptStrPattern>().v.has_value());
 }
 
 TEST_CASE("field min_length on a list emits too_short", "[field]") {
     json_type arr = json_type::array({json_type(1)});
-    REQUIRE(must_fail<CListMin>(obj_with("v", arr)) ==
-            R"({"detail":[{"type":"too_short","loc":["v"],"msg":"List should have at least 2 items after validation, not 1","input":[1],"ctx":{"field_type":"List","min_length":2,"actual_length":1}}]})");
+    REQUIRE(
+        must_fail<CListMin>(obj_with("v", arr)) ==
+        R"({"detail":[{"type":"too_short","loc":["v"],"msg":"List should have at least 2 items after validation, not 1","input":[1],"ctx":{"field_type":"List","min_length":2,"actual_length":1}}]})");
 }
 
 TEST_CASE("field max_length on a list emits too_long", "[field]") {
     json_type arr = json_type::array({json_type(1), json_type(2), json_type(3)});
-    REQUIRE(must_fail<CListMax>(obj_with("v", arr)) ==
-            R"({"detail":[{"type":"too_long","loc":["v"],"msg":"List should have at most 2 items after validation, not 3","input":[1,2,3],"ctx":{"field_type":"List","max_length":2,"actual_length":3}}]})");
+    REQUIRE(
+        must_fail<CListMax>(obj_with("v", arr)) ==
+        R"({"detail":[{"type":"too_long","loc":["v"],"msg":"List should have at most 2 items after validation, not 3","input":[1,2,3],"ctx":{"field_type":"List","max_length":2,"actual_length":3}}]})");
 }
 
 TEST_CASE("field constraints apply to the inner value of an optional", "[field]") {
-    REQUIRE(must_fail<COptInt>(obj_with("v", json_type(0))) ==
-            R"({"detail":[{"type":"greater_than","loc":["v"],"msg":"Input should be greater than 5","input":0,"ctx":{"gt":5}}]})");
+    REQUIRE(
+        must_fail<COptInt>(obj_with("v", json_type(0))) ==
+        R"({"detail":[{"type":"greater_than","loc":["v"],"msg":"Input should be greater than 5","input":0,"ctx":{"gt":5}}]})");
     // null and absent are fine
     json_type j = json_type::object();
     j["v"] = json_type(nullptr);
@@ -198,15 +245,19 @@ TEST_CASE("field alias changes the wire key for read and write", "[field]") {
 }
 
 TEST_CASE("Pydantic uses singular nouns for a bound of 1", "[field]") {
-    REQUIRE(must_fail<CStrMin1>(obj_with("v", json_type(""))) ==
-            R"({"detail":[{"type":"string_too_short","loc":["v"],"msg":"String should have at least 1 character","input":"","ctx":{"min_length":1}}]})");
-    REQUIRE(must_fail<CStrMax1>(obj_with("v", json_type("ab"))) ==
-            R"({"detail":[{"type":"string_too_long","loc":["v"],"msg":"String should have at most 1 character","input":"ab","ctx":{"max_length":1}}]})");
-    REQUIRE(must_fail<CListMin1>(obj_with("v", json_type::array({}))) ==
-            R"({"detail":[{"type":"too_short","loc":["v"],"msg":"List should have at least 1 item after validation, not 0","input":[],"ctx":{"field_type":"List","min_length":1,"actual_length":0}}]})");
+    REQUIRE(
+        must_fail<CStrMin1>(obj_with("v", json_type(""))) ==
+        R"({"detail":[{"type":"string_too_short","loc":["v"],"msg":"String should have at least 1 character","input":"","ctx":{"min_length":1}}]})");
+    REQUIRE(
+        must_fail<CStrMax1>(obj_with("v", json_type("ab"))) ==
+        R"({"detail":[{"type":"string_too_long","loc":["v"],"msg":"String should have at most 1 character","input":"ab","ctx":{"max_length":1}}]})");
+    REQUIRE(
+        must_fail<CListMin1>(obj_with("v", json_type::array({}))) ==
+        R"({"detail":[{"type":"too_short","loc":["v"],"msg":"List should have at least 1 item after validation, not 0","input":[],"ctx":{"field_type":"List","min_length":1,"actual_length":0}}]})");
     json_type two = json_type::array({json_type(1), json_type(2)});
-    REQUIRE(must_fail<CListMax1>(obj_with("v", two)) ==
-            R"({"detail":[{"type":"too_long","loc":["v"],"msg":"List should have at most 1 item after validation, not 2","input":[1,2],"ctx":{"field_type":"List","max_length":1,"actual_length":2}}]})");
+    REQUIRE(
+        must_fail<CListMax1>(obj_with("v", two)) ==
+        R"({"detail":[{"type":"too_long","loc":["v"],"msg":"List should have at most 1 item after validation, not 2","input":[1,2],"ctx":{"field_type":"List","max_length":1,"actual_length":2}}]})");
 }
 
 TEST_CASE("a valid value satisfying constraints passes", "[field]") {
@@ -223,27 +274,31 @@ TEST_CASE("field inclusive bounds accept the exact boundary", "[field]") {
     REQUIRE(obj_with("v", json_type(5)).get<CIntLe>().v == 5);
     REQUIRE(obj_with("v", json_type("abc")).get<CStrMin>().v == "abc");
     REQUIRE(obj_with("v", json_type("ab")).get<CStrMax>().v == "ab");
-    REQUIRE(obj_with("v", json_type::array({json_type(1), json_type(2)})).get<CListMin>().v.size() ==
-            2);
+    REQUIRE(
+        obj_with("v", json_type::array({json_type(1), json_type(2)})).get<CListMin>().v.size() ==
+        2);
 }
 
 TEST_CASE("field constraints work with fixed-width integer fields", "[field]") {
-    REQUIRE(must_fail<CInt32Gt>(obj_with("v", json_type(5))) ==
-            R"({"detail":[{"type":"greater_than","loc":["v"],"msg":"Input should be greater than 5","input":5,"ctx":{"gt":5}}]})");
+    REQUIRE(
+        must_fail<CInt32Gt>(obj_with("v", json_type(5))) ==
+        R"({"detail":[{"type":"greater_than","loc":["v"],"msg":"Input should be greater than 5","input":5,"ctx":{"gt":5}}]})");
     REQUIRE(obj_with("v", json_type(6)).get<CInt32Gt>().v == 6);
 }
 
 TEST_CASE("field min_length works on maps", "[field]") {
     json_type one = json_type::object();
     one["only"] = json_type(1);
-    REQUIRE(must_fail<CMapMin>(obj_with("v", one)) ==
-            R"({"detail":[{"type":"too_short","loc":["v"],"msg":"Dictionary should have at least 2 items after validation, not 1","input":{"only":1},"ctx":{"field_type":"Dictionary","min_length":2,"actual_length":1}}]})");
+    REQUIRE(
+        must_fail<CMapMin>(obj_with("v", one)) ==
+        R"({"detail":[{"type":"too_short","loc":["v"],"msg":"Dictionary should have at least 2 items after validation, not 1","input":{"only":1},"ctx":{"field_type":"Dictionary","min_length":2,"actual_length":1}}]})");
 }
 
 TEST_CASE("field alias preserves requiredness and error location", "[field]") {
     json_type j = obj_with("lname", json_type("Smith"));
-    REQUIRE(must_fail<CWithRequiredAlias>(j) ==
-            R"({"detail":[{"type":"missing","loc":["last-name"],"msg":"Field required","input":{"lname":"Smith"}}]})");
+    REQUIRE(
+        must_fail<CWithRequiredAlias>(j) ==
+        R"({"detail":[{"type":"missing","loc":["last-name"],"msg":"Field required","input":{"lname":"Smith"}}]})");
 }
 
 TEST_CASE("all constraint failures are collected", "[field]") {

@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include "fiasco/fiasco.hpp"
+#include "support/test_routes.hpp"
 
 namespace {
 
@@ -20,20 +21,18 @@ fiasco::request make_request(std::string_view method, std::string url) {
 }  // namespace
 
 TEST_CASE("response serializes cookie attributes", "[cookies]") {
-    auto res = fiasco::response::text("ok").set_cookie(
-        "session", "abc",
-        {.max_age = 3600,
-         .path = "/app",
-         .domain = "example.com",
-         .secure = true,
-         .httponly = true,
-         .samesite = "Strict"});
+    auto res = fiasco::response::text("ok").set_cookie("session",
+                                                       "abc",
+                                                       {.max_age = 3600,
+                                                        .path = "/app",
+                                                        .domain = "example.com",
+                                                        .secure = true,
+                                                        .httponly = true,
+                                                        .samesite = "Strict"});
 
     const auto raw = res.serialize();
-    CHECK(raw.find(
-              "Set-Cookie: session=abc; Path=/app; Domain=example.com; "
-              "Max-Age=3600; Secure; HttpOnly; SameSite=Strict\r\n") !=
-          std::string::npos);
+    CHECK(raw.find("Set-Cookie: session=abc; Path=/app; Domain=example.com; "
+                   "Max-Age=3600; Secure; HttpOnly; SameSite=Strict\r\n") != std::string::npos);
 }
 
 TEST_CASE("response serializes datetime expiry as an HTTP date", "[cookies]") {
@@ -55,10 +54,8 @@ TEST_CASE("response emits one Set-Cookie header per cookie", "[cookies]") {
     res.set_cookie("second", "2");
 
     const auto raw = res.serialize();
-    CHECK(raw.find("Set-Cookie: first=1; Path=/; SameSite=lax\r\n") !=
-          std::string::npos);
-    CHECK(raw.find("Set-Cookie: second=2; Path=/; SameSite=lax\r\n") !=
-          std::string::npos);
+    CHECK(raw.find("Set-Cookie: first=1; Path=/; SameSite=lax\r\n") != std::string::npos);
+    CHECK(raw.find("Set-Cookie: second=2; Path=/; SameSite=lax\r\n") != std::string::npos);
 }
 
 TEST_CASE("response quotes values that need quoting", "[cookies]") {
@@ -91,7 +88,7 @@ TEST_CASE("invalid cookie input is rejected", "[cookies]") {
 
 TEST_CASE("handlers can set cookies through the application seam", "[cookies]") {
     fiasco::app app;
-    app.get("/login", [] {
+    fiasco_test::get(app, "/login", [] {
         return fiasco::response::text("ok").set_cookie(
             "session", "abc", {.secure = true, .httponly = true});
     });
@@ -100,7 +97,6 @@ TEST_CASE("handlers can set cookies through the application seam", "[cookies]") 
     const auto res = client.handle(make_request("GET", "/login"));
 
     REQUIRE(res.set_cookie_headers.size() == 1);
-    CHECK(res.set_cookie_headers[0] ==
-          "session=abc; Path=/; Secure; HttpOnly; SameSite=lax");
+    CHECK(res.set_cookie_headers[0] == "session=abc; Path=/; Secure; HttpOnly; SameSite=lax");
     CHECK_FALSE(res.headers.contains("Set-Cookie"));
 }

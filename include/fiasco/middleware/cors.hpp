@@ -76,7 +76,8 @@ inline void append_vary(response& res, std::string_view value) {
     }
 }
 
-inline void add_headers(response& res, const std::unordered_map<std::string, std::string>& headers) {
+inline void add_headers(response& res,
+                        const std::unordered_map<std::string, std::string>& headers) {
     for (const auto& [name, value] : headers) {
         res.headers[name] = value;
     }
@@ -84,12 +85,12 @@ inline void add_headers(response& res, const std::unordered_map<std::string, std
 
 struct cors_state {
     explicit cors_state(cors_config config) {
-        allow_all_origins = std::find(config.allow_origins.begin(),
-                                      config.allow_origins.end(),
-                                      "*") != config.allow_origins.end();
-        allow_all_headers = std::find(config.allow_headers.begin(),
-                                      config.allow_headers.end(),
-                                      "*") != config.allow_headers.end();
+        allow_all_origins =
+            std::find(config.allow_origins.begin(), config.allow_origins.end(), "*") !=
+            config.allow_origins.end();
+        allow_all_headers =
+            std::find(config.allow_headers.begin(), config.allow_headers.end(), "*") !=
+            config.allow_headers.end();
         allow_credentials = config.allow_credentials;
         allow_private_network = config.allow_private_network;
         explicit_allow_origin = !allow_all_origins || allow_credentials;
@@ -202,8 +203,7 @@ inline response preflight_response(const cors_state& state, const request& req) 
             while (start <= requested_headers.size()) {
                 const auto end = requested_headers.find(',', start);
                 const auto part = requested_headers.substr(
-                    start,
-                    end == std::string::npos ? std::string::npos : end - start);
+                    start, end == std::string::npos ? std::string::npos : end - start);
                 const auto header = ascii_lower(part);
                 if (std::find(state.allow_headers.begin(), state.allow_headers.end(), header) ==
                     state.allow_headers.end()) {

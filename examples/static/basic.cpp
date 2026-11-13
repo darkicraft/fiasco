@@ -1,7 +1,7 @@
 // Static file mounts.
 //
 //   cmake --build build --target static_files
-//   FIASCO_PORT=8080 ./build/examples/static_files
+//   ./build/examples/static_files
 //
 //   curl localhost:8080/static/
 //   curl localhost:8080/static/style.css
@@ -9,26 +9,22 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <string>
 
-namespace {
+using fiasco::get;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
+namespace routes {
+
+[[=get("/")]]
+auto root() -> std::string {
+    return "try /static/";
 }
 
-}  // namespace
+}  // namespace routes
 
 int main() {
     fiasco::app app;
-
-    app.get("/", [] { return "try /static/"; });
+    app.register_api<^^routes>();
     app.mount_static("/static", "examples/static/public", {.html = true});
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.run();
 }

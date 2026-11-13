@@ -3,15 +3,16 @@
 // Annotation DSL for FastAPI-style field/parameter metadata.
 //
 //   struct User {
-//       int age [[= field{.gt = 5, .le = 10}]];
-//       std::string name [[= field{.min_length = 2, .alias = "user"}]];
+//       int age [[=field{.gt = 5, .le = 10}]];
+//       std::string name [[=field{.min_length = 2, .alias = "user"}]];
 //   };
 //
-//   app.get("/items/{id}",
-//           [](long id [[= path{.ge = 1}]],
-//              std::optional<int> page [[= query{}]]) { ... });
+//   [[=get("/items/{id}")]]
+//   auto item(long id [[=path{.ge = 1}]],
+//             std::optional<int> page [[=query{}]]) -> ...;
 //
-//   app.get("/me", [](User user [[= depends{^^get_current_user}]]) { ... });
+//   [[=get("/me")]]
+//   auto me(User user [[=depends{^^get_current_user}]]) -> ...;
 //
 // Markers are TYPES (`field<source>` + aliases), so `field{...}`/`path{...}`
 // are syntactically uniform. `depends` stores the reflected provider function.
@@ -60,7 +61,7 @@ struct depends_options {
 };
 
 /// A handler or dependency parameter supplied by another callable. `fn` is the
-/// reflected function entity, e.g. `[[= depends{^^get_current_user}]]`.
+/// reflected function entity, e.g. `[[=depends{^^get_current_user}]]`.
 /// Pass `{.use_cache = false}` as the second argument to bypass the per-request
 /// cache for that occurrence.
 struct depends {

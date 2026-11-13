@@ -5,6 +5,7 @@
 
 #include "fiasco/fiasco.hpp"
 #include "support/http_client.hpp"
+#include "support/test_routes.hpp"
 #include "support/test_server.hpp"
 
 TEST_CASE("server_config has stable defaults", "[server][config]") {
@@ -25,13 +26,13 @@ TEST_CASE("server binds an ephemeral port and serves requests", "[server][bounda
     fiasco_test::test_server server{
         fiasco::server_config{},
     };
-    server.app().get("/health", []() { return "ok"; });
+    fiasco_test::get(server.app(), "/health", []() { return "ok"; });
     server.start();
 
     REQUIRE(server.port() != 0);
 
-    const auto response = fiasco_test::send_request(
-        server.port(), "GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    const auto response =
+        fiasco_test::send_request(server.port(), "GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n");
 
     REQUIRE(fiasco_test::extract_status(response) == 200);
     REQUIRE(fiasco_test::extract_body(response) == "ok\n");

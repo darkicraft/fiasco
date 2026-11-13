@@ -6,7 +6,7 @@
 //
 //   cmake -S . -B build-modules -G Ninja
 //   cmake --build build-modules --target module
-//   FIASCO_PORT=8080 ./build-modules/examples/module
+//   ./build-modules/examples/module
 //   curl localhost:8080/
 //
 // GCC's module implementation requires the importer to make standard headers

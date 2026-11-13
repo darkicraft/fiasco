@@ -1,7 +1,7 @@
 // CORS middleware.
 //
 //   cmake --build build --target cors
-//   FIASCO_PORT=8080 ./build/examples/cors
+//   ./build/examples/cors
 //
 //   curl -i localhost:8080/hello -H 'Origin: https://example.com'
 //
@@ -12,19 +12,24 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
+#include <string>
 
-namespace {
+using fiasco::get;
+using fiasco::post;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
+namespace routes {
+
+[[=get("/hello")]]
+auto hello() -> std::string {
+    return "hello";
 }
 
-}  // namespace
+[[=post("/hello")]]
+auto create() -> std::string {
+    return "created";
+}
+
+}  // namespace routes
 
 int main() {
     fiasco::app app;
@@ -38,8 +43,6 @@ int main() {
         .max_age = 600,
     }));
 
-    app.get("/hello", [] { return "hello"; });
-    app.post("/hello", [] { return "created"; });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

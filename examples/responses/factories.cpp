@@ -1,7 +1,7 @@
 // Response factories, automatic wrapping, and response mutation.
 //
 //   cmake --build build --target responses
-//   FIASCO_PORT=8080 ./build/examples/responses
+//   ./build/examples/responses
 //
 //   curl -i localhost:8080/auto/text
 //   curl -i localhost:8080/auto/number
@@ -17,18 +17,12 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <string>
 
-namespace {
+using fiasco::get;
+using fiasco::response;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
+namespace {
 
 struct greeting {
     std::string message;
@@ -37,29 +31,70 @@ struct greeting {
 
 }  // namespace
 
+namespace routes {
+
+// Plain values are wrapped automatically.
+[[=get("/auto/text")]]
+auto auto_text() -> std::string {
+    return "plain text";
+}
+
+[[=get("/auto/number")]]
+auto auto_number() -> int {
+    return 42;
+}
+
+[[=get("/auto/model")]]
+auto auto_model() -> greeting {
+    return greeting{"from a model"};
+}
+
+[[=get("/auto/void")]]
+auto auto_void() -> void {}
+
+// Explicit response factories.
+[[=get("/text")]]
+auto text() -> response {
+    return response::text("plain text");
+}
+
+[[=get("/html")]]
+auto html() -> response {
+    return response::html("<h1>Hello</h1>");
+}
+
+[[=get("/json")]]
+auto raw_json() -> response {
+    return response::json(R"({"key":"value","n":[1,2,3]})");
+}
+
+[[=get("/redirect")]]
+auto redirect() -> response {
+    return response::redirect("/auto/text");
+}
+
+[[=get("/error")]]
+auto error() -> response {
+    return response::error("something went wrong", 400);
+}
+
+[[=get("/empty")]]
+auto empty() -> response {
+    return response::empty(204);
+}
+
+[[=get("/headers")]]
+auto headers() -> response {
+    auto res = response::text("check the headers");
+    res.status_code = 203;
+    res.headers["X-Example"] = "fiasco";
+    return res;
+}
+
+}  // namespace routes
+
 int main() {
     fiasco::app app;
-
-    // Plain values are wrapped automatically.
-    app.get("/auto/text", []() { return "plain text"; });
-    app.get("/auto/number", []() { return 42; });
-    app.get("/auto/model", []() { return greeting{"from a model"}; });
-    app.get("/auto/void", []() {});
-
-    // Explicit response factories.
-    app.get("/text", []() { return fiasco::response::text("plain text"); });
-    app.get("/html", []() { return fiasco::response::html("<h1>Hello</h1>"); });
-    app.get("/json", []() { return fiasco::response::json(R"({"key":"value","n":[1,2,3]})"); });
-    app.get("/redirect", []() { return fiasco::response::redirect("/auto/text"); });
-    app.get("/error", []() { return fiasco::response::error("something went wrong", 400); });
-    app.get("/empty", []() { return fiasco::response::empty(204); });
-
-    app.get("/headers", []() {
-        auto response = fiasco::response::text("check the headers");
-        response.status_code = 203;
-        response.headers["X-Example"] = "fiasco";
-        return response;
-    });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

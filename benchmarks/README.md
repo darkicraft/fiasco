@@ -19,8 +19,8 @@ The server binds the body to a model, validates it, and returns:
 
 The same request is served by two binaries:
 
-- `fiasco_json_bind` — Fiasco's reflection, validation, and routing on top of
-  `tcp_server`.
+- `fiasco_json_bind` — Fiasco's annotation routing, reflection, validation, and
+  JSON binding.
 - `raw_json_bind` — a hand-written Asio/Beast HTTP/1.1 server with the same
   `nlohmann::json` parse and the same validation. This is the baseline.
 

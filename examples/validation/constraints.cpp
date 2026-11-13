@@ -1,7 +1,7 @@
 // Pydantic-style field constraints, including pattern and alias.
 //
 //   cmake --build build --target constraints
-//   FIASCO_PORT=8080 ./build/examples/constraints
+//   ./build/examples/constraints
 //
 //   curl -X POST localhost:8080/constrained \
 //     -H 'Content-Type: application/json' \
@@ -30,36 +30,37 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <string>
 #include <vector>
 
+using fiasco::field;
+using fiasco::post;
+
 namespace {
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
-
 struct constrained_item {
-    int percent [[= fiasco::field{.gt = 0, .le = 100}]];
-    int boxes [[= fiasco::field{.multiple_of = 3}]] = 3;
-    double damping [[= fiasco::field{.ge = 0.0, .lt = 10.0}]] = 0.5;
-    std::string code [[= fiasco::field{.min_length = 2, .max_length = 8}]];
-    std::string slug [[= fiasco::field{.pattern = "^[a-z0-9-]+$"}]];
-    std::vector<int> tags [[= fiasco::field{.min_length = 1, .max_length = 4}]];
-    std::string username [[= fiasco::field{.alias = "user-name"}]] = "anon";
+    int percent [[=field{.gt = 0, .le = 100}]];
+    int boxes [[=field{.multiple_of = 3}]] = 3;
+    double damping [[=field{.ge = 0.0, .lt = 10.0}]] = 0.5;
+    std::string code [[=field{.min_length = 2, .max_length = 8}]];
+    std::string slug [[=field{.pattern = "^[a-z0-9-]+$"}]];
+    std::vector<int> tags [[=field{.min_length = 1, .max_length = 4}]];
+    std::string username [[=field{.alias = "user-name"}]] = "anon";
 };
 
 }  // namespace
 
+namespace routes {
+
+[[=post("/constrained")]]
+auto constrained(constrained_item input) -> constrained_item {
+    return input;
+}
+
+}  // namespace routes
+
 int main() {
     fiasco::app app;
-
-    app.post("/constrained", [](constrained_item input) { return input; });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

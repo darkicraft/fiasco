@@ -119,10 +119,11 @@ TEST_CASE("static mounts reject missing files and traversal", "[static]") {
     fiasco::test_client client{app};
 
     CHECK(client.handle(make_request("GET", "/assets/missing.txt")).status_code == 404);
-    CHECK(client.handle(make_request("GET", "/assets/../fiasco-static-secret.txt"))
-              .status_code == 404);
-    CHECK(client.handle(make_request("GET", "/assets/%2e%2e/fiasco-static-secret.txt"))
-              .status_code == 404);
+    CHECK(client.handle(make_request("GET", "/assets/../fiasco-static-secret.txt")).status_code ==
+          404);
+    CHECK(
+        client.handle(make_request("GET", "/assets/%2e%2e/fiasco-static-secret.txt")).status_code ==
+        404);
 
     std::error_code ec;
     std::filesystem::remove(secret, ec);

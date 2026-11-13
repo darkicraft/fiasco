@@ -46,8 +46,7 @@ inline const char* openapi_scalar_type(std::string_view type) {
         type.find("float") != std::string_view::npos) {
         return "number";
     }
-    if (type.find("int") != std::string_view::npos ||
-        type.find("long") != std::string_view::npos ||
+    if (type.find("int") != std::string_view::npos || type.find("long") != std::string_view::npos ||
         type.find("short") != std::string_view::npos ||
         type.find("size_t") != std::string_view::npos) {
         return "integer";

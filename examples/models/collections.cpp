@@ -1,7 +1,7 @@
 // Nested models and standard collection fields, in both directions.
 //
 //   cmake --build build --target collections
-//   FIASCO_PORT=8080 ./build/examples/collections
+//   ./build/examples/collections
 //
 //   curl -X POST localhost:8080/collections \
 //     -H 'Content-Type: application/json' \
@@ -18,8 +18,6 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <map>
 #include <optional>
 #include <string>
@@ -27,14 +25,9 @@
 #include <utility>
 #include <vector>
 
-namespace {
+using fiasco::post;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
+namespace {
 
 struct region {
     int x;
@@ -63,40 +56,45 @@ struct collection_response {
 
 }  // namespace
 
+namespace routes {
+
+[[=post("/collections")]]
+auto collections(collection_request input) -> collection_response {
+    int total = 0;
+    for (int value : input.values) {
+        total += value;
+    }
+
+    std::vector<std::string> keys;
+    std::map<std::string, int> region_counts;
+    for (const auto& [key, value] : input.weights) {
+        (void)value;
+        keys.push_back(key);
+    }
+    for (const auto& region : input.regions) {
+        region_counts[region.note.value_or("unnamed")] += 1;
+    }
+
+    std::optional<region> first;
+    if (!input.regions.empty()) {
+        first = input.regions.front();
+    }
+
+    return {
+        total,
+        keys,
+        input.window,
+        input.meta,
+        first,
+        input.focus,
+        region_counts,
+    };
+}
+
+}  // namespace routes
+
 int main() {
     fiasco::app app;
-
-    app.post("/collections", [](collection_request input) -> collection_response {
-        int total = 0;
-        for (int value : input.values) {
-            total += value;
-        }
-
-        std::vector<std::string> keys;
-        std::map<std::string, int> region_counts;
-        for (const auto& [key, value] : input.weights) {
-            (void)value;
-            keys.push_back(key);
-        }
-        for (const auto& region : input.regions) {
-            region_counts[region.note.value_or("unnamed")] += 1;
-        }
-
-        std::optional<region> first;
-        if (!input.regions.empty()) {
-            first = input.regions.front();
-        }
-
-        return {
-            total,
-            keys,
-            input.window,
-            input.meta,
-            first,
-            input.focus,
-            region_counts,
-        };
-    });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

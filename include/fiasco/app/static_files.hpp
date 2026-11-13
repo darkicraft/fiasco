@@ -47,8 +47,7 @@ inline bool static_path_matches(std::string_view prefix, std::string_view path) 
     if (path == prefix) {
         return true;
     }
-    return path.size() > prefix.size() && path.starts_with(prefix) &&
-           path[prefix.size()] == '/';
+    return path.size() > prefix.size() && path.starts_with(prefix) && path[prefix.size()] == '/';
 }
 
 inline int hex_value(char c) {
@@ -90,9 +89,8 @@ inline std::optional<std::filesystem::path> static_relative_path(std::string_vie
     while (start <= decoded.size()) {
         const std::size_t slash = decoded.find('/', start);
         const std::string_view segment =
-            (slash == std::string::npos)
-                ? std::string_view(decoded).substr(start)
-                : std::string_view(decoded).substr(start, slash - start);
+            (slash == std::string::npos) ? std::string_view(decoded).substr(start)
+                                         : std::string_view(decoded).substr(start, slash - start);
 
         if (!segment.empty() && segment != ".") {
             if (segment == ".." || segment.find('\\') != std::string_view::npos) {
@@ -124,8 +122,7 @@ inline response static_method_not_allowed() {
     return res;
 }
 
-inline std::optional<response> serve_static(const static_mount& mount,
-                                            const request& req) {
+inline std::optional<response> serve_static(const static_mount& mount, const request& req) {
     if (!static_path_matches(mount.prefix, req.path)) {
         return std::nullopt;
     }

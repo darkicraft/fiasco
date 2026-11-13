@@ -333,8 +333,8 @@ TEST_CASE("reflection model collections of nested models round-trip", "[model]")
 
 TEST_CASE("reflection model reports collection element paths", "[model]") {
     json_type j = json_type::object();
-    j["items"] = json_type::array(
-        {json_type(BoundaryInner{1}), json_type::parse(R"({"value":"bad"})")});
+    j["items"] =
+        json_type::array({json_type(BoundaryInner{1}), json_type::parse(R"({"value":"bad"})")});
     j["by_name"] = json_type::object();
 
     try {

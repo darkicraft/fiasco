@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "fiasco/fiasco.hpp"
+#include "support/test_routes.hpp"
 
 namespace {
 
@@ -19,7 +20,7 @@ fiasco::request make_request(std::string_view method, std::string url) {
 
 TEST_CASE("405 responses carry an Allow header", "[routing][http]") {
     fiasco::app app;
-    app.get("/only-get", [] { return std::string{"ok"}; });
+    fiasco_test::get(app, "/only-get", [] { return std::string{"ok"}; });
 
     fiasco::test_client client{app};
     const auto response = client.handle(make_request("POST", "/only-get"));
@@ -31,7 +32,7 @@ TEST_CASE("405 responses carry an Allow header", "[routing][http]") {
 
 TEST_CASE("trailing slash policy redirects to the registered path", "[routing][http]") {
     fiasco::app app;
-    app.get("/slash/", [] { return std::string{"ok"}; });
+    fiasco_test::get(app, "/slash/", [] { return std::string{"ok"}; });
 
     fiasco::test_client client{app};
 
@@ -50,7 +51,7 @@ TEST_CASE("trailing slash redirect can be disabled", "[routing][http]") {
     router_options.redirect_slashes = false;
 
     fiasco::app app{options, router_options};
-    app.get("/slash/", [] { return std::string{"ok"}; });
+    fiasco_test::get(app, "/slash/", [] { return std::string{"ok"}; });
 
     fiasco::test_client client{app};
     const auto response = client.handle(make_request("GET", "/slash"));

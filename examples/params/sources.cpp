@@ -1,7 +1,7 @@
 // Explicit parameter sources: path, query, body, header, and cookie.
 //
 //   cmake --build build --target param_sources
-//   FIASCO_PORT=8080 ./build/examples/param_sources
+//   ./build/examples/param_sources
 //
 //   curl -X POST 'localhost:8080/items/7?search=cats' \
 //     -H 'X-Token: abc' \
@@ -14,19 +14,19 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <optional>
 #include <string>
 
-namespace {
+using fiasco::body;
+using fiasco::cookie;
+using fiasco::get;
+using fiasco::header;
+using fiasco::json;
+using fiasco::path;
+using fiasco::post;
+using fiasco::query;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
+namespace {
 
 struct payload {
     std::string note;
@@ -34,32 +34,42 @@ struct payload {
 
 }  // namespace
 
+namespace routes {
+
+struct payload {
+    std::string note;
+};
+
+[[=post("/items/{id}")]]
+auto create_item(
+    int id [[=path{.ge = 1}]],
+    std::string q [[=query{.min_length = 2, .alias = "search"}]],
+    std::string token [[=header{.alias = "X-Token"}]],
+    std::string session [[=cookie{.alias = "session_id"}]],
+    payload value [[=body{}]]) -> json {
+    return json{
+        {"id", id},
+        {"search", q},
+        {"token", token},
+        {"session", session},
+        {"note", value.note},
+    };
+}
+
+[[=get("/optional")]]
+auto optional_values(
+    std::optional<std::string> trace [[=header{.alias = "X-Trace"}]],
+    std::optional<int> page [[=query{.ge = 1}]]) -> json {
+    return json{
+        {"trace", trace ? json(*trace) : json(nullptr)},
+        {"page", page ? json(*page) : json(nullptr)},
+    };
+}
+
+}  // namespace routes
+
 int main() {
     fiasco::app app;
-
-    app.post("/items/{id}",
-             [](int id [[= fiasco::path{.ge = 1}]],
-               std::string q [[= fiasco::query{.min_length = 2, .alias = "search"}]],
-               std::string token [[= fiasco::header{.alias = "X-Token"}]],
-               std::string session [[= fiasco::cookie{.alias = "session_id"}]],
-               payload body [[= fiasco::body{}]]) {
-                 return fiasco::json{
-                     {"id", id},
-                     {"search", q},
-                     {"token", token},
-                     {"session", session},
-                     {"note", body.note},
-                 };
-             });
-
-    app.get("/optional",
-            [](std::optional<std::string> trace [[= fiasco::header{.alias = "X-Trace"}]],
-               std::optional<int> page [[= fiasco::query{.ge = 1}]]) {
-                return fiasco::json{
-                    {"trace", trace ? fiasco::json(*trace) : fiasco::json(nullptr)},
-                    {"page", page ? fiasco::json(*page) : fiasco::json(nullptr)},
-                };
-            });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

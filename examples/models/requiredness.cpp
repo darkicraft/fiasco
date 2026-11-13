@@ -1,7 +1,7 @@
 // Pydantic's required-vs-nullable rules, exactly.
 //
 //   cmake --build build --target requiredness
-//   FIASCO_PORT=8080 ./build/examples/requiredness
+//   ./build/examples/requiredness
 //
 //   curl -X POST localhost:8080/requiredness \
 //     -H 'Content-Type: application/json' \
@@ -21,18 +21,11 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <optional>
 
-namespace {
+using fiasco::post;
 
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
+namespace {
 
 struct requiredness_model {
     int a;                                // required, not nullable
@@ -43,10 +36,17 @@ struct requiredness_model {
 
 }  // namespace
 
+namespace routes {
+
+[[=post("/requiredness")]]
+auto requiredness(requiredness_model input) -> requiredness_model {
+    return input;
+}
+
+}  // namespace routes
+
 int main() {
     fiasco::app app;
-
-    app.post("/requiredness", [](requiredness_model input) { return input; });
-
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.register_api<^^routes>();
+    app.run();
 }

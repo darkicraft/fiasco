@@ -12,7 +12,8 @@ namespace fiasco_test {
 class test_server {
   public:
     explicit test_server(fiasco::server_config config = {})
-        : m_app(), m_server(m_app.handler(), make_config(std::move(config))) {}
+        : m_app(),
+          m_server(m_app.handler(), make_config(std::move(config))) {}
 
     test_server(const test_server&) = delete;
     test_server& operator=(const test_server&) = delete;

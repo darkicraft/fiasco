@@ -29,11 +29,9 @@
 #include "fiasco/internal/middleware.hpp"
 #include "fiasco/internal/router.hpp"
 
-namespace fiasco {
-struct server_config;
-}  // namespace fiasco
-
 namespace fiasco::detail {
+
+struct test_route_access;
 
 /// The pure application object: routes, middleware, exception handlers, and
 /// metadata. It owns no transport. `server` owns the socket and drives
@@ -71,28 +69,22 @@ class app {
     }
 
     template <typename F>
-    void get(const std::string& path, F&& f) {
-        m_router.add(http_method::get, path, std::forward<F>(f));
+    void middleware(F&& fn) {
+        m_middleware.add(middleware_fn{std::forward<F>(fn)});
     }
 
-    template <typename F>
-    void post(const std::string& path, F&& f) {
-        m_router.add(http_method::post, path, std::forward<F>(f));
-    }
+    /// Mount a sub-application at `path`. The sub-app's own middleware and
+    /// exception handlers run, and the prefix is stripped before its routes
+    /// are matched. Starlette-style: the mount path is a path-segment prefix.
+    void mount(const std::string& path, app& sub) { m_sub_apps.push_back({path, &sub}); }
 
-    template <typename F>
-    void put(const std::string& path, F&& f) {
-        m_router.add(http_method::put, path, std::forward<F>(f));
-    }
-
-    template <typename F>
-    void del(const std::string& path, F&& f) {
-        m_router.add(http_method::del, path, std::forward<F>(f));
-    }
-
-    template <typename F>
-    void patch(const std::string& path, F&& f) {
-        m_router.add(http_method::patch, path, std::forward<F>(f));
+    /// Serve files from `directory` under `prefix`.
+    void mount_static(std::string prefix,
+                      std::filesystem::path directory,
+                      static_options options = {}) {
+        m_static_mounts.push_back(static_mount{.prefix = normalize_static_prefix(std::move(prefix)),
+                                               .directory = std::move(directory),
+                                               .options = options});
     }
 
     void include_router(router sub, const std::string& prefix = "") {
@@ -102,28 +94,6 @@ class app {
     template <std::meta::info Ns>
     void register_api() {
         m_router.register_api<Ns>();
-    }
-
-    /// Mount a sub-application at `path`. The sub-app's own middleware and
-    /// exception handlers run, and the prefix is stripped before its routes
-    /// are matched. Starlette-style: the mount path is a path-segment prefix.
-    void mount(const std::string& path, app& sub) {
-        m_sub_apps.push_back({path, &sub});
-    }
-
-    /// Serve files from `directory` under `prefix`.
-    void mount_static(std::string prefix,
-                      std::filesystem::path directory,
-                      static_options options = {}) {
-        m_static_mounts.push_back(static_mount{
-            .prefix = normalize_static_prefix(std::move(prefix)),
-            .directory = std::move(directory),
-            .options = options});
-    }
-
-    template <typename F>
-    void middleware(F&& fn) {
-        m_middleware.add(middleware_fn{std::forward<F>(fn)});
     }
 
     /// The application seam. No socket, no logging, no threads.
@@ -140,7 +110,6 @@ class app {
 
     /// Single-server sugar; implemented by the umbrella target.
     void run();
-    void run(server_config config);
 
   private:
     struct sub_app {
@@ -156,8 +125,8 @@ class app {
             return true;
         }
         if (path.starts_with(prefix)) {
-            return prefix.back() == '/' || path.size() > prefix.size() &&
-                                              path[prefix.size()] == '/';
+            return prefix.back() == '/' ||
+                   path.size() > prefix.size() && path[prefix.size()] == '/';
         }
         return false;
     }
@@ -168,6 +137,13 @@ class app {
     std::vector<sub_app> m_sub_apps;
     std::vector<static_mount> m_static_mounts;
     std::unordered_map<std::type_index, exception_handler> m_exception_handlers;
+
+    friend struct test_route_access;
+
+    template <typename F>
+    void add_route_for_test(http_method method, const std::string& path, F&& f) {
+        m_router.add(method, path, std::forward<F>(f));
+    }
 
     template <std::derived_from<std::exception> E, typename F>
     void add_exception_handler_impl(F&& handler) {
@@ -425,8 +401,7 @@ inline task<void> app::write_response(response_sink& sink, response res) {
         sink.header("Set-Cookie", cookie);
     }
     if (!res.body.empty()) {
-        co_await sink.write(
-            std::as_bytes(std::span<const char>(res.body.data(), res.body.size())));
+        co_await sink.write(std::as_bytes(std::span<const char>(res.body.data(), res.body.size())));
     }
     co_await sink.end();
     co_return;

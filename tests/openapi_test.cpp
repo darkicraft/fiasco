@@ -15,7 +15,7 @@ struct dimensions {
 };
 
 struct item_input {
-    std::string name [[= fiasco::field{.min_length = 2}]];
+    std::string name [[=fiasco::field{.min_length = 2}]];
     dimensions size;
     std::optional<int> stock;
     std::vector<std::string> tags;
@@ -26,17 +26,18 @@ struct item_output {
     int quantity;
 };
 
-[[= fiasco::get("/items/{id}",
+[[=fiasco::get("/items/{id}",
                 {.summary = "Fetch item", .operation_id = "fetch_item"})]]
-std::string fetch(long id [[= fiasco::path{.ge = 1}]],
-                  std::optional<int> page [[= fiasco::query{.le = 10}]],
-                  fiasco::request req) {
+std::string
+    fetch(long id [[=fiasco::path{.ge = 1}]],
+          std::optional<int> page [[=fiasco::query{.le = 10}]],
+          fiasco::request req) {
     (void)page;
     (void)req;
     return std::to_string(id);
 }
 
-[[= fiasco::post("/items",
+[[=fiasco::post("/items",
                  {.summary = "Create item",
                   .operation_id = "create_item",
                   .status_code = 201})]]
@@ -44,22 +45,22 @@ item_output create(item_input item) {
     return item_output{.name = item.name, .quantity = 1};
 }
 
-[[= fiasco::post("/batch")]]
+[[=fiasco::post("/batch")]]
 std::string batch(item_input first, dimensions second) {
     return first.name + std::to_string(second.width);
 }
 
-[[= fiasco::get("/typed-async/{id}")]]
+[[=fiasco::get("/typed-async/{id}")]]
 fiasco::async_t<item_output> typed_async(long id) {
     co_return item_output{.name = "item-" + std::to_string(id), .quantity = 1};
 }
 
-[[= fiasco::get("/untyped-async")]]
+[[=fiasco::get("/untyped-async")]]
 fiasco::async untyped_async() {
     co_return item_output{.name = "untyped", .quantity = 1};
 }
 
-[[= fiasco::get("/override-response",
+[[=fiasco::get("/override-response",
                 {.response_model = ^^item_output})]]
 item_input override_response() {
     return item_input{.name = "actual", .size = {1, 2}, .stock = 1, .tags = {"x"}};
@@ -130,8 +131,7 @@ TEST_CASE("openapi document projects route descriptors", "[openapi]") {
 
     const auto request_body = create_operation["requestBody"];
     CHECK(request_body["required"] == true);
-    const auto request_schema =
-        request_body["content"]["application/json"]["schema"];
+    const auto request_schema = request_body["content"]["application/json"]["schema"];
     const auto components = document["components"]["schemas"];
     const std::string prefix = "#/components/schemas/";
     const auto request_ref = request_schema["$ref"].get<std::string>();
@@ -162,21 +162,17 @@ TEST_CASE("openapi document projects route descriptors", "[openapi]") {
     CHECK(batch_schema["properties"]["second"]["$ref"].get<std::string>().starts_with(prefix));
     CHECK(batch_schema["required"].size() == 2);
 
-    const auto typed_async_response =
-        paths["/typed-async/{id}"]["get"]["responses"]["200"];
+    const auto typed_async_response = paths["/typed-async/{id}"]["get"]["responses"]["200"];
     CHECK(typed_async_response["content"].contains("application/json"));
     const auto typed_async_ref =
-        typed_async_response["content"]["application/json"]["schema"]["$ref"]
-            .get<std::string>();
+        typed_async_response["content"]["application/json"]["schema"]["$ref"].get<std::string>();
     REQUIRE(typed_async_ref.starts_with(prefix));
     CHECK(components.contains(typed_async_ref.substr(prefix.size())));
 
-    const auto untyped_async_response =
-        paths["/untyped-async"]["get"]["responses"]["200"];
+    const auto untyped_async_response = paths["/untyped-async"]["get"]["responses"]["200"];
     CHECK_FALSE(untyped_async_response.contains("content"));
 
-    const auto override_response =
-        paths["/override-response"]["get"]["responses"]["200"];
+    const auto override_response = paths["/override-response"]["get"]["responses"]["200"];
     CHECK(override_response["content"].contains("application/json"));
     const auto override_ref =
         override_response["content"]["application/json"]["schema"]["$ref"].get<std::string>();

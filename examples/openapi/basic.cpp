@@ -1,7 +1,7 @@
 // OpenAPI metadata from app_options, router_options, and route annotations.
 //
 //   cmake --build build --target openapi
-//   FIASCO_PORT=8080 ./build/examples/openapi
+//   ./build/examples/openapi
 //
 //   curl localhost:8080/items/7
 //   curl localhost:8080/items/7/raw
@@ -16,21 +16,15 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <cstdint>
-#include <cstdlib>
 #include <optional>
 #include <string>
 
-namespace {
-
-std::uint16_t example_port() {
-    if (const char* value = std::getenv("FIASCO_PORT")) {
-        return static_cast<std::uint16_t>(std::stoi(value));
-    }
-    return 8080;
-}
-
-}  // namespace
+using fiasco::get;
+using fiasco::json;
+using fiasco::path;
+using fiasco::post;
+using fiasco::query;
+using fiasco::response;
 
 namespace catalog {
 
@@ -39,30 +33,29 @@ struct item {
     int quantity = 1;
 };
 
-[[= fiasco::get("/items/{id}",
-                {.summary = "Read an item",
-                 .description = "Returns the item for the given identifier.",
-                 .operation_id = "read_item"})]]
-item read_item(long id [[= fiasco::path{.ge = 1}]],
-               std::optional<int> fields [[= fiasco::query{.ge = 1, .le = 10}]]) {
+[[=get("/items/{id}",
+        {.summary = "Read an item",
+         .description = "Returns the item for the given identifier.",
+         .operation_id = "read_item"})]]
+auto read_item(long id [[=path{.ge = 1}]], std::optional<int> fields [[=query{.ge = 1, .le = 10}]])
+        -> item {
     (void)fields;
     return item{.name = "item-" + std::to_string(id), .quantity = 1};
 }
 
-[[= fiasco::post("/items",
-                 {.summary = "Create an item",
-                  .description = "Creates an item from the JSON request body.",
-                  .operation_id = "create_item",
-                  .status_code = 201})]]
-item create_item(item input) {
+[[=post("/items",
+         {.summary = "Create an item",
+          .description = "Creates an item from the JSON request body.",
+          .operation_id = "create_item",
+          .status_code = 201})]]
+auto create_item(item input) -> item {
     return input;
 }
 
-// `fiasco::response` is opaque to schema inference; use `.response_model`.
-[[= fiasco::get("/items/{id}/raw", {.response_model = ^^item})]]
-fiasco::response raw_item(long id) {
-    return fiasco::response::json(
-        fiasco::json{{"name", "item-" + std::to_string(id)}, {"quantity", 1}}.dump());
+// `response` is opaque to schema inference; use `.response_model`.
+[[=get("/items/{id}/raw", {.response_model = ^^item})]]
+auto raw_item(long id) -> response {
+    return response::json(json{{"name", "item-" + std::to_string(id)}, {"quantity", 1}}.dump());
 }
 
 }  // namespace catalog
@@ -75,7 +68,7 @@ int main() {
     options.contact.name = "Fiasco";
     options.contact.url = "https://github.com/darkicraft/fiasco";
     options.license.name = "MIT";
-    options.swagger_ui_parameters = fiasco::json{{"syntaxHighlight", false}};
+    options.swagger_ui_parameters = json{{"syntaxHighlight", false}};
 
     fiasco::router_options router_options;
     router_options.tags = {"catalog"};
@@ -84,5 +77,5 @@ int main() {
     app.register_api<^^catalog>();
 
     app.print_routes();
-    app.run(fiasco::server_config{.network = {.port = example_port()}});
+    app.run();
 }

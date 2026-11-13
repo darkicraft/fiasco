@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <string>
 
+using fiasco::post;
+
 namespace {
 
 struct user_input {
@@ -23,6 +25,15 @@ struct user_view {
 
 }  // namespace
 
+namespace benchmark {
+
+[[=post("/validate")]]
+auto validate(user_input input) -> user_view {
+    return {input.username, input.age + 1};
+}
+
+}  // namespace benchmark
+
 int main(int argc, char** argv) {
     const auto port = argc > 1 ? static_cast<std::uint16_t>(std::stoi(argv[1]))
                                : static_cast<std::uint16_t>(8080);
@@ -32,12 +43,10 @@ int main(int argc, char** argv) {
     }
 
     fiasco::app app;
+    app.register_api<^^benchmark>();
 
-    app.post("/validate", [](user_input input) -> user_view {
-        return {input.username, input.age + 1};
-    });
-
-    app.run(fiasco::server_config{
+    fiasco::server server(app.handler(), {
         .network = {.port = port, .workers = workers},
     });
+    server.run();
 }
