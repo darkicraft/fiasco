@@ -7,7 +7,9 @@
 #include <string_view>
 
 #include "fiasco/fiasco.hpp"
+#include "support/http_client.hpp"
 #include "support/test_routes.hpp"
+#include "support/test_server.hpp"
 
 namespace {
 
@@ -36,12 +38,14 @@ fiasco::request make_request(std::string_view method, std::string url) {
 
 }  // namespace
 
-TEST_CASE("response::file reads a file and infers its media type", "[file_response]") {
+TEST_CASE("response::file records file metadata and infers its media type", "[file_response]") {
     file_fixture fixture{"hello from a file"};
 
     const auto res = fiasco::response::file(fixture.path);
     CHECK(res.status_code == 200);
-    CHECK(res.body == "hello from a file");
+    CHECK(res.body.empty());
+    CHECK(res.file_source != nullptr);
+    CHECK(res.file_source->size == 17);
     CHECK(res.headers.at("Content-Type") == "text/plain; charset=utf-8");
     CHECK_FALSE(res.headers.contains("Content-Disposition"));
 }
@@ -91,4 +95,129 @@ TEST_CASE("response::file works through the application seam", "[file_response]"
     REQUIRE(res.status_code == 200);
     CHECK(res.body == "download me");
     CHECK(res.headers.at("Content-Disposition") == "attachment; filename=\"download.txt\"");
+    CHECK(res.headers.at("Accept-Ranges") == "bytes");
+    CHECK(res.headers.at("Content-Length") == "11");
+    CHECK(res.headers.contains("ETag"));
+    CHECK(res.headers.contains("Last-Modified"));
+}
+
+TEST_CASE("response::file supports byte ranges", "[file_response][range]") {
+    file_fixture fixture{"0123456789"};
+
+    fiasco::app app;
+    fiasco_test::get(app, "/file", [path = fixture.path] { return fiasco::response::file(path); });
+
+    fiasco::test_client client{app};
+    auto req = make_request("GET", "/file");
+    req.headers["Range"] = "bytes=2-5";
+    const auto res = client.handle(std::move(req));
+
+    REQUIRE(res.status_code == 206);
+    CHECK(res.body == "2345");
+    CHECK(res.headers.at("Content-Range") == "bytes 2-5/10");
+    CHECK(res.headers.at("Content-Length") == "4");
+}
+
+TEST_CASE("response::file supports suffix and open-ended ranges", "[file_response][range]") {
+    file_fixture fixture{"0123456789"};
+
+    fiasco::app app;
+    fiasco_test::get(app, "/file", [path = fixture.path] { return fiasco::response::file(path); });
+
+    fiasco::test_client client{app};
+    {
+        auto req = make_request("GET", "/file");
+        req.headers["Range"] = "bytes=-3";
+        const auto res = client.handle(std::move(req));
+        REQUIRE(res.status_code == 206);
+        CHECK(res.body == "789");
+        CHECK(res.headers.at("Content-Range") == "bytes 7-9/10");
+    }
+    {
+        auto req = make_request("GET", "/file");
+        req.headers["Range"] = "bytes=7-";
+        const auto res = client.handle(std::move(req));
+        REQUIRE(res.status_code == 206);
+        CHECK(res.body == "789");
+        CHECK(res.headers.at("Content-Range") == "bytes 7-9/10");
+    }
+}
+
+TEST_CASE("response::file rejects unsatisfiable ranges", "[file_response][range]") {
+    file_fixture fixture{"0123456789"};
+
+    fiasco::app app;
+    fiasco_test::get(app, "/file", [path = fixture.path] { return fiasco::response::file(path); });
+
+    fiasco::test_client client{app};
+    auto req = make_request("GET", "/file");
+    req.headers["Range"] = "bytes=20-";
+    const auto res = client.handle(std::move(req));
+
+    REQUIRE(res.status_code == 416);
+    CHECK(res.body.empty());
+    CHECK(res.headers.at("Content-Range") == "bytes */10");
+    CHECK(res.headers.at("Content-Length") == "0");
+}
+
+TEST_CASE("response::file ignores a range when If-Range does not match", "[file_response][range]") {
+    file_fixture fixture{"0123456789"};
+
+    fiasco::app app;
+    fiasco_test::get(app, "/file", [path = fixture.path] { return fiasco::response::file(path); });
+
+    fiasco::test_client client{app};
+    auto req = make_request("GET", "/file");
+    req.headers["Range"] = "bytes=2-5";
+    req.headers["If-Range"] = "\"not-the-etag\"";
+    const auto res = client.handle(std::move(req));
+
+    REQUIRE(res.status_code == 200);
+    CHECK(res.body == "0123456789");
+    CHECK(res.headers.at("Content-Length") == "10");
+}
+
+TEST_CASE("server streams file ranges", "[file_response][integration]") {
+    file_fixture fixture{"0123456789"};
+
+    fiasco_test::test_server server;
+    fiasco_test::get(
+        server.app(), "/file", [path = fixture.path] { return fiasco::response::file(path); });
+    server.start();
+
+    const auto raw = fiasco_test::send_request(server.port(),
+                                               "GET /file HTTP/1.1\r\n"
+                                               "Host: localhost\r\n"
+                                               "Range: bytes=2-5\r\n"
+                                               "Connection: close\r\n"
+                                               "\r\n");
+
+    CHECK(fiasco_test::extract_status(raw) == 206);
+    CHECK(fiasco_test::extract_body(raw) == "2345");
+    CHECK(raw.find("Content-Range: bytes 2-5/10\r\n") != std::string::npos);
+    CHECK(raw.find("Content-Length: 4\r\n") != std::string::npos);
+}
+
+TEST_CASE("response::file supports HEAD and conditional requests", "[file_response]") {
+    file_fixture fixture{"0123456789"};
+
+    fiasco::app app;
+    app.mount_static("/files", fixture.path.parent_path());
+
+    const std::string url = "/files/" + fixture.path.filename().string();
+    fiasco::test_client client{app};
+    const auto head = client.handle(make_request("HEAD", url));
+    REQUIRE(head.status_code == 200);
+    CHECK(head.body.empty());
+    CHECK(head.headers.at("Content-Length") == "10");
+
+    const auto full = client.handle(make_request("GET", url));
+    REQUIRE(full.status_code == 200);
+    const auto etag = full.headers.at("ETag");
+
+    auto conditional = make_request("GET", url);
+    conditional.headers["If-None-Match"] = etag;
+    const auto not_modified = client.handle(std::move(conditional));
+    CHECK(not_modified.status_code == 304);
+    CHECK(not_modified.body.empty());
 }

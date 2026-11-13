@@ -211,6 +211,13 @@ inline std::string http_date(std::chrono::system_clock::time_point point) {
                        static_cast<int>(time.seconds().count()));
 }
 
+struct file_body {
+    std::filesystem::path path;
+    std::uintmax_t size = 0;
+    std::string last_modified;
+    std::string etag;
+};
+
 inline bool cookie_name_char(char c) {
     const auto uc = static_cast<unsigned char>(c);
     if (std::isalnum(uc) != 0) {
@@ -323,6 +330,7 @@ struct response {
     std::vector<std::string> set_cookie_headers;
     std::string body;
     std::shared_ptr<body_source> stream_source;
+    std::shared_ptr<response_detail::file_body> file_source;
 
     response& set_cookie(std::string_view name,
                          std::string_view value,
@@ -349,10 +357,20 @@ struct response {
             throw std::runtime_error("file does not exist: " + path.string());
         }
 
-        std::ifstream input(path, std::ios::binary);
-        if (!input) {
-            throw std::runtime_error("cannot open file: " + path.string());
+        const auto size = std::filesystem::file_size(path, ec);
+        if (ec) {
+            throw std::runtime_error("cannot stat file: " + path.string());
         }
+
+        const auto modified = std::filesystem::last_write_time(path, ec);
+        if (ec) {
+            throw std::runtime_error("cannot stat file: " + path.string());
+        }
+
+        const auto system_modified =
+            std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                modified - std::filesystem::file_time_type::clock::now() +
+                std::chrono::system_clock::now());
 
         response r;
         r.headers["Content-Type"] = options.media_type.has_value()
@@ -362,7 +380,14 @@ struct response {
         if (!disposition.empty()) {
             r.headers["Content-Disposition"] = disposition;
         }
-        r.body.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+
+        r.file_source = std::make_shared<response_detail::file_body>(response_detail::file_body{
+            .path = path,
+            .size = size,
+            .last_modified = response_detail::http_date(system_modified),
+            .etag = std::format(
+                "\"{:x}-{:x}\"", size, static_cast<long long>(modified.time_since_epoch().count())),
+        });
         return r;
     }
 
@@ -431,12 +456,18 @@ struct response {
             return "Created";
         case 204:
             return "No Content";
+        case 206:
+            return "Partial Content";
+        case 304:
+            return "Not Modified";
         case 400:
             return "Bad Request";
         case 404:
             return "Not Found";
         case 405:
             return "Method Not Allowed";
+        case 416:
+            return "Range Not Satisfiable";
         case 422:
             return "Unprocessable Entity";
         case 500:
@@ -447,7 +478,7 @@ struct response {
     }
 
     [[nodiscard]] std::string serialize() const {
-        if (stream_source) {
+        if (stream_source || file_source) {
             throw std::logic_error("streaming responses cannot be serialized");
         }
 

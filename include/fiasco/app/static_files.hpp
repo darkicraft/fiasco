@@ -5,8 +5,6 @@
 
 #include <cctype>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -175,26 +173,12 @@ inline std::optional<response> serve_static(const static_mount& mount, const req
         return static_not_found();
     }
 
-    const auto size = std::filesystem::file_size(target, ec);
-    if (ec) {
+    try {
+        return response::file(target,
+                              {.media_type = static_content_type(target.extension().string())});
+    } catch (...) {
         return static_not_found();
     }
-
-    response res;
-    res.status_code = 200;
-    res.headers["Content-Type"] = static_content_type(target.extension().string());
-
-    if (req.method == http_method::head) {
-        res.headers["Content-Length"] = std::to_string(size);
-        return res;
-    }
-
-    std::ifstream file(target, std::ios::binary);
-    if (!file) {
-        return static_not_found();
-    }
-    res.body.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-    return res;
 }
 
 }  // namespace fiasco::detail

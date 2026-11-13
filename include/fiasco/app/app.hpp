@@ -17,6 +17,7 @@
 
 #include "fiasco/app/app_options.hpp"
 #include "fiasco/app/docs.hpp"
+#include "fiasco/app/file_response.hpp"
 #include "fiasco/app/openapi.hpp"
 #include "fiasco/app/static_files.hpp"
 #include "fiasco/contract/exchange.hpp"
@@ -382,18 +383,24 @@ inline request_result app::handle(request req) {
 }
 
 inline task<void> app::handle(exchange& ex) {
-    auto result = handle(std::move(ex.req));
+    auto req = ex.req;
+    auto result = handle(std::move(req));
     if (auto* res = std::get_if<response>(&result)) {
+        prepare_file_response(*res, ex.req);
         co_await write_response(ex.res, std::move(*res));
         co_return;
     }
     auto res = co_await std::get<async>(std::move(result));
-    co_await write_response(ex.res, std::move(res).take());
+    auto response = std::move(res).take();
+    prepare_file_response(response, ex.req);
+    co_await write_response(ex.res, std::move(response));
     co_return;
 }
 
 inline task<void> app::write_response(response_sink& sink, response res) {
-    if (!res.stream_source && !res.headers.contains("Content-Length")) {
+    const bool bodyless = res.status_code == 204 || res.status_code == 304 ||
+                          (res.status_code >= 100 && res.status_code < 200);
+    if (!res.stream_source && !bodyless && !res.headers.contains("Content-Length")) {
         res.headers["Content-Length"] = std::to_string(res.body.size());
     }
 
