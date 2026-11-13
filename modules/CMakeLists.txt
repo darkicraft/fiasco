@@ -5,7 +5,6 @@ target_sources(fiasco_modules
   PUBLIC FILE_SET CXX_MODULES FILES
     fiasco.cppm
     fiasco-common.cppm
-    fiasco-logging.cppm
     fiasco-response.cppm
     fiasco-server.cppm
     fiasco-router.cppm

@@ -1,6 +1,6 @@
 module;
 
-#include "fiasco/internal/http/response.hpp"
+#include "fiasco/http/detail/response.hpp"
 
 export module fiasco.response;
 

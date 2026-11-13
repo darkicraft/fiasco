@@ -1,6 +1,6 @@
 module;
 
-#include "fiasco/internal/router.hpp"
+#include "fiasco/routing/router.hpp"
 
 export module fiasco.router;
 export import fiasco.common;

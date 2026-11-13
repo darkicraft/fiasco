@@ -1,4 +1,4 @@
-#include "fiasco/http/tcp_server.hpp"
+#include "fiasco/http/detail/tcp_server.hpp"
 
 #include <asio.hpp>
 
@@ -19,7 +19,7 @@
 #include <sys/socket.h>
 #endif
 
-#include "fiasco/internal/http/parser.hpp"
+#include "fiasco/http/detail/parser.hpp"
 
 namespace fiasco::detail {
 

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "fiasco/internal/types/json.hpp"
+#include "fiasco/types/json.hpp"
 
 namespace fiasco {
 

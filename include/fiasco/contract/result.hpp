@@ -5,7 +5,7 @@
 
 #include "fiasco/contract/request.hpp"
 #include "fiasco/contract/response.hpp"
-#include "fiasco/internal/http/async.hpp"
+#include "fiasco/http/detail/async.hpp"
 
 namespace fiasco::detail {
 

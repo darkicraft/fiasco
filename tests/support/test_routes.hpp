@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "fiasco/app/app.hpp"
-#include "fiasco/internal/router.hpp"
+#include "fiasco/routing/router.hpp"
 
 namespace fiasco::detail {
 

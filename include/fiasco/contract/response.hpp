@@ -18,7 +18,7 @@
 #include <vector>
 
 #include "fiasco/contract/sink.hpp"
-#include "fiasco/stream.hpp"
+#include "fiasco/stream/generator.hpp"
 
 namespace fiasco::detail {
 

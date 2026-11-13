@@ -1,6 +1,6 @@
 module;
 
-#include "fiasco/internal/server.hpp"
+#include "fiasco/http/server.hpp"
 
 export module fiasco.server;
 export import fiasco.common;

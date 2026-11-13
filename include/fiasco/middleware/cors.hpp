@@ -12,9 +12,9 @@
 #include <utility>
 #include <vector>
 
-#include "fiasco/internal/http/request.hpp"
-#include "fiasco/internal/http/response.hpp"
-#include "fiasco/internal/middleware.hpp"
+#include "fiasco/http/detail/request.hpp"
+#include "fiasco/http/detail/response.hpp"
+#include "fiasco/middleware/middleware.hpp"
 
 namespace fiasco::middleware {
 

@@ -1,6 +1,6 @@
 module;
 
-#include "fiasco/internal/json.hpp"
+#include "fiasco/types/json.hpp"
 
 export module fiasco.common;
 

@@ -115,7 +115,7 @@ target_link_libraries(fiasco_contract INTERFACE asio)
 
 # -- fiasco_types -----------------------------------------
 add_library(fiasco_types STATIC
-    src/fiasco/internal/types/json.cpp
+    src/fiasco/types/json.cpp
 )
 
 target_include_directories(fiasco_types PUBLIC
@@ -147,7 +147,7 @@ endif()
 # Transport: HTTP/1.1 parser, connection lifecycle and the socket session.
 add_library(fiasco_http STATIC
     src/fiasco/http/tcp_server.cpp
-    src/fiasco/internal/http/parser.cpp
+    src/fiasco/http/parser.cpp
 )
 
 target_include_directories(fiasco_http PUBLIC
@@ -163,7 +163,7 @@ target_link_libraries(fiasco_http PUBLIC
 
 # -- fiasco_routing ------------------------------------------
 add_library(fiasco_routing STATIC
-    src/fiasco/internal/routing/route_table.cpp
+    src/fiasco/routing/route_table.cpp
 )
 
 target_include_directories(fiasco_routing PUBLIC

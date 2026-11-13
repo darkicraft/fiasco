@@ -16,19 +16,19 @@
 #include <vector>
 
 #include "fiasco/app/app_options.hpp"
-#include "fiasco/app/docs.hpp"
-#include "fiasco/app/file_response.hpp"
-#include "fiasco/app/openapi.hpp"
-#include "fiasco/app/static_files.hpp"
+#include "fiasco/app/detail/docs.hpp"
+#include "fiasco/app/detail/file_response.hpp"
+#include "fiasco/app/detail/openapi.hpp"
+#include "fiasco/app/detail/static_files.hpp"
 #include "fiasco/contract/exchange.hpp"
 #include "fiasco/contract/result.hpp"
-#include "fiasco/internal/http/http_error.hpp"
-#include "fiasco/internal/http/request.hpp"
-#include "fiasco/internal/http/response.hpp"
-#include "fiasco/internal/json.hpp"
-#include "fiasco/internal/meta/reflect.hpp"
-#include "fiasco/internal/middleware.hpp"
-#include "fiasco/internal/router.hpp"
+#include "fiasco/http/error.hpp"
+#include "fiasco/http/detail/request.hpp"
+#include "fiasco/http/detail/response.hpp"
+#include "fiasco/types/json.hpp"
+#include "fiasco/meta/reflect.hpp"
+#include "fiasco/middleware/middleware.hpp"
+#include "fiasco/routing/router.hpp"
 
 namespace fiasco::detail {
 

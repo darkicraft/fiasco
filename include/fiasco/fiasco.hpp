@@ -1,17 +1,18 @@
 #pragma once
 
-#include "fiasco/internal/http/async.hpp"
-#include "fiasco/internal/http/http_error.hpp"
-#include "fiasco/internal/http/response.hpp"
+#include "fiasco/http/detail/async.hpp"
+#include "fiasco/http/error.hpp"
+#include "fiasco/http/detail/response.hpp"
 
 #include "fiasco/app/app.hpp"
 #include "fiasco/app/test_client.hpp"
-#include "fiasco/internal/json.hpp"
-#include "fiasco/internal/middleware.hpp"
-#include "fiasco/internal/router.hpp"
+#include "fiasco/types/json.hpp"
+#include "fiasco/middleware/middleware.hpp"
+#include "fiasco/routing/router.hpp"
 #include "fiasco/middleware/cors.hpp"
-#include "fiasco/server.hpp"
-#include "fiasco/stream.hpp"
+#include "fiasco/http/server.hpp"
+#include "fiasco/http/server_config.hpp"
+#include "fiasco/stream/generator.hpp"
 
 namespace fiasco {
 
