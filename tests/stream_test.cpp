@@ -121,6 +121,12 @@ std::string decode_chunked_body(std::string_view body) {
     return decoded;
 }
 
+fiasco::stream<int> pending_stream(asio::steady_timer& timer) {
+    timer.expires_after(std::chrono::hours(1));
+    co_await timer.async_wait(asio::deferred);
+    co_yield 1;
+}
+
 fiasco::stream<int> delayed_stream(asio::steady_timer& timer) {
     timer.expires_after(std::chrono::milliseconds(1));
     co_await timer.async_wait(asio::deferred);
@@ -281,6 +287,34 @@ TEST_CASE("server streams chunked response bodies", "[stream][integration]") {
     const auto header_end = raw.find("\r\n\r\n");
     REQUIRE(header_end != std::string::npos);
     REQUIRE(decode_chunked_body(std::string_view(raw).substr(header_end + 4)) == "firstsecond");
+}
+
+TEST_CASE("stream cancels a pending operation when destroyed", "[stream]") {
+    bool finished = false;
+    bool cancelled = false;
+
+    asio::io_context io;
+    asio::steady_timer operation_timer(io);
+    asio::steady_timer destroy_timer(io);
+    auto stream = std::make_unique<fiasco::stream<int>>(pending_stream(operation_timer));
+    auto* raw = stream.get();
+
+    asio::co_spawn(
+        io,
+        [raw, &finished, &cancelled]() -> asio::awaitable<void> {
+            auto value = co_await raw->next();
+            cancelled = !value.has_value();
+            finished = true;
+        }(),
+        asio::detached);
+
+    destroy_timer.expires_after(std::chrono::milliseconds(10));
+    destroy_timer.async_wait([&stream](const asio::error_code&) { stream.reset(); });
+
+    io.run();
+
+    REQUIRE(finished);
+    REQUIRE(cancelled);
 }
 
 TEST_CASE("stream is movable", "[stream]") {

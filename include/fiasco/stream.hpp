@@ -15,11 +15,16 @@
 // Await expressions inside a stream use the ordinary Asio deferred form:
 //
 //   co_await socket.async_read_some(buffer, asio::deferred);
+//
+// Destroying a stream while a pull is in flight cancels the awaited operation
+// and resolves that pull with nullopt.
 
 #include <asio/any_io_executor.hpp>
 #include <asio/async_result.hpp>
 #include <asio/awaitable.hpp>
+#include <asio/cancellation_signal.hpp>
 #include <asio/deferred.hpp>
+#include <asio/error.hpp>
 #include <asio/error_code.hpp>
 #include <asio/post.hpp>
 #include <asio/system_error.hpp>
@@ -29,6 +34,7 @@
 #include <coroutine>
 #include <exception>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <system_error>
 #include <tuple>
@@ -106,44 +112,62 @@ class stream {
     struct promise_type;
     using handle_type = std::coroutine_handle<promise_type>;
 
+    struct state {
+        explicit state(handle_type h)
+            : handle(h) {}
+
+        ~state();
+        void cancel() noexcept;
+
+        handle_type handle{};
+        bool pull_active = false;
+    };
+
     stream(const stream&) = delete;
     stream& operator=(const stream&) = delete;
 
     stream(stream&& other) noexcept
-        : m_handle(std::exchange(other.m_handle, {})) {}
+        : m_state(std::exchange(other.m_state, {})) {}
 
     stream& operator=(stream&& other) noexcept {
         if (this != &other) {
-            if (m_handle) {
-                m_handle.destroy();
-            }
-            m_handle = std::exchange(other.m_handle, {});
+            reset();
+            m_state = std::exchange(other.m_state, {});
         }
         return *this;
     }
 
-    ~stream() {
-        if (m_handle) {
-            m_handle.destroy();
-        }
-    }
+    ~stream() { reset(); }
 
-    /// Pull the next chunk. Returns nullopt when the producer finishes.
+    /// Pull the next chunk. Returns nullopt when the producer finishes or the
+    /// stream is cancelled.
     [[nodiscard]] auto next() -> asio::awaitable<std::optional<T>> {
-        if (!m_handle || m_handle.done()) {
-            if (m_handle && m_handle.promise().error) {
-                std::rethrow_exception(m_handle.promise().error);
+        auto state = m_state;
+        if (!state || !state->handle || state->handle.done()) {
+            if (state && state->handle && state->handle.promise().error) {
+                std::rethrow_exception(state->handle.promise().error);
             }
             co_return std::nullopt;
         }
 
-        auto& promise = m_handle.promise();
+        auto& promise = state->handle.promise();
         promise.executor = co_await asio::this_coro::executor;
+        state->pull_active = true;
 
-        auto token = asio::use_awaitable_t<>{};
-        auto value = co_await asio::async_initiate<asio::use_awaitable_t<>, void(std::optional<T>)>(
-            pull_initiation{this}, token);
+        std::optional<T> value;
+        try {
+            auto token = asio::use_awaitable_t<>{};
+            value = co_await asio::async_initiate<asio::use_awaitable_t<>, void(std::optional<T>)>(
+                pull_initiation{state}, token);
+        } catch (...) {
+            state->pull_active = false;
+            throw;
+        }
+        state->pull_active = false;
 
+        if (promise.cancelled) {
+            co_return std::nullopt;
+        }
         if (promise.error) {
             std::rethrow_exception(promise.error);
         }
@@ -155,6 +179,9 @@ class stream {
         std::exception_ptr error;
         asio::any_io_executor executor;
         std::move_only_function<void(std::optional<T>)> pending;
+        asio::cancellation_signal cancel_signal;
+        bool cancelled = false;
+        bool awaiting_async = false;
 
         struct yield_awaiter {
             promise_type* promise;
@@ -162,11 +189,17 @@ class stream {
             bool await_ready() const noexcept { return false; }
 
             void await_suspend(std::coroutine_handle<promise_type>) noexcept {
-                promise->deliver(std::move(promise->current));
+                if (!promise->cancelled) {
+                    promise->deliver(std::move(promise->current));
+                }
                 promise->current.reset();
             }
 
-            void await_resume() const noexcept {}
+            void await_resume() const {
+                if (promise->cancelled) {
+                    throw asio::system_error(asio::error::operation_aborted);
+                }
+            }
         };
 
         struct final_awaiter {
@@ -183,10 +216,18 @@ class stream {
 
         template <typename... Args>
         struct operation_handler {
+            promise_type* promise;
             std::coroutine_handle<promise_type> handle;
             std::optional<std::tuple<Args...>>* result;
 
+            using cancellation_slot_type = asio::cancellation_slot;
+
+            auto get_cancellation_slot() const noexcept -> cancellation_slot_type {
+                return promise->cancel_signal.slot();
+            }
+
             void operator()(Args... args) {
+                promise->awaiting_async = false;
                 result->emplace(std::move(args)...);
                 handle.resume();
             }
@@ -206,21 +247,30 @@ class stream {
             using signature = asio::completion_signature_of_t<Op>;
             using result_type = typename operation_traits<signature>::result_type;
 
+            promise_type* promise;
             Op op;
             std::optional<result_type> result;
 
-            bool await_ready() const noexcept { return false; }
+            bool await_ready() const noexcept { return promise->cancelled; }
 
             void await_suspend(std::coroutine_handle<promise_type> handle) {
-                std::move(op)(typename operation_traits<signature>::handler{handle, &result});
+                promise->awaiting_async = true;
+                std::move(op)(
+                    typename operation_traits<signature>::handler{promise, handle, &result});
             }
 
             auto await_resume() {
+                if (promise->cancelled) {
+                    throw asio::system_error(asio::error::operation_aborted);
+                }
                 return stream_detail::interpret_result(std::move(result).value());
             }
         };
 
-        auto get_return_object() -> stream { return stream{handle_type::from_promise(*this)}; }
+        auto get_return_object() -> stream {
+            const auto handle = handle_type::from_promise(*this);
+            return stream{std::make_shared<state>(handle)};
+        }
 
         auto initial_suspend() noexcept -> std::suspend_always { return {}; }
 
@@ -249,7 +299,7 @@ class stream {
         template <typename Op>
             requires asio::is_async_operation<std::decay_t<Op>>::value
         auto await_transform(Op&& op) {
-            return operation_awaiter<std::decay_t<Op>>{std::forward<Op>(op)};
+            return operation_awaiter<std::decay_t<Op>>{this, std::forward<Op>(op)};
         }
 
         void deliver(std::optional<T> value) noexcept {
@@ -272,20 +322,76 @@ class stream {
 
   private:
     struct pull_initiation {
-        stream* self;
+        std::shared_ptr<state> source;
 
         template <typename Handler>
         void operator()(Handler&& handler) {
-            auto& promise = self->m_handle.promise();
+            auto& promise = source->handle.promise();
             promise.pending = std::forward<Handler>(handler);
-            self->m_handle.resume();
+            source->handle.resume();
         }
     };
 
-    explicit stream(handle_type handle)
-        : m_handle(handle) {}
+    void reset() noexcept {
+        auto state = std::exchange(m_state, {});
+        if (state) {
+            state->cancel();
+        }
+    }
 
-    handle_type m_handle{};
+    explicit stream(std::shared_ptr<state> state)
+        : m_state(std::move(state)) {}
+
+    std::shared_ptr<state> m_state;
 };
+
+template <typename T>
+stream<T>::state::~state() {
+    if (!handle) {
+        return;
+    }
+
+    auto& promise = handle.promise();
+    if (!handle.done() && (promise.awaiting_async || pull_active)) {
+        promise.cancelled = true;
+        promise.cancel_signal.emit(asio::cancellation_type::all);
+        // The coroutine still owns a suspended async operation. Its completion
+        // path is the only safe place to destroy the frame.
+        handle = {};
+        return;
+    }
+
+    handle.destroy();
+    handle = {};
+}
+
+template <typename T>
+void stream<T>::state::cancel() noexcept {
+    if (!handle) {
+        return;
+    }
+
+    auto& promise = handle.promise();
+    if (pull_active) {
+        promise.cancelled = true;
+        if (promise.awaiting_async) {
+            promise.cancel_signal.emit(asio::cancellation_type::all);
+            return;
+        }
+        if (promise.pending) {
+            promise.deliver(std::nullopt);
+        }
+        return;
+    }
+
+    if (!handle.done() && promise.awaiting_async) {
+        promise.cancelled = true;
+        promise.cancel_signal.emit(asio::cancellation_type::all);
+        return;
+    }
+
+    handle.destroy();
+    handle = {};
+}
 
 }  // namespace fiasco
