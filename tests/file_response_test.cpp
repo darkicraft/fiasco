@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -17,7 +18,8 @@ struct file_fixture {
     std::filesystem::path path;
 
     explicit file_fixture(std::string_view contents)
-        : path(std::filesystem::temp_directory_path() / "fiasco-file-response.txt") {
+        : path(std::filesystem::temp_directory_path() /
+               ("fiasco-file-response-" + std::to_string(std::random_device{}()) + ".txt")) {
         std::ofstream file(path, std::ios::binary);
         file.write(contents.data(), static_cast<std::streamsize>(contents.size()));
     }
