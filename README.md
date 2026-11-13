@@ -149,14 +149,14 @@ Every app serves an OpenAPI 3.1 document by default:
 | OpenAPI | JSON document, parameters, request/response bodies, component schemas, `response_model`, typed async |
 | Docs | Swagger UI, ReDoc, configurable URLs and CDN/self-hosted assets |
 | Responses | Text/JSON/HTML/redirect/error helpers, cookies, file responses with ETag/Last-Modified/ranges |
-| Streaming | Pull-based `fiasco::stream<T>`, `response::stream`, chunked HTTP, SSE/JSON Lines via streamed text |
+| Streaming | Pull-based `fiasco::stream<T>`, `response::stream`, chunked HTTP, `fiasco::sse`, `fiasco::json_lines` |
 | Static files | Mounted directories, MIME lookup, index files, HEAD, traversal protection |
 | Runtime | Asio HTTP/1.1, keep-alive, per-core workers, `SO_REUSEPORT`, optional io_uring |
 | Async | `fiasco::async` (untyped) and `fiasco::async_t<T>` (typed) |
 
-Not implemented yet: request body streaming, multipart/file uploads, SSE/JSON
-Lines convenience helpers, WebSockets, TLS, security helpers, `app.state`,
-dependency overrides, `url_path_for`, and imperative `add_route` registration.
+Not implemented yet: request body streaming, multipart/file uploads, WebSockets,
+TLS, security helpers, `app.state`, dependency overrides, `url_path_for`, and
+imperative `add_route` registration.
 C++20 modules are parked: the sources remain under `modules/`, but there is no
 module build target.
 

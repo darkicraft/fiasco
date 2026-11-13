@@ -51,6 +51,7 @@ fiasco_add_test(fiasco_test_cookies app/cookie_test.cpp fiasco_app)
 fiasco_add_test(fiasco_test_static_files app/static_files_test.cpp fiasco_app)
 fiasco_add_test(fiasco_test_file_response app/file_response_test.cpp fiasco)
 fiasco_add_test(fiasco_test_stream app/stream_test.cpp fiasco)
+fiasco_add_test(fiasco_test_stream_helpers app/stream_helpers_test.cpp fiasco)
 
 # ---- integration ----
 fiasco_add_test(fiasco_test_integration integration/integration_test.cpp fiasco)

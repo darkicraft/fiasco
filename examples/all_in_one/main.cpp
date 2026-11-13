@@ -61,21 +61,21 @@ std::string current_user(
     return "unrecognized";
 }
 
-auto event_stream() -> fiasco::stream<std::string> {
-    co_yield "event: welcome\ndata: all-in-one\n\n";
+auto event_stream() -> fiasco::stream<fiasco::sse_event> {
+    co_yield fiasco::sse_event{.data = "all-in-one", .event = "welcome"};
 
     asio::steady_timer timer(co_await asio::this_coro::executor);
     timer.expires_after(std::chrono::milliseconds(50));
     co_await timer.async_wait(asio::deferred);
 
-    co_yield "event: tick\ndata: 1\n\n";
-    co_yield "event: tick\ndata: 2\n\n";
+    co_yield fiasco::sse_event{.data = "1", .event = "tick"};
+    co_yield fiasco::sse_event{.data = "2", .event = "tick"};
     co_return;
 }
 
-auto json_lines() -> fiasco::stream<std::string> {
-    co_yield "{\"line\":1,\"ok\":true}\n";
-    co_yield "{\"line\":2,\"ok\":true}\n";
+auto json_line_stream() -> fiasco::stream<item> {
+    co_yield item{1, "one", 1};
+    co_yield item{2, "two", 2};
     co_return;
 }
 
@@ -148,18 +148,17 @@ auto cookie_route() -> response {
 
 [[=get("/download")]]
 auto download() -> response {
-    return response::file("examples/responses/download.txt",
-                          {.filename = "fiasco-demo.txt"});
+    return response::file("examples/responses/download.txt", {.filename = "fiasco-demo.txt"});
 }
 
 [[=get("/events")]]
 auto events() -> response {
-    return response::stream("text/event-stream", event_stream());
+    return fiasco::sse(event_stream());
 }
 
 [[=get("/lines")]]
 auto lines() -> response {
-    return response::stream("application/x-ndjson", json_lines());
+    return fiasco::json_lines(json_line_stream());
 }
 
 }  // namespace demo

@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pull-based `fiasco::stream<T>` generators and `response::stream` for chunked
   HTTP responses, with cancellation-safe destruction and event-driven client
   disconnect detection while a stream is idle.
+- `fiasco::sse` / `fiasco::sse_event` and `fiasco::json_lines` streaming helpers.
 - An integrated `all_in_one` example used by the demo script.
 - Sub-router mounting with path prefixes.
 - Mounted sub-applications.
