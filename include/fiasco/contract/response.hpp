@@ -7,13 +7,18 @@
 #include <format>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <unordered_map>
 #include <vector>
+
+#include "fiasco/contract/sink.hpp"
+#include "fiasco/stream.hpp"
 
 namespace fiasco::detail {
 
@@ -101,6 +106,47 @@ inline std::string content_disposition(const file_options& options) {
 
     return options.content_disposition_type + "; filename=\"" + escaped + "\"";
 }
+
+template <typename T>
+auto as_stream_bytes(const T&) = delete;
+
+inline auto as_stream_bytes(const std::string& value) -> std::span<const std::byte> {
+    return std::as_bytes(std::span<const char>(value.data(), value.size()));
+}
+
+inline auto as_stream_bytes(std::string_view value) -> std::span<const std::byte> {
+    return std::as_bytes(std::span<const char>(value.data(), value.size()));
+}
+
+inline auto as_stream_bytes(const std::vector<char>& value) -> std::span<const std::byte> {
+    return std::as_bytes(std::span<const char>(value.data(), value.size()));
+}
+
+inline auto as_stream_bytes(const std::vector<std::byte>& value) -> std::span<const std::byte> {
+    return std::span<const std::byte>(value.data(), value.size());
+}
+
+inline auto as_stream_bytes(std::span<const std::byte> value) -> std::span<const std::byte> {
+    return value;
+}
+
+template <typename T>
+struct stream_state {
+    explicit stream_state(fiasco::stream<T> source)
+        : producer(std::move(source)) {}
+
+    auto read() -> task<std::optional<std::span<const std::byte>>> {
+        auto chunk = co_await producer.next();
+        if (!chunk) {
+            co_return std::nullopt;
+        }
+        current.emplace(std::move(*chunk));
+        co_return as_stream_bytes(*current);
+    }
+
+    fiasco::stream<T> producer;
+    std::optional<T> current;
+};
 
 inline std::string json_escape(std::string_view value) {
     std::string out;
@@ -276,6 +322,7 @@ struct response {
     std::unordered_map<std::string, std::string> headers;
     std::vector<std::string> set_cookie_headers;
     std::string body;
+    std::shared_ptr<body_source> stream_source;
 
     response& set_cookie(std::string_view name,
                          std::string_view value,
@@ -316,6 +363,21 @@ struct response {
             r.headers["Content-Disposition"] = disposition;
         }
         r.body.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+        return r;
+    }
+
+    template <typename T>
+    static response stream(std::string content_type, fiasco::stream<T> producer) {
+        auto state = std::make_shared<response_detail::stream_state<T>>(std::move(producer));
+
+        response r;
+        r.headers["Content-Type"] = std::move(content_type);
+        r.stream_source = std::make_shared<body_source>(body_source{
+            .read = [state]() -> task<std::optional<std::span<const std::byte>>> {
+                auto chunk = co_await state->read();
+                co_return chunk;
+            },
+        });
         return r;
     }
 
@@ -385,6 +447,10 @@ struct response {
     }
 
     [[nodiscard]] std::string serialize() const {
+        if (stream_source) {
+            throw std::logic_error("streaming responses cannot be serialized");
+        }
+
         // pre-size to avoid reallocations: status line ~20, headers ~60 each, body
         std::string out;
         out.reserve(128 + headers.size() * 64 + body.size());

@@ -393,6 +393,10 @@ inline task<void> app::handle(exchange& ex) {
 }
 
 inline task<void> app::write_response(response_sink& sink, response res) {
+    if (!res.stream_source && !res.headers.contains("Content-Length")) {
+        res.headers["Content-Length"] = std::to_string(res.body.size());
+    }
+
     sink.status(res.status_code);
     for (const auto& [key, value] : res.headers) {
         sink.header(key, value);
@@ -400,6 +404,15 @@ inline task<void> app::write_response(response_sink& sink, response res) {
     for (const auto& cookie : res.set_cookie_headers) {
         sink.header("Set-Cookie", cookie);
     }
+
+    if (res.stream_source) {
+        while (auto chunk = co_await res.stream_source->read()) {
+            co_await sink.write(*chunk);
+        }
+        co_await sink.end();
+        co_return;
+    }
+
     if (!res.body.empty()) {
         co_await sink.write(std::as_bytes(std::span<const char>(res.body.data(), res.body.size())));
     }

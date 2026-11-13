@@ -11,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #ifdef _WIN32
@@ -38,15 +39,15 @@ bool request_wants_close(const request& req) {
     return ascii_lower(req.header("Connection")) == "close";
 }
 
-bool response_wants_close(const response& res) {
-    const auto it = res.headers.find("Connection");
-    return it != res.headers.end() && ascii_lower(it->second) == "close";
-}
-
 struct exchange_state {
-    response out;
+    int status = 200;
+    std::vector<std::pair<std::string, std::string>> headers;
     response_sink sink;
     body_source body;
+    bool request_close = false;
+    bool headers_sent = false;
+    bool chunked = false;
+    bool close = false;
 };
 
 std::unique_ptr<tcp::acceptor> make_acceptor(asio::io_context& context,
@@ -112,25 +113,20 @@ struct session : std::enable_shared_from_this<session> {
             req->client_address = "unknown";
         }
 
-        const bool request_close = request_wants_close(*req);
-
         auto state = std::make_shared<exchange_state>();
-        response* out = &state->out;
+        state->request_close = request_wants_close(*req);
+
+        auto self = shared_from_this();
         state->sink = response_sink{
-            .status = [out](int status) { out->status_code = status; },
+            .status = [state](int status) { state->status = status; },
             .header =
-                [out](std::string_view key, std::string_view value) {
-                    if (key == "Set-Cookie") {
-                        out->set_cookie_headers.emplace_back(value);
-                    } else {
-                        out->headers[std::string(key)] = std::string(value);
-                    }
+                [state](std::string_view key, std::string_view value) {
+                    state->headers.emplace_back(std::string(key), std::string(value));
                 },
-            .write = [out](std::span<const std::byte> bytes) -> task<void> {
-                out->body.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-                co_return;
+            .write = [self, state](std::span<const std::byte> bytes) -> task<void> {
+                co_await self->write_chunk(state, bytes);
             },
-            .end = []() -> task<void> { co_return; },
+            .end = [self, state]() -> task<void> { co_await self->end_response(state); },
         };
 
         std::string_view body_view = req->body;
@@ -147,39 +143,153 @@ struct session : std::enable_shared_from_this<session> {
             },
         };
 
-        auto self = shared_from_this();
         asio::co_spawn(
             strand,
-            [self, req, state, request_close]() -> task<void> {
+            [self, req, state]() -> task<void> {
                 exchange ex{*req, state->body, state->sink};
+                std::exception_ptr error;
                 try {
                     co_await self->handler(ex);
                 } catch (...) {
-                    state->out = response::error("Internal Server Error", 500);
+                    error = std::current_exception();
                 }
-                self->finish(std::move(state->out), request_close);
+                if (error) {
+                    co_await self->write_error_response(state);
+                }
                 co_return;
             },
             asio::detached);
     }
 
-    void finish(response res, bool request_close) {
-        const bool close = request_close || response_wants_close(res);
-        if (close) {
-            res.headers["Connection"] = "close";
+    static auto chunk_size(std::size_t size) -> std::string {
+        static constexpr char digits[] = "0123456789abcdef";
+        std::string out;
+        do {
+            out.push_back(digits[size & 0x0f]);
+            size >>= 4;
+        } while (size != 0);
+        std::reverse(out.begin(), out.end());
+        return out;
+    }
+
+    task<void> write_raw(std::string_view bytes) {
+        co_await asio::async_write(
+            socket, asio::buffer(bytes.data(), bytes.size()), asio::use_awaitable);
+    }
+
+    task<void> send_headers(const std::shared_ptr<exchange_state>& state) {
+        std::string head;
+        head += "HTTP/1.1 ";
+        head += std::to_string(state->status);
+        head += ' ';
+        head += response::reason_phrase(state->status);
+        head += "\r\n";
+
+        bool has_length = false;
+        bool has_connection = false;
+        bool has_transfer_encoding = false;
+        for (const auto& [key, value] : state->headers) {
+            head += key;
+            head += ": ";
+            head += value;
+            head += "\r\n";
+
+            const auto lower = ascii_lower(key);
+            if (lower == "content-length") {
+                has_length = true;
+            } else if (lower == "connection") {
+                has_connection = true;
+                state->close = state->close || ascii_lower(value) == "close";
+            } else if (lower == "transfer-encoding") {
+                has_transfer_encoding = true;
+                state->chunked = ascii_lower(value) == "chunked";
+            }
         }
 
-        auto self = shared_from_this();
-        auto raw = std::make_shared<std::string>(res.serialize());
-        asio::async_write(
-            socket,
-            asio::buffer(*raw),
-            asio::bind_executor(strand, [self, raw, close](asio::error_code ec, std::size_t) {
-                if (!ec && !close) {
-                    self->parser.reset();  // reset parser state for next request
-                    self->read();          // keep reading on same connection
-                }
-            }));
+        if (!has_length) {
+            if (!has_transfer_encoding) {
+                head += "Transfer-Encoding: chunked\r\n";
+                state->chunked = true;
+            }
+        }
+
+        state->close = state->close || state->request_close;
+        if (!has_connection) {
+            head += state->close ? "Connection: close\r\n" : "Connection: keep-alive\r\n";
+        }
+        head += "\r\n";
+
+        co_await write_raw(head);
+        state->headers_sent = true;
+    }
+
+    task<void> write_chunk(const std::shared_ptr<exchange_state>& state,
+                           std::span<const std::byte> bytes) {
+        if (bytes.empty()) {
+            co_return;
+        }
+        if (!state->headers_sent) {
+            co_await send_headers(state);
+        }
+
+        if (state->chunked) {
+            std::string frame;
+            frame.reserve(bytes.size() + 24);
+            frame += chunk_size(bytes.size());
+            frame += "\r\n";
+            frame.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+            frame += "\r\n";
+            co_await write_raw(frame);
+        } else {
+            co_await asio::async_write(
+                socket, asio::buffer(bytes.data(), bytes.size()), asio::use_awaitable);
+        }
+    }
+
+    task<void> end_response(const std::shared_ptr<exchange_state>& state) {
+        if (!state->headers_sent) {
+            co_await send_headers(state);
+        }
+        if (state->chunked) {
+            co_await write_raw("0\r\n\r\n");
+        }
+        finish_connection(state->close);
+    }
+
+    task<void> write_error_response(const std::shared_ptr<exchange_state>& state) {
+        if (state->headers_sent) {
+            close_socket();
+            co_return;
+        }
+
+        const auto error = response::error("Internal Server Error", 500);
+        state->status = error.status_code;
+        state->headers.clear();
+        for (const auto& [key, value] : error.headers) {
+            state->headers.emplace_back(key, value);
+        }
+        try {
+            co_await write_chunk(
+                state, std::as_bytes(std::span<const char>(error.body.data(), error.body.size())));
+            co_await end_response(state);
+        } catch (...) {
+            close_socket();
+        }
+    }
+
+    void finish_connection(bool close) {
+        if (close) {
+            close_socket();
+            return;
+        }
+        parser.reset();
+        read();
+    }
+
+    void close_socket() {
+        asio::error_code ignored;
+        socket.shutdown(tcp::socket::shutdown_both, ignored);
+        socket.close(ignored);
     }
 };
 
