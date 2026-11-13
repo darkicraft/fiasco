@@ -22,13 +22,13 @@
 #include "fiasco/app/detail/static_files.hpp"
 #include "fiasco/contract/exchange.hpp"
 #include "fiasco/contract/result.hpp"
-#include "fiasco/http/error.hpp"
 #include "fiasco/http/detail/request.hpp"
 #include "fiasco/http/detail/response.hpp"
-#include "fiasco/types/json.hpp"
+#include "fiasco/http/error.hpp"
 #include "fiasco/meta/reflect.hpp"
 #include "fiasco/middleware/middleware.hpp"
 #include "fiasco/routing/router.hpp"
+#include "fiasco/types/json.hpp"
 
 namespace fiasco::detail {
 
@@ -413,8 +413,21 @@ inline task<void> app::write_response(response_sink& sink, response res) {
     }
 
     if (res.stream_source) {
-        while (auto chunk = co_await res.stream_source->read()) {
-            co_await sink.write(*chunk);
+        if (sink.begin_stream) {
+            sink.begin_stream(res.stream_source.get());
+        }
+        try {
+            while (auto chunk = co_await res.stream_source->read()) {
+                co_await sink.write(*chunk);
+            }
+        } catch (...) {
+            if (sink.end_stream) {
+                sink.end_stream();
+            }
+            throw;
+        }
+        if (sink.end_stream) {
+            sink.end_stream();
         }
         co_await sink.end();
         co_return;

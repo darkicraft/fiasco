@@ -13,11 +13,13 @@
 #include <asio/write.hpp>
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -119,6 +121,24 @@ std::string decode_chunked_body(std::string_view body) {
         pos += size + 2;
     }
     return decoded;
+}
+
+struct destruction_probe {
+    std::atomic<bool>* flag;
+
+    ~destruction_probe() { flag->store(true); }
+};
+
+fiasco::stream<std::string> idle_stream(std::atomic<bool>& cancelled) {
+    destruction_probe probe{&cancelled};
+    co_yield "data: first\n\n";
+
+    asio::steady_timer timer(co_await asio::this_coro::executor);
+    timer.expires_after(std::chrono::hours(1));
+    co_await timer.async_wait(asio::deferred);
+
+    co_yield "data: never\n\n";
+    co_return;
 }
 
 fiasco::stream<int> pending_stream(asio::steady_timer& timer) {
@@ -315,6 +335,44 @@ TEST_CASE("stream cancels a pending operation when destroyed", "[stream]") {
 
     REQUIRE(finished);
     REQUIRE(cancelled);
+}
+
+TEST_CASE("server cancels an idle stream when the client disconnects", "[stream][disconnect]") {
+    std::atomic<bool> cancelled{false};
+
+    fiasco_test::test_server server;
+    fiasco_test::get(server.app(), "/events", [&cancelled]() -> fiasco::response {
+        return fiasco::response::stream("text/event-stream", idle_stream(cancelled));
+    });
+    server.start();
+
+    asio::io_context client_io;
+    asio::ip::tcp::socket socket(client_io);
+    socket.connect(asio::ip::tcp::endpoint(asio::ip::address_v4::loopback(), server.port()));
+    const std::string request =
+        "GET /events HTTP/1.1\r\n"
+        "Host: localhost\r\n"
+        "\r\n";
+    asio::write(socket, asio::buffer(request.data(), request.size()));
+
+    std::array<char, 4096> buffer{};
+    std::string received;
+    while (received.find("data: first\n\n") == std::string::npos) {
+        const auto count = socket.read_some(asio::buffer(buffer));
+        if (count == 0) {
+            break;
+        }
+        received.append(buffer.data(), count);
+    }
+    REQUIRE(received.find("data: first\n\n") != std::string::npos);
+    socket.close();
+
+    for (int i = 0; i < 100 && !cancelled.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK(cancelled.load());
+
+    server.stop();
 }
 
 TEST_CASE("stream is movable", "[stream]") {

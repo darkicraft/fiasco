@@ -139,6 +139,9 @@ class stream {
 
     ~stream() { reset(); }
 
+    /// Cancel an in-flight pull. The active/future pull resolves with nullopt.
+    void cancel() noexcept { reset(); }
+
     /// Pull the next chunk. Returns nullopt when the producer finishes or the
     /// stream is cancelled.
     [[nodiscard]] auto next() -> asio::awaitable<std::optional<T>> {

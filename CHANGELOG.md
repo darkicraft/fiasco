@@ -49,7 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Application middleware and a built-in CORS middleware.
 - Coroutine/async handlers.
 - Pull-based `fiasco::stream<T>` generators and `response::stream` for chunked
-  HTTP responses, with cancellation-safe destruction.
+  HTTP responses, with cancellation-safe destruction and event-driven client
+  disconnect detection while a stream is idle.
 - An integrated `all_in_one` example used by the demo script.
 - Sub-router mounting with path prefixes.
 - Mounted sub-applications.

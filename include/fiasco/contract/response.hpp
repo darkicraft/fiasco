@@ -144,6 +144,8 @@ struct stream_state {
         co_return as_stream_bytes(*current);
     }
 
+    void cancel() { producer.cancel(); }
+
     fiasco::stream<T> producer;
     std::optional<T> current;
 };
@@ -402,6 +404,7 @@ struct response {
                 auto chunk = co_await state->read();
                 co_return chunk;
             },
+            .cancel = [state] { state->cancel(); },
         });
         return r;
     }

@@ -1,6 +1,8 @@
 #include "fiasco/http/detail/tcp_server.hpp"
 
 #include <asio.hpp>
+#include <asio/bind_cancellation_slot.hpp>
+#include <asio/cancellation_signal.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -44,6 +46,10 @@ struct exchange_state {
     std::vector<std::pair<std::string, std::string>> headers;
     response_sink sink;
     body_source body;
+    body_source* active_stream = nullptr;
+    asio::cancellation_signal peer_watch_cancel;
+    bool watching_peer = false;
+    bool peer_closed = false;
     bool request_close = false;
     bool headers_sent = false;
     bool chunked = false;
@@ -127,6 +133,16 @@ struct session : std::enable_shared_from_this<session> {
                 co_await self->write_chunk(state, bytes);
             },
             .end = [self, state]() -> task<void> { co_await self->end_response(state); },
+            .begin_stream =
+                [self, state](body_source* source) {
+                    state->active_stream = source;
+                    self->start_peer_watch(state);
+                },
+            .end_stream =
+                [self, state]() {
+                    state->active_stream = nullptr;
+                    self->stop_peer_watch(state);
+                },
         };
 
         std::string_view body_view = req->body;
@@ -159,6 +175,64 @@ struct session : std::enable_shared_from_this<session> {
                 co_return;
             },
             asio::detached);
+    }
+
+    void start_peer_watch(const std::shared_ptr<exchange_state>& state) {
+        if (state->watching_peer || state->peer_closed || !socket.is_open()) {
+            return;
+        }
+
+        state->watching_peer = true;
+        auto self = shared_from_this();
+        socket.async_wait(tcp::socket::wait_read,
+                          asio::bind_cancellation_slot(
+                              state->peer_watch_cancel.slot(),
+                              asio::bind_executor(strand, [self, state](asio::error_code error) {
+                                  self->on_peer_readable(state, error);
+                              })));
+    }
+
+    void stop_peer_watch(const std::shared_ptr<exchange_state>& state) {
+        if (!state->watching_peer) {
+            return;
+        }
+        state->watching_peer = false;
+        state->peer_watch_cancel.emit(asio::cancellation_type::all);
+    }
+
+    void on_peer_readable(const std::shared_ptr<exchange_state>& state, asio::error_code error) {
+        if (!state->watching_peer) {
+            return;
+        }
+        state->watching_peer = false;
+
+        if (error == asio::error::operation_aborted) {
+            return;
+        }
+        if (error) {
+            peer_disconnected(state);
+            return;
+        }
+
+        std::array<char, 1> byte{};
+        const auto count = socket.receive(asio::buffer(byte), tcp::socket::message_peek, error);
+        if (error == asio::error::would_block || error == asio::error::try_again) {
+            return;
+        }
+        if (error || count == 0) {
+            peer_disconnected(state);
+        }
+        // A readable byte that is not EOF is likely a pipelined request. Do not
+        // consume it; stop watching instead of entering a readiness loop.
+    }
+
+    void peer_disconnected(const std::shared_ptr<exchange_state>& state) {
+        state->peer_closed = true;
+        state->watching_peer = false;
+        if (state->active_stream && state->active_stream->cancel) {
+            state->active_stream->cancel();
+        }
+        close_socket();
     }
 
     static auto chunk_size(std::size_t size) -> std::string {
@@ -247,6 +321,11 @@ struct session : std::enable_shared_from_this<session> {
     }
 
     task<void> end_response(const std::shared_ptr<exchange_state>& state) {
+        stop_peer_watch(state);
+        if (state->peer_closed) {
+            close_socket();
+            co_return;
+        }
         if (!state->headers_sent) {
             co_await send_headers(state);
         }
@@ -257,7 +336,8 @@ struct session : std::enable_shared_from_this<session> {
     }
 
     task<void> write_error_response(const std::shared_ptr<exchange_state>& state) {
-        if (state->headers_sent) {
+        stop_peer_watch(state);
+        if (state->headers_sent || state->peer_closed) {
             close_socket();
             co_return;
         }
