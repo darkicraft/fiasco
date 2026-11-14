@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Concepts shared by routing and parameter binding.
+/// @internal
+
 #include <concepts>
 #include <string>
 

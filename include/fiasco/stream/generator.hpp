@@ -1,23 +1,24 @@
 #pragma once
 
-// Pull-based async generator used by streaming responses.
-//
-//   auto events() -> fiasco::stream<std::string> {
-//       co_yield "data: one\n\n";
-//       co_await timer.async_wait(asio::deferred);
-//       co_yield "data: two\n\n";
-//       co_return;
-//   }
-//
-// The transport pulls one chunk at a time. The promise uses return_void, so
-// `co_return;` ends the stream and `co_return value;` is intentionally invalid.
-//
-// Await expressions inside a stream use the ordinary Asio deferred form:
-//
-//   co_await socket.async_read_some(buffer, asio::deferred);
-//
-// Destroying a stream while a pull is in flight cancels the awaited operation
-// and resolves that pull with nullopt.
+/// @file
+/// @brief Pull-based async generator used by streaming responses.
+
+/// A pull-based async sequence for streamed responses.
+///
+/// Producers use `co_yield` for chunks, may await async work between chunks,
+/// and finish with `co_return;`. The transport pulls one chunk at a time.
+///
+/// @code
+/// auto events() -> fiasco::stream<std::string> {
+///     co_yield "first";
+///     co_await some_async_operation;
+///     co_yield "second";
+///     co_return;
+/// }
+/// @endcode
+///
+/// Destroying or cancelling a stream while a pull is in flight cancels the
+/// awaited operation and resolves that pull with `std::nullopt`.
 
 #include <asio/any_io_executor.hpp>
 #include <asio/async_result.hpp>
@@ -104,6 +105,11 @@ auto interpret_result(std::tuple<asio::error_code, Arg>&& args) {
 
 }  // namespace stream_detail
 
+/// A pull-based async sequence of chunks.
+///
+/// Producers are coroutines that use `co_yield` for chunks and `co_return;` to
+/// finish. Consumers pull with `next()`. Destroying or cancelling a stream
+/// cancels an in-flight pull and resolves it with `std::nullopt`.
 template <typename T>
 class stream {
   public:
@@ -137,11 +143,14 @@ class stream {
 
     ~stream() { reset(); }
 
-    /// Cancel an in-flight pull. The active/future pull resolves with nullopt.
+    /// Cancel the stream. The active or next pull resolves with `std::nullopt`.
     void cancel() noexcept { reset(); }
 
-    /// Pull the next chunk. Returns nullopt when the producer finishes or the
-    /// stream is cancelled.
+    /// Pull the next chunk.
+    ///
+    /// @return The next chunk, or `std::nullopt` when the producer finishes or
+    ///         the stream is cancelled.
+    /// @throws std::exception Propagates an exception from the producer.
     [[nodiscard]] auto next() -> asio::awaitable<std::optional<T>> {
         auto state = m_state;
         if (!state || !state->handle || state->handle.done()) {

@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Structural wrappers used by compile-time annotation payloads.
+/// @internal
+
 // Structural value types used to build annotation payloads.
 //
 // An annotation value (P3394) must have a *structural type*, but the obvious

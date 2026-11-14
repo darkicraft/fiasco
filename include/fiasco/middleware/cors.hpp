@@ -1,5 +1,8 @@
 #pragma once
 
+/// @file
+/// @brief CORS middleware with preflight and response-header handling.
+
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -24,14 +27,23 @@ using fiasco::detail::next_handler;
 using fiasco::detail::request;
 using fiasco::detail::response;
 
+/// CORS policy for the built-in middleware.
 struct cors_config {
+    /// Allowed origins. Use `{"*"}` to allow any origin.
     std::vector<std::string> allow_origins{};
+    /// Allowed methods for preflight requests.
     std::vector<std::string> allow_methods{"GET"};
+    /// Allowed request headers.
     std::vector<std::string> allow_headers{};
+    /// Send `Access-Control-Allow-Credentials`.
     bool allow_credentials = false;
+    /// Optional regular expression for allowed origins.
     std::optional<std::string> allow_origin_regex{};
+    /// Allow private-network preflight requests.
     bool allow_private_network = false;
+    /// Response headers exposed to browser JavaScript.
     std::vector<std::string> expose_headers{};
+    /// Preflight cache duration in seconds.
     std::uint32_t max_age = 600;
 };
 
@@ -235,6 +247,7 @@ inline response preflight_response(const cors_state& state, const request& req) 
 
 }  // namespace cors_detail
 
+/// Create CORS middleware.
 inline fn cors(cors_config config = {}) {
     auto state = std::make_shared<cors_detail::cors_state>(std::move(config));
 

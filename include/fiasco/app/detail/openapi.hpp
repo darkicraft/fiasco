@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Internal OpenAPI document projection.
+/// @internal
+
 // OpenAPI document projection. The route descriptors are the only source of
 // truth here: this file never reflects handler types.
 
@@ -173,6 +177,7 @@ inline json_type build_openapi_operation(const route_descriptor& descriptor,
     return operation;
 }
 
+/// Build the OpenAPI document from application metadata and route descriptors.
 inline json_type build_openapi(const fiasco::app_options& options, const router& routes) {
     json_type document = json_type::object();
     document["openapi"] = "3.1.0";

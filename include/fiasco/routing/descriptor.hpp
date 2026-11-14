@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Runtime route and parameter descriptors used by matching and OpenAPI.
+/// @internal
+
 // Registration-time description of a route. This is the projection seam
 // between the application layer and OpenAPI: handlers keep their reflection
 // metadata only long enough to materialise plain runtime values here.

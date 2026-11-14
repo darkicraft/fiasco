@@ -1,5 +1,8 @@
 #pragma once
 
+/// @file
+/// @brief Application object: routing, middleware, error handling, OpenAPI and mounts.
+
 #include <concepts>
 #include <functional>
 #include <optional>
@@ -32,24 +35,39 @@ namespace fiasco::detail {
 
 struct test_route_access;
 
-/// The pure application object: routes, middleware, exception handlers, and
-/// metadata. It owns no transport. `server` owns the socket and drives
-/// `handle`; `app` is the seam the in-process test client uses.
+/// The application: route registration, middleware, exception handlers,
+/// mounts, OpenAPI metadata and zero-config startup.
+///
+/// Register annotated namespaces with `register_api<^^ns>()`, add routers and
+/// mounts as needed, then call `run()` for the default server or use
+/// `fiasco::server` when explicit network configuration is required.
 class app {
   public:
     using exception_handler = std::move_only_function<response(std::exception_ptr)>;
 
+    /// Create an application with default options.
     app() = default;
+
+    /// Create an application with API metadata and documentation options.
     explicit app(fiasco::app_options options)
         : m_options(std::move(options)) {}
 
+    /// Print the registered routes to standard output.
+    ///
+    /// Prefer `openapi()` or `GET /openapi.json` for structured inspection.
+    /// @deprecated Prefer the OpenAPI document.
     void print_routes() const { m_router.print_routes(); }
 
+    /// Options used by this application.
     [[nodiscard]] const fiasco::app_options& options() const { return m_options; }
 
     /// The OpenAPI document, projected from the registered route descriptors.
     [[nodiscard]] json_type openapi() const { return build_openapi(m_options, m_router); }
 
+    /// Register a handler for a specific exception type.
+    ///
+    /// The exception type is inferred from the callable's parameter. The
+    /// handler returns the response that should be sent instead of a 500.
     template <typename F>
     void add_exception_handler(F&& handler) {
         using traits = meta::callable_traits<std::decay_t<F>>;
@@ -61,11 +79,17 @@ class app {
         add_exception_handler_impl<E>(std::forward<F>(handler));
     }
 
+    /// Register a handler for exception type `E`.
     template <std::derived_from<std::exception> E, typename F>
     void add_exception_handler(F&& handler) {
         add_exception_handler_impl<E>(std::forward<F>(handler));
     }
 
+    /// Add application middleware.
+    ///
+    /// Middleware is invoked in last-added-first-invoked order and can inspect
+    /// the request, short-circuit with a response, or modify the response from
+    /// `next`.
     template <typename F>
     void middleware(F&& fn) {
         m_middleware.add(middleware_fn{std::forward<F>(fn)});
@@ -77,6 +101,9 @@ class app {
     void mount(const std::string& path, app& sub) { m_sub_apps.push_back({path, &sub}); }
 
     /// Serve files from `directory` under `prefix`.
+    ///
+    /// Directory requests serve `index.html` when `static_options::html` is
+    /// enabled. Traversal outside the mounted root is rejected.
     void mount_static(std::string prefix,
                       std::filesystem::path directory,
                       static_options options = {}) {
@@ -85,28 +112,37 @@ class app {
                                                .options = options});
     }
 
+    /// Include a router and its routes under an optional path prefix.
     void include_router(router sub, const std::string& prefix = "") {
         m_router.include_router(std::move(sub), prefix);
     }
 
+    /// Register all annotated routes declared in a namespace.
+    ///
+    /// @tparam Ns Reflected namespace containing annotated free functions.
     template <std::meta::info Ns>
     void register_api() {
         m_router.register_api<Ns>();
     }
 
-    /// The application seam. No socket, no logging, no threads.
+    /// @internal
+    /// The transport-independent request entry point.
     request_result handle(request req);
 
-    /// Type-erased handler for the transport.
+    /// @internal
+    /// Type-erased handler used by the transport.
     application_handler handler() {
         return [this](exchange& ex) { return handle(ex); };
     }
 
-    /// Exchange seam. Adapts the internal `handle(request)` fast path to the
-    /// sink; the async result is awaited before the response is written.
+    /// @internal
+    /// Exchange seam used by the transport and test client.
     task<void> handle(exchange& ex);
 
-    /// Single-server sugar; implemented by the umbrella target.
+    /// Run a server on the default network configuration (`0.0.0.0:8080`).
+    ///
+    /// Use `fiasco::server` when you need explicit host, port or worker
+    /// settings.
     void run();
 
   private:

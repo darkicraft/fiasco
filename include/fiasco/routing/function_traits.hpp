@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Compile-time handler inspection, parameter binding and route generation.
+/// @internal
+
 #include <array>
 #include <cctype>
 #include <charconv>
@@ -17,12 +21,12 @@
 #include "fiasco/http/detail/request.hpp"
 #include "fiasco/http/detail/response.hpp"
 #include "fiasco/http/detail/response_conversion.hpp"
-#include "fiasco/types/json.hpp"
 #include "fiasco/meta/reflect.hpp"
 #include "fiasco/routing/concepts.hpp"
 #include "fiasco/routing/dependency.hpp"
 #include "fiasco/routing/descriptor.hpp"
 #include "fiasco/routing/pathing.hpp"
+#include "fiasco/types/json.hpp"
 
 namespace fiasco::detail {
 
@@ -30,7 +34,10 @@ namespace fiasco::detail {
 // paying std::function's copyable-requirement / allocation model.
 // Note: std::move_only_function::operator() is non-const, so handlers are
 // invoked through a non-const reference (see route_table::match).
+/// Type-erased synchronous route handler.
 using handler_fn = std::move_only_function<response(const request&)>;
+
+/// Type-erased asynchronous route handler.
 using async_handler_fn = std::move_only_function<async(const request&)>;
 
 template <typename T>
@@ -719,6 +726,7 @@ consteval bool returns_async_handler() {
         std::make_index_sequence<traits::arity>{});
 }
 
+/// Wrap a reflected callable into a synchronous route handler.
 template <typename F>
 [[nodiscard]] handler_fn make_handler(F&& f) {
     using traits = meta::callable_traits<std::decay_t<F>>;
@@ -737,6 +745,7 @@ template <typename F>
     };
 }
 
+/// Wrap a reflected callable into an asynchronous route handler.
 template <typename F>
 [[nodiscard]] async_handler_fn make_async_handler(F&& f) {
     using traits = meta::callable_traits<std::decay_t<F>>;

@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Internal conversion from handler return values to responses.
+/// @internal
+
 #include <concepts>
 #include <string>
 #include <type_traits>
@@ -28,6 +32,7 @@ concept ResponseConvertible =
 /// Convert a handler return value into an HTTP response. This is shared by
 /// synchronous handlers and the async coroutine result type so both accept the
 /// same values.
+/// Convert a handler return value into an HTTP response.
 template <typename T>
 [[nodiscard]] response to_response(T&& value) {
     using clean = clean_type_t<T>;

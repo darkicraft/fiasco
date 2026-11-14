@@ -1,5 +1,8 @@
 #pragma once
 
+/// @file
+/// @brief In-process test client for exercising an application without sockets.
+
 #include <asio/co_spawn.hpp>
 #include <asio/detached.hpp>
 #include <asio/io_context.hpp>
@@ -20,9 +23,11 @@ namespace fiasco::detail {
 /// are driven on a local `io_context`.
 class test_client {
   public:
+    /// Create a client bound to an application.
     explicit test_client(app& app)
         : m_app(app) {}
 
+    /// Send a request to the app and return its buffered response.
     response handle(request req) {
         response out;
         response_sink sink{

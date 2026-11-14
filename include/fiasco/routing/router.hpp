@@ -1,5 +1,8 @@
 #pragma once
 
+/// @file
+/// @brief Route collection with prefixes, tags and inclusion.
+
 #include <iostream>
 #include <string>
 #include <utility>
@@ -7,9 +10,9 @@
 #include "fiasco/http/detail/request.hpp"
 #include "fiasco/meta/annotations.hpp"
 #include "fiasco/meta/reflect.hpp"
-#include "fiasco/routing/options.hpp"
 #include "fiasco/routing/descriptor.hpp"
 #include "fiasco/routing/function_traits.hpp"
+#include "fiasco/routing/options.hpp"
 #include "fiasco/routing/pathing.hpp"
 #include "fiasco/routing/route_table.hpp"
 
@@ -17,21 +20,34 @@ namespace fiasco::detail {
 
 struct test_route_access;
 
+/// A group of routes that can be included in an app or another router.
+///
+/// Routers carry their own prefix, tags and route-option cascade. They do not
+/// own a server or transport.
 class router {
   public:
+    /// Create a router with default options.
     router() = default;
+
+    /// Create a router with a path prefix.
     explicit router(std::string prefix) { m_options.prefix = std::move(prefix); }
+
+    /// Create a router with explicit router options.
     explicit router(fiasco::router_options options)
         : m_options(std::move(options)) {}
 
+    /// Options applied to routes in this router.
     [[nodiscard]] const fiasco::router_options& options() const { return m_options; }
 
+    /// Print the registered routes to standard output.
+    /// @deprecated Prefer the OpenAPI document.
     void print_routes() const {
         m_routes.for_each_route(
             [](http_method, const std::string& path) { std::cout << path << "\n"; });
         std::cout << "\n\n";
     }
 
+    /// Include another router's routes under an additional prefix.
     void include_router(router sub, const std::string& prefix = "") {
         std::string full_prefix = join_prefix(prefix, sub.m_options.prefix);
         m_routes.merge_with_prefix(std::move(sub.m_routes), full_prefix, m_options.tags);
@@ -76,6 +92,9 @@ class router {
         return false;
     }
 
+    /// Register all annotated routes declared in a namespace.
+    ///
+    /// @tparam Ns Reflected namespace containing annotated free functions.
     template <std::meta::info Ns>
     void register_api() {
         static_assert(annotated_route_count<Ns>() > 0,
@@ -120,19 +139,24 @@ class router {
         }
     }
 
+    /// @internal
+    /// Visit the runtime descriptor of every registered route.
     template <typename F>
     void for_each_descriptor(F&& f) const {
         m_routes.for_each_descriptor(std::forward<F>(f));
     }
 
+    /// @internal
     [[nodiscard]] std::vector<http_method> allowed_methods(std::string_view path) const {
         return m_routes.allowed_methods(path);
     }
 
+    /// @internal
     match_result match(http_method method, std::string_view path) {
         return m_routes.match(method, path);
     }
 
+    /// @internal
     bool any_method_matches(std::string_view path) const { return !allowed_methods(path).empty(); }
 
   private:

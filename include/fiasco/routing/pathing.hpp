@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Path parsing, query decoding and prefix helpers.
+/// @internal
+
 #include <string>
 #include <string_view>
 #include <unordered_map>

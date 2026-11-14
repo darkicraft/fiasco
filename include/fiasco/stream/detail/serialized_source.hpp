@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Internal adapter that serializes a stream into a response body.
+/// @internal
+
 #include <memory>
 #include <optional>
 #include <span>

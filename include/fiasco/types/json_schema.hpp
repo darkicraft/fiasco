@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief JSON Schema projection for reflected model types.
+/// @internal
+
 // JSON Schema projection for reflected request/response models.
 //
 // Schema generation is registration-time work: OpenAPI only consumes the
@@ -204,6 +208,7 @@ struct schema_context {
     }
 };
 
+/// Build a JSON Schema projection for `T`, including referenced definitions.
 template <typename T>
 json_schema make_json_schema() {
     schema_context context;

@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Route storage and request matching.
+/// @internal
+
 #include <array>
 #include <span>
 #include <string>
@@ -28,12 +32,14 @@ struct string_hash {
     size_t operator()(const std::string& s) const noexcept { return std::hash<std::string>{}(s); }
 };
 
+/// Stored handler and descriptor for one route.
 struct route_entry {
     handler_fn handler;
     async_handler_fn async_handler;
     route_descriptor descriptor;
 };
 
+/// Result of matching a method and path against the route table.
 struct match_result {
     bool matched = false;
     bool is_async = false;
@@ -48,19 +54,26 @@ struct match_result {
     std::vector<std::pair<std::string_view, std::string_view>> path_params;
 };
 
+/// Owns registered routes and matches requests against them.
 class route_table {
   public:
+    /// Add a synchronous route.
     void add(http_method method,
              const std::string& pattern,
              handler_fn handler,
              route_descriptor descriptor = {});
+    /// Add an asynchronous route.
     void add(http_method method,
              const std::string& pattern,
              async_handler_fn handler,
              route_descriptor descriptor = {});
+    /// Match a request method and path.
     match_result match(http_method method, std::string_view path);
+    /// True when any method matches the path.
     bool any_method_matches(std::string_view path) const;
+    /// Methods that match the path, used for `Allow` headers.
     [[nodiscard]] std::vector<http_method> allowed_methods(std::string_view path) const;
+    /// Merge routes from another table under a prefix.
     void merge_with_prefix(route_table&& other,
                            std::string_view prefix,
                            std::span<const std::string> extra_tags = {});

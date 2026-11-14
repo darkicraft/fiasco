@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Internal async handler result wrappers.
+/// @internal
+
 #include <asio/awaitable.hpp>
 
 #include <utility>
@@ -21,6 +25,7 @@ class async_result {
     explicit async_result(T&& value)
         : m_response(to_response(std::forward<T>(value))) {}
 
+    /// Convert the awaited value into a response.
     [[nodiscard]] response take() && { return std::move(m_response); }
 
   private:
@@ -41,6 +46,8 @@ class typed_async_result {
     explicit typed_async_result(U&& value)
         : m_response(to_response(std::forward<U>(value))) {}
 
+    /// Convert the awaited value into a response.
+    /// Convert the awaited value into a response.
     [[nodiscard]] response take() && { return std::move(m_response); }
 
   private:

@@ -1,9 +1,14 @@
 #pragma once
 
-// JSON Lines helper built on top of fiasco::stream.
-//
-//   auto items() -> fiasco::stream<item> { ... }
-//   return fiasco::json_lines(items());
+/// @file
+/// @brief JSON Lines streaming response helper.
+
+/// JSON Lines response helper.
+///
+/// @code
+/// auto items() -> fiasco::stream<Item> { ... }
+/// return fiasco::json_lines(items());
+/// @endcode
 
 #include <type_traits>
 #include <utility>
@@ -13,6 +18,9 @@
 
 namespace fiasco {
 
+/// Create a JSON Lines response from a stream of values.
+///
+/// Each value is serialized as one JSON value followed by a newline.
 template <typename T>
     requires detail::JsonSerializable<std::remove_cvref_t<T>>
 inline auto json_lines(stream<T> values) -> detail::response {

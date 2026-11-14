@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Internal Swagger UI and ReDoc HTML rendering.
+/// @internal
+
 // Swagger UI and ReDoc HTML pages. The assets themselves come from the CDN by
 // default; the URLs are configurable for self-hosting.
 

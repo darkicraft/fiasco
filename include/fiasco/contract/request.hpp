@@ -1,5 +1,8 @@
 #pragma once
 
+/// @file
+/// @brief HTTP request data and header helpers.
+
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -8,6 +11,7 @@
 
 namespace fiasco::detail {
 
+/// HTTP request method.
 enum class http_method {
     get,
     post,
@@ -65,23 +69,35 @@ inline const char* method_to_string(http_method m) {
     }
 }
 
+/// An incoming HTTP request after parsing and parameter binding.
+///
+/// `path` and `query_string` are views into `url`; they stay valid as long as
+/// the request is not moved. Call `reanchor_url_views()` after moving a request
+/// before reading them.
 struct request {
+    /// Request method.
     http_method method = http_method::unknown;
-    std::string url;                // owns the URL buffer
-    std::string_view path;          // points into url
-    std::string_view query_string;  // points into url
+    /// Complete request target, including the query string.
+    std::string url;
+    /// Path portion of `url`.
+    std::string_view path;
+    /// Query string portion of `url`, without the leading `?`.
+    std::string_view query_string;
+    /// HTTP headers with case-insensitive lookup through `header()`.
     std::unordered_map<std::string, std::string> headers;
+    /// Request body.
     std::string body;
 
-    // Named path params (views point into url for values, route table for keys)
+    /// Named path parameters populated by the router.
     std::unordered_map<std::string_view, std::string_view> path_params;
 
-    // Positional path param values in URL order (views point into url)
+    /// Path parameter values in URL order.
     std::vector<std::string_view> ordered_path_params;
 
-    // Decoded query parameters (first value wins), parsed from query_string.
+    /// Decoded query parameters. The first value wins for duplicate keys.
     std::unordered_map<std::string, std::string> query_params;
 
+    /// Remote client address, when the transport can determine it.
     std::string client_address;
 
     /// Re-anchor path and query views after the request object has been moved.
@@ -103,6 +119,7 @@ struct request {
         }
     }
 
+    /// Find a header by case-insensitive name. Returns null when absent.
     [[nodiscard]] const std::string* find_header(std::string_view key) const {
         if (auto it = headers.find(std::string(key)); it != headers.end()) {
             return &it->second;
@@ -115,15 +132,18 @@ struct request {
         return nullptr;
     }
 
+    /// Return true when a header with a case-insensitive name exists.
     [[nodiscard]] bool has_header(std::string_view key) const {
         return find_header(key) != nullptr;
     }
 
+    /// Return a header value, or an empty string when it is absent.
     [[nodiscard]] std::string header(const std::string& key) const {
         const auto* value = find_header(key);
         return value ? *value : "";
     }
 
+    /// Return the request `Content-Type`, or an empty string when absent.
     [[nodiscard]] std::string content_type() const { return header("Content-Type"); }
 
   private:

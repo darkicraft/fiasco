@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Annotation payloads used to declare routes and parameters.
+/// @internal
+
 // Annotation DSL for FastAPI-style field/parameter metadata.
 //
 //   struct User {
@@ -40,23 +44,51 @@ enum class param_in { infer, path, query, header, cookie, body, form, file };
 /// `field<param_in::infer>`) is the "inferred" form used on model members.
 template <param_in In = param_in::infer>
 struct field {
-    detail::opt<double> gt{}, ge{}, lt{}, le{}, multiple_of{};
-    detail::opt<std::size_t> min_length{}, max_length{};
-    detail::lit pattern{}, alias{}, title{}, description{};
+    /// Require a value greater than this bound.
+    detail::opt<double> gt{};
+    /// Require a value greater than or equal to this bound.
+    detail::opt<double> ge{};
+    /// Require a value less than this bound.
+    detail::opt<double> lt{};
+    /// Require a value less than or equal to this bound.
+    detail::opt<double> le{};
+    /// Require the value to be a multiple of this number.
+    detail::opt<double> multiple_of{};
+    /// Minimum string or collection length.
+    detail::opt<std::size_t> min_length{};
+    /// Maximum string or collection length.
+    detail::opt<std::size_t> max_length{};
+    /// Regular expression the value must match.
+    detail::lit pattern{};
+    /// External name used for the wire format, query key, header or cookie.
+    detail::lit alias{};
+    /// Human-readable title for the generated schema.
+    detail::lit title{};
+    /// Human-readable description for the generated schema.
+    detail::lit description{};
+    /// Embed a multi-parameter body under this parameter's name.
     bool embed = false;
 
     static constexpr param_in in = In;
 };
 
+/// Bind a parameter or model member from the path.
 using path = field<param_in::path>;
+/// Bind a parameter from the query string.
 using query = field<param_in::query>;
+/// Read a parameter or model from the request body.
 using body = field<param_in::body>;
+/// Bind a parameter from an HTTP header.
 using header = field<param_in::header>;
+/// Bind a parameter from a cookie.
 using cookie = field<param_in::cookie>;
+/// Bind a parameter from a form field.
 using form = field<param_in::form>;
+/// Bind a parameter from an uploaded file.
 using file = field<param_in::file>;
 
 struct depends_options {
+    /// Reuse the provider result within one request.
     bool use_cache = true;
 };
 
@@ -72,47 +104,74 @@ struct depends {
 /// Runtime route metadata. This type must stay free of consteval-only types;
 /// it is passed through `describe()` and `add()` at registration time.
 struct route_options {
-    detail::lit summary{}, description{}, name{}, operation_id{};
+    /// Short route summary for OpenAPI.
+    detail::lit summary{};
+    /// Longer route description for OpenAPI.
+    detail::lit description{};
+    /// Optional route name.
+    detail::lit name{};
+    /// Explicit OpenAPI operation id.
+    detail::lit operation_id{};
+    /// Response status code for the route.
     detail::opt<int> status_code{};
+    /// Mark the route as deprecated in OpenAPI.
     bool deprecated = false;
+    /// Include the route in the generated OpenAPI document.
     bool include_in_schema = true;
 };
 
 /// Annotation payload. It adds the reflected response model on top of the
 /// runtime metadata. `register_api` converts the runtime fields into
 /// `route_options` before calling the runtime registration path.
+/// Route annotation options used by `get`, `post` and the other factories.
 struct route_annotation_options {
-    detail::lit summary{}, description{}, name{}, operation_id{};
+    /// Short route summary for OpenAPI.
+    detail::lit summary{};
+    /// Longer route description for OpenAPI.
+    detail::lit description{};
+    /// Optional route name.
+    detail::lit name{};
+    /// Explicit OpenAPI operation id.
+    detail::lit operation_id{};
+    /// Response status code for the route.
     detail::opt<int> status_code{};
+    /// Mark the route as deprecated in OpenAPI.
     bool deprecated = false;
+    /// Include the route in the generated OpenAPI document.
     bool include_in_schema = true;
     /// Reflected type used for the OpenAPI response schema. Overrides the
     /// schema inferred from the handler return type.
     std::meta::info response_model{};
 };
 
+/// Route annotation payload consumed during namespace registration.
 struct route_annotation {
     detail::http_method method = detail::http_method::get;
     detail::lit path{};
     route_annotation_options options{};
 };
 
+/// Declare a GET route.
 consteval route_annotation get(detail::lit path, route_annotation_options options = {}) {
     return {detail::http_method::get, path, options};
 }
 
+/// Declare a POST route.
 consteval route_annotation post(detail::lit path, route_annotation_options options = {}) {
     return {detail::http_method::post, path, options};
 }
 
+/// Declare a PUT route.
 consteval route_annotation put(detail::lit path, route_annotation_options options = {}) {
     return {detail::http_method::put, path, options};
 }
 
+/// Declare a PATCH route.
 consteval route_annotation patch(detail::lit path, route_annotation_options options = {}) {
     return {detail::http_method::patch, path, options};
 }
 
+/// Declare a DELETE route.
 consteval route_annotation del(detail::lit path, route_annotation_options options = {}) {
     return {detail::http_method::del, path, options};
 }

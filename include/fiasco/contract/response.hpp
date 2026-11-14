@@ -1,5 +1,8 @@
 #pragma once
 
+/// @file
+/// @brief HTTP response data, factories, cookies, files and streams.
+
 #include <cctype>
 #include <chrono>
 #include <cstdint>
@@ -20,19 +23,31 @@
 
 namespace fiasco::detail {
 
+/// Options for setting a response cookie.
 struct cookie_options {
+    /// Maximum cookie age in seconds.
     std::optional<std::int64_t> max_age;
+    /// Absolute expiration time.
     std::optional<std::chrono::system_clock::time_point> expires;
+    /// Cookie path. Defaults to `/`.
     std::string path = "/";
+    /// Optional cookie domain.
     std::optional<std::string> domain;
+    /// Restrict the cookie to HTTPS.
     bool secure = false;
+    /// Hide the cookie from JavaScript.
     bool httponly = false;
+    /// SameSite policy: `lax`, `strict` or `none`.
     std::string samesite = "lax";
 };
 
+/// Options for a file response.
 struct file_options {
+    /// Download filename used in `Content-Disposition`.
     std::optional<std::string> filename;
+    /// Override the inferred media type.
     std::optional<std::string> media_type;
+    /// `Content-Disposition` type, usually `attachment` or `inline`.
     std::string content_disposition_type = "attachment";
 };
 
@@ -324,14 +339,25 @@ inline std::string make_cookie_header(std::string_view name,
 
 }  // namespace response_detail
 
+/// An outgoing HTTP response.
+///
+/// Most handlers can return a value directly; use the factories here when an
+/// explicit status, content type, cookie, file or stream is required.
 struct response {
+    /// HTTP status code. Defaults to 200.
     int status_code = 200;
+    /// Response headers.
     std::unordered_map<std::string, std::string> headers;
+    /// Additional `Set-Cookie` header values.
     std::vector<std::string> set_cookie_headers;
+    /// Buffered response body. Streamed responses leave this empty.
     std::string body;
+    /// @internal Pull source for a streamed body.
     std::shared_ptr<body_source> stream_source;
+    /// @internal File metadata used to prepare a streamed file response.
     std::shared_ptr<response_detail::file_body> file_source;
 
+    /// Add a `Set-Cookie` header and return this response.
     response& set_cookie(std::string_view name,
                          std::string_view value,
                          const cookie_options& options = {}) {
@@ -339,18 +365,24 @@ struct response {
         return *this;
     }
 
+    /// Add an expired cookie that deletes the named cookie on the client.
     response& delete_cookie(std::string_view name, cookie_options options = {}) {
         options.max_age = 0;
         options.expires = std::chrono::system_clock::now();
         return set_cookie(name, "", options);
     }
 
+    /// Create a response with no body.
     static response empty(int status = 204) {
         response r;
         r.status_code = status;
         return r;
     }
 
+    /// Stream a file with range, ETag and Last-Modified support.
+    ///
+    /// The application inspects the request and adjusts the response for
+    /// `Range`, `If-Range`, `If-None-Match` and `HEAD`.
     static response file(const std::filesystem::path& path, const file_options& options = {}) {
         std::error_code ec;
         if (!std::filesystem::is_regular_file(path, ec)) {
@@ -391,6 +423,10 @@ struct response {
         return r;
     }
 
+    /// Stream chunks produced by an async generator.
+    ///
+    /// The response uses chunked transfer encoding unless it is given a length
+    /// by the caller. The producer is cancelled if the client disconnects.
     template <typename T>
     static response stream(std::string content_type, fiasco::stream<T> producer) {
         auto state = std::make_shared<response_detail::stream_state<T>>(std::move(producer));
@@ -407,6 +443,7 @@ struct response {
         return r;
     }
 
+    /// Create a plain-text response. A trailing newline is appended.
     static response text(const std::string& body, int status = 200) {
         response r;
         r.status_code = status;
@@ -416,6 +453,7 @@ struct response {
         return r;
     }
 
+    /// Create a JSON response. A trailing newline is appended.
     static response json(const std::string& json_body, int status = 200) {
         response r;
         r.status_code = status;
@@ -425,6 +463,7 @@ struct response {
         return r;
     }
 
+    /// Create an HTML response. A trailing newline is appended.
     static response html(const std::string& body, int status = 200) {
         response r;
         r.status_code = status;
@@ -434,6 +473,7 @@ struct response {
         return r;
     }
 
+    /// Create a redirect response with a `Location` header.
     static response redirect(const std::string& location, int status = 302) {
         response r;
         r.status_code = status;
@@ -441,6 +481,7 @@ struct response {
         return r;
     }
 
+    /// Create a JSON error response with a `detail` field.
     static response error(const std::string& message, int status) {
         response r;
         r.status_code = status;
@@ -449,6 +490,7 @@ struct response {
         return r;
     }
 
+    /// Return the standard HTTP reason phrase for a status code.
     [[nodiscard]] static const char* reason_phrase(int code) {
         switch (code) {
         case 200:
@@ -478,6 +520,9 @@ struct response {
         }
     }
 
+    /// Serialize the response as an HTTP/1.1 byte string.
+    ///
+    /// Streaming responses cannot be serialized this way.
     [[nodiscard]] std::string serialize() const {
         if (stream_source || file_source) {
             throw std::logic_error("streaming responses cannot be serialized");

@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief JSON value type and reflection-based serialization.
+/// @internal
+
 #include <charconv>
 #include <cmath>
 #include <concepts>
@@ -32,14 +36,19 @@ concept JsonSerializable = requires(json_type& j, const T& v) { to_json(j, v); }
 template <typename T>
 concept JsonDeserializable = requires(const json_type& j, T& v) { from_json(j, v); };
 
+/// Dynamic JSON value used by `fiasco::json`.
+///
+/// Supports parsing, dumping, object/array access, primitive access and
+/// reflection-based model serialization. Object member access through
+/// `operator[]` is mutable in the same way as nlohmann::json.
 class json_type {
   public:
+    /// Base JSON exception.
     struct exception : std::runtime_error {
         using std::runtime_error::runtime_error;
     };
 
-    // Thrown by parse() for invalid JSON; carries the byte offset of the error
-    // (mapped to FastAPI's json_invalid "loc": ["body", <pos>]).
+    /// Thrown by parse() for invalid JSON; carries the byte offset of the error.
     struct parse_exception : exception {
         parse_exception(const std::string& message, std::size_t position)
             : exception(message),
@@ -63,7 +72,9 @@ class json_type {
     json_type(json_type&&) noexcept;
     json_type(std::initializer_list<json_entry>);
 
+    /// Create an empty JSON array.
     static json_type array(std::initializer_list<json_type> values);
+    /// Create an empty JSON object.
     static json_type object();
 
     template <typename T>
@@ -86,17 +97,27 @@ class json_type {
     json_type operator[](const std::string& key) const;
     json_type operator[](std::size_t index) const;
 
+    /// True when the value is JSON null.
     [[nodiscard]] bool is_null() const noexcept;
+    /// True for booleans.
     [[nodiscard]] bool is_boolean() const noexcept;
+    /// True for numeric values.
     [[nodiscard]] bool is_number() const noexcept;
+    /// True for strings.
     [[nodiscard]] bool is_string() const noexcept;
+    /// True for objects.
     [[nodiscard]] bool is_object() const noexcept;
+    /// True for arrays.
     [[nodiscard]] bool is_array() const noexcept;
 
+    /// True when the object contains `key`.
     [[nodiscard]] bool contains(const std::string& key) const noexcept;
+    /// True when the object or array has no elements.
     [[nodiscard]] bool empty() const noexcept;
+    /// Number of object members or array elements.
     [[nodiscard]] std::size_t size() const noexcept;
 
+    /// Convert the value into `T` using its `from_json` overload.
     template <JsonDeserializable T>
     [[nodiscard]] T get() const {
         T val;
@@ -104,6 +125,7 @@ class json_type {
         return val;
     }
 
+    /// Return the member at `key`, or `default_val` when it is absent.
     template <JsonDeserializable T>
     [[nodiscard]] T value(const std::string& key, const T& default_val) const {
         if (contains(key)) {
@@ -112,14 +134,21 @@ class json_type {
         return default_val;
     }
 
+    /// Parse JSON text.
     static json_type parse(const std::string& str);
+    /// Serialize this value. `indent < 0` selects compact output.
     [[nodiscard]] std::string dump(int indent = -1) const;
 
+    /// Append a value to an array.
     void push_back(json_type value);
+    /// Erase an object member.
     void erase(const std::string& key);
+    /// Apply an RFC 7396 merge patch.
     void merge_patch(const json_type& patch);
+    /// Remove all elements.
     void clear();
 
+    /// Return object keys in insertion order.
     [[nodiscard]] std::vector<std::string> object_keys() const;
 
     [[nodiscard]] bool operator==(const json_type&) const noexcept;
@@ -127,7 +156,9 @@ class json_type {
 
     ~json_type();
 
+    /// @internal Access the underlying storage for the JSON backend.
     void* data();
+    /// @internal Access the underlying storage for the JSON backend.
     const void* data() const;
 
   private:

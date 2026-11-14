@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Application middleware chain and next-handler contract.
+/// @internal
+
 #include <asio/awaitable.hpp>
 
 #include <cstddef>

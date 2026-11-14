@@ -1,5 +1,8 @@
 #pragma once
 
+/// @file
+/// @brief Public server runtime and lifecycle control.
+
 #include <condition_variable>
 #include <cstdint>
 #include <memory>
@@ -15,8 +18,10 @@ namespace fiasco::detail {
 
 /// The transport: owns the socket and the worker threads. It drives the
 /// type-erased application handler and never registers routes.
+/// Owns the listening socket and worker threads for an application.
 class server {
   public:
+    /// Create a server for an application handler and network configuration.
     explicit server(application_handler handler, fiasco::server_config config = {})
         : m_handler(std::move(handler)),
           m_config(std::move(config)) {}
@@ -24,6 +29,7 @@ class server {
     server(const server&) = delete;
     server& operator=(const server&) = delete;
 
+    /// Start accepting connections and block until the server stops.
     void run() {
         const auto& network = m_config.network;
         // run() may be called on a different thread than stop(); guard m_server.
@@ -45,11 +51,13 @@ class server {
         }
     }
 
+    /// Return the bound port, or `0` before the server has started.
     [[nodiscard]] std::uint16_t port() const {
         std::lock_guard lock(m_server_mutex);
         return m_server ? m_server->port() : 0;
     }
 
+    /// Block until the server has bound its port or failed to start.
     void wait_until_started() {
         std::unique_lock lock(m_server_mutex);
         m_server_cv.wait(lock, [this] { return m_server != nullptr || m_run_finished; });
@@ -58,6 +66,7 @@ class server {
         }
     }
 
+    /// Ask the server to stop. May be called from another thread.
     void stop() {
         std::lock_guard<std::mutex> lock(m_server_mutex);
         if (m_server) {

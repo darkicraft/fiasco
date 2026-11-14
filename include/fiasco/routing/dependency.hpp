@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Dependency descriptors and per-request dependency storage.
+/// @internal
+
 #include <array>
 #include <cstddef>
 #include <meta>

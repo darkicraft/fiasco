@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Internal static-file mount serving.
+/// @internal
+
 // Static file mounts. This is intentionally a small buffered implementation:
 // path validation, MIME lookup, index.html support, GET/HEAD, and a clean 404.
 
@@ -14,7 +18,9 @@
 
 namespace fiasco::detail {
 
+/// Options for a static-file mount.
 struct static_options {
+    /// Serve `index.html` for directory requests.
     bool html = false;
 };
 

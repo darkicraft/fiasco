@@ -1,5 +1,8 @@
 #pragma once
 
+/// @file
+/// @brief Exception type that maps directly to an HTTP error response.
+
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -14,16 +17,19 @@ namespace fiasco::detail {
 /// request processing. The detail may be any JSON value.
 class http_error : public std::runtime_error {
   public:
+    /// Create an error with a string detail.
     explicit http_error(int status_code,
                         std::string detail,
                         std::unordered_map<std::string, std::string> headers = {})
         : http_error(status_code, json_type(std::move(detail)), std::move(headers)) {}
 
+    /// Create an error with a string literal detail.
     explicit http_error(int status_code,
                         const char* detail,
                         std::unordered_map<std::string, std::string> headers = {})
         : http_error(status_code, std::string(detail), std::move(headers)) {}
 
+    /// Create an error with an arbitrary JSON detail value.
     explicit http_error(int status_code,
                         json_type detail,
                         std::unordered_map<std::string, std::string> headers = {})
@@ -32,8 +38,11 @@ class http_error : public std::runtime_error {
           m_detail(std::move(detail)),
           m_headers(std::move(headers)) {}
 
+    /// HTTP status code to return.
     [[nodiscard]] int status_code() const noexcept { return m_status_code; }
+    /// JSON value placed in the response `detail` field.
     [[nodiscard]] const json_type& detail() const noexcept { return m_detail; }
+    /// Additional response headers.
     [[nodiscard]] const std::unordered_map<std::string, std::string>& headers() const noexcept {
         return m_headers;
     }

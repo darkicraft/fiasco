@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Internal file-range preparation and streaming body source.
+/// @internal
+
 // File-range preparation for `response::file`. The factory records metadata
 // only; this layer turns that metadata into a streaming body once the request
 // headers are known.
@@ -121,6 +125,7 @@ inline auto parse_range(std::string_view header, std::uintmax_t size) -> byte_ra
     return {.status = range_status::valid, .start = *start, .end = end};
 }
 
+/// Stream one contiguous byte range from a file.
 class file_stream_state {
   public:
     file_stream_state(const std::filesystem::path& path,
@@ -162,6 +167,7 @@ class file_stream_state {
     std::uintmax_t m_remaining;
 };
 
+/// Apply range, conditional-request and HEAD handling to a file response.
 inline auto prepare_file_response(response& res, const request& req) -> void {
     if (!res.file_source) {
         return;

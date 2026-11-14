@@ -1,5 +1,9 @@
 #pragma once
 
+/// @file
+/// @brief Reflection helpers for callable and parameter metadata.
+/// @internal
+
 // Reflection foundation for fiasco.
 //
 // GCC 16.2 notes that shape this layer:
