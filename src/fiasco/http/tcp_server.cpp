@@ -29,16 +29,22 @@ using asio::ip::tcp;
 
 namespace {
 
-std::string ascii_lower(std::string_view value) {
-    std::string result(value);
-    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
-    return result;
+bool ascii_iequals(std::string_view a, std::string_view b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) !=
+            std::tolower(static_cast<unsigned char>(b[i]))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool request_wants_close(const request& req) {
-    return ascii_lower(req.header("Connection")) == "close";
+    const auto* connection = req.find_header("Connection");
+    return connection != nullptr && ascii_iequals(*connection, "close");
 }
 
 struct exchange_state {
@@ -84,11 +90,23 @@ struct session : std::enable_shared_from_this<session> {
     llhttp_parser parser;
     std::array<char, 8192> buf;
     application_handler& handler;
+    std::string peer_address = "unknown";
 
     session(tcp::socket sock, asio::io_context::executor_type ex, application_handler& h)
         : strand(asio::make_strand(ex)),
           socket(std::move(sock)),
-          handler(h) {}
+          handler(h) {
+        // Responses are small and written with keep-alive, so Nagle only adds
+        // latency (and delayed ACKs can stall a response by tens of ms).
+        asio::error_code ignored;
+        socket.set_option(tcp::no_delay(true), ignored);
+        // The peer address is stable for the connection; resolve it once rather
+        // than issuing a getpeername syscall for every request.
+        const auto endpoint = socket.remote_endpoint(ignored);
+        if (!ignored) {
+            peer_address = endpoint.address().to_string() + ':' + std::to_string(endpoint.port());
+        }
+    }
 
     void start() { read(); }
 
@@ -112,12 +130,7 @@ struct session : std::enable_shared_from_this<session> {
     void respond() {
         auto req = std::make_shared<request>(parser.take_request());
 
-        try {
-            auto ep = socket.remote_endpoint();
-            req->client_address = ep.address().to_string() + ':' + std::to_string(ep.port());
-        } catch (...) {
-            req->client_address = "unknown";
-        }
+        req->client_address = peer_address;
 
         auto state = std::make_shared<exchange_state>();
         state->request_close = request_wants_close(*req);
@@ -251,7 +264,7 @@ struct session : std::enable_shared_from_this<session> {
             socket, asio::buffer(bytes.data(), bytes.size()), asio::use_awaitable);
     }
 
-    task<void> send_headers(const std::shared_ptr<exchange_state>& state) {
+    static std::string build_headers(const std::shared_ptr<exchange_state>& state) {
         std::string head;
         head += "HTTP/1.1 ";
         head += std::to_string(state->status);
@@ -268,15 +281,14 @@ struct session : std::enable_shared_from_this<session> {
             head += value;
             head += "\r\n";
 
-            const auto lower = ascii_lower(key);
-            if (lower == "content-length") {
+            if (ascii_iequals(key, "Content-Length")) {
                 has_length = true;
-            } else if (lower == "connection") {
+            } else if (ascii_iequals(key, "Connection")) {
                 has_connection = true;
-                state->close = state->close || ascii_lower(value) == "close";
-            } else if (lower == "transfer-encoding") {
+                state->close = state->close || ascii_iequals(value, "close");
+            } else if (ascii_iequals(key, "Transfer-Encoding")) {
                 has_transfer_encoding = true;
-                state->chunked = ascii_lower(value) == "chunked";
+                state->chunked = ascii_iequals(value, "chunked");
             }
         }
 
@@ -292,9 +304,7 @@ struct session : std::enable_shared_from_this<session> {
             head += state->close ? "Connection: close\r\n" : "Connection: keep-alive\r\n";
         }
         head += "\r\n";
-
-        co_await write_raw(head);
-        state->headers_sent = true;
+        return head;
     }
 
     task<void> write_chunk(const std::shared_ptr<exchange_state>& state,
@@ -302,22 +312,37 @@ struct session : std::enable_shared_from_this<session> {
         if (bytes.empty()) {
             co_return;
         }
-        if (!state->headers_sent) {
-            co_await send_headers(state);
+
+        if (state->headers_sent) {
+            if (state->chunked) {
+                std::string frame;
+                frame.reserve(bytes.size() + 24);
+                frame += chunk_size(bytes.size());
+                frame += "\r\n";
+                frame.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+                frame += "\r\n";
+                co_await write_raw(frame);
+            } else {
+                co_await asio::async_write(
+                    socket, asio::buffer(bytes.data(), bytes.size()), asio::use_awaitable);
+            }
+            co_return;
         }
 
+        // Coalesce the response head with the first body chunk into a single
+        // write. Two small writes per response interact badly with delayed ACKs
+        // and cost an extra syscall on the hot path.
+        std::string out = build_headers(state);
         if (state->chunked) {
-            std::string frame;
-            frame.reserve(bytes.size() + 24);
-            frame += chunk_size(bytes.size());
-            frame += "\r\n";
-            frame.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-            frame += "\r\n";
-            co_await write_raw(frame);
+            out += chunk_size(bytes.size());
+            out += "\r\n";
+            out.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+            out += "\r\n";
         } else {
-            co_await asio::async_write(
-                socket, asio::buffer(bytes.data(), bytes.size()), asio::use_awaitable);
+            out.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
         }
+        state->headers_sent = true;
+        co_await write_raw(out);
     }
 
     task<void> end_response(const std::shared_ptr<exchange_state>& state) {
@@ -327,9 +352,13 @@ struct session : std::enable_shared_from_this<session> {
             co_return;
         }
         if (!state->headers_sent) {
-            co_await send_headers(state);
-        }
-        if (state->chunked) {
+            std::string out = build_headers(state);
+            if (state->chunked) {
+                out += "0\r\n\r\n";
+            }
+            state->headers_sent = true;
+            co_await write_raw(out);
+        } else if (state->chunked) {
             co_await write_raw("0\r\n\r\n");
         }
         finish_connection(state->close);
