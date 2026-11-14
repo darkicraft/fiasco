@@ -23,7 +23,6 @@
 #include <asio/async_result.hpp>
 #include <asio/awaitable.hpp>
 #include <asio/cancellation_signal.hpp>
-#include <asio/deferred.hpp>
 #include <asio/error.hpp>
 #include <asio/error_code.hpp>
 #include <asio/post.hpp>
@@ -36,7 +35,6 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <system_error>
 #include <tuple>
 #include <utility>
 

@@ -9,7 +9,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <utility>
 
 #include "fiasco/app/app.hpp"
 #include "fiasco/contract/exchange.hpp"

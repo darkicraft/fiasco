@@ -3,7 +3,6 @@
 // Static file mounts. This is intentionally a small buffered implementation:
 // path validation, MIME lookup, index.html support, GET/HEAD, and a clean 404.
 
-#include <cctype>
 #include <filesystem>
 #include <optional>
 #include <string>

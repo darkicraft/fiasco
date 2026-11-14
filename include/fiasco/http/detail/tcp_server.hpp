@@ -2,10 +2,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #include "fiasco/contract/exchange.hpp"
-#include "fiasco/http/detail/request.hpp"
-#include "fiasco/http/detail/response.hpp"
 
 namespace fiasco::detail {
 

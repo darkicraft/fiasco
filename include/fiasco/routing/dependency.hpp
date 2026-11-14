@@ -6,7 +6,6 @@
 #include <optional>
 #include <tuple>
 #include <type_traits>
-#include <utility>
 
 #include "fiasco/meta/annotations.hpp"
 #include "fiasco/meta/reflect.hpp"

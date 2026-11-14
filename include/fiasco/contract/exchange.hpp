@@ -1,10 +1,7 @@
 #pragma once
 
-#include <functional>
-
 #include "fiasco/contract/request.hpp"
 #include "fiasco/contract/sink.hpp"
-#include "fiasco/contract/task.hpp"
 
 namespace fiasco::detail {
 

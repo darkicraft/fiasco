@@ -1,7 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
-#include <variant>
 
 #include "fiasco/contract/request.hpp"
 #include "fiasco/contract/response.hpp"

@@ -1,7 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <cstdint>
-#include <string>
 
 #include "fiasco/fiasco.hpp"
 #include "support/http_client.hpp"

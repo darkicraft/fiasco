@@ -1,8 +1,6 @@
 #include "fiasco/http/detail/tcp_server.hpp"
 
 #include <asio.hpp>
-#include <asio/bind_cancellation_slot.hpp>
-#include <asio/cancellation_signal.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -22,6 +20,8 @@
 #endif
 
 #include "fiasco/http/detail/parser.hpp"
+#include "fiasco/http/detail/request.hpp"
+#include "fiasco/http/detail/response.hpp"
 
 namespace fiasco::detail {
 

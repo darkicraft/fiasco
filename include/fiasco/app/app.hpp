@@ -1,11 +1,9 @@
 #pragma once
 
 #include <concepts>
-#include <cstddef>
 #include <functional>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>

@@ -2,7 +2,6 @@
 
 #include <asio/awaitable.hpp>
 
-#include <type_traits>
 #include <utility>
 
 #include "fiasco/http/detail/response.hpp"

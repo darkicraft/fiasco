@@ -8,7 +8,6 @@
 
 #include <fiasco/fiasco.hpp>
 
-#include <string>
 
 using fiasco::get;
 using fiasco::response;
