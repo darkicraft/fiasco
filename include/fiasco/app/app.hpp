@@ -127,7 +127,7 @@ class app {
 
     /// @internal
     /// The transport-independent request entry point.
-    request_result handle(request req);
+    request_result handle(request& req);
 
     /// @internal
     /// Type-erased handler used by the transport.
@@ -329,7 +329,7 @@ class app {
 
     static task<void> write_response(response_sink& sink, response res);
 
-    request_result dispatch(request req);
+    request_result dispatch(request& req);
 
     std::optional<request_result> try_sub_app(request& req);
     std::optional<response> try_static(const request& req) const;
@@ -347,7 +347,7 @@ inline std::optional<request_result> app::try_sub_app(request& req) {
         }
         sub_req.url = std::move(new_url);
         sub_req.reanchor_url_views();
-        return sub.target->handle(std::move(sub_req));
+        return sub.target->handle(sub_req);
     }
     return std::nullopt;
 }
@@ -361,7 +361,7 @@ inline std::optional<response> app::try_static(const request& req) const {
     return std::nullopt;
 }
 
-inline request_result app::dispatch(request req) {
+inline request_result app::dispatch(request& req) {
     req.reanchor_url_views();
 
     if (auto sub_result = try_sub_app(req)) {
@@ -388,7 +388,8 @@ inline request_result app::dispatch(request req) {
     }
 
     if (match.is_async) {
-        return dispatch_async(std::move(req), *match.async_handler);
+        // Async handlers outlive this frame, so hand them their own request.
+        return dispatch_async(request(req), *match.async_handler);
     }
 
     req.path_params.clear();
@@ -408,16 +409,16 @@ inline request_result app::dispatch(request req) {
     return res;
 }
 
-inline request_result app::handle(request req) {
+inline request_result app::handle(request& req) {
     if (!m_middleware.empty()) {
-        return dispatch_pipeline(std::move(req));
+        // Middleware pipelines own the request across suspensions.
+        return dispatch_pipeline(request(req));
     }
-    return dispatch(std::move(req));
+    return dispatch(req);
 }
 
 inline task<void> app::handle(exchange& ex) {
-    auto req = ex.req;
-    auto result = handle(std::move(req));
+    auto result = handle(ex.req);
     if (auto* res = std::get_if<response>(&result)) {
         prepare_file_response(*res, ex.req);
         co_await write_response(ex.res, std::move(*res));
