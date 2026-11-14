@@ -16,6 +16,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -141,7 +142,8 @@ fiasco::stream<std::string> idle_stream(std::atomic<bool>& cancelled) {
     co_return;
 }
 
-fiasco::stream<int> pending_stream(asio::steady_timer& timer) {
+fiasco::stream<int> pending_stream(asio::steady_timer& timer, std::function<void()> on_start) {
+    on_start();
     timer.expires_after(std::chrono::hours(1));
     co_await timer.async_wait(asio::deferred);
     co_yield 1;
@@ -317,7 +319,12 @@ TEST_CASE("stream cancels a pending operation when destroyed", "[stream]") {
     asio::io_context io;
     asio::steady_timer operation_timer(io);
     asio::steady_timer destroy_timer(io);
-    auto stream = std::make_unique<fiasco::stream<int>>(pending_stream(operation_timer));
+    std::unique_ptr<fiasco::stream<int>> stream;
+    stream = std::make_unique<fiasco::stream<int>>(
+        pending_stream(operation_timer, [&stream, &destroy_timer] {
+            destroy_timer.expires_after(std::chrono::milliseconds(10));
+            destroy_timer.async_wait([&stream](const asio::error_code&) { stream.reset(); });
+        }));
     auto* raw = stream.get();
 
     asio::co_spawn(
@@ -328,9 +335,6 @@ TEST_CASE("stream cancels a pending operation when destroyed", "[stream]") {
             finished = true;
         }(),
         asio::detached);
-
-    destroy_timer.expires_after(std::chrono::milliseconds(10));
-    destroy_timer.async_wait([&stream](const asio::error_code&) { stream.reset(); });
 
     io.run();
 
