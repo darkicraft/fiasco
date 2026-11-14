@@ -13,14 +13,13 @@
 #include <asio/write.hpp>
 
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -125,12 +124,12 @@ std::string decode_chunked_body(std::string_view body) {
 }
 
 struct destruction_probe {
-    std::atomic<bool>* flag;
+    std::promise<void>* signal;
 
-    ~destruction_probe() { flag->store(true); }
+    ~destruction_probe() { signal->set_value(); }
 };
 
-fiasco::stream<std::string> idle_stream(std::atomic<bool>& cancelled) {
+fiasco::stream<std::string> idle_stream(std::promise<void>& cancelled) {
     destruction_probe probe{&cancelled};
     co_yield "data: first\n\n";
 
@@ -318,13 +317,9 @@ TEST_CASE("stream cancels a pending operation when destroyed", "[stream]") {
 
     asio::io_context io;
     asio::steady_timer operation_timer(io);
-    asio::steady_timer destroy_timer(io);
     std::unique_ptr<fiasco::stream<int>> stream;
-    stream = std::make_unique<fiasco::stream<int>>(
-        pending_stream(operation_timer, [&stream, &destroy_timer] {
-            destroy_timer.expires_after(std::chrono::milliseconds(10));
-            destroy_timer.async_wait([&stream](const asio::error_code&) { stream.reset(); });
-        }));
+    stream = std::make_unique<fiasco::stream<int>>(pending_stream(
+        operation_timer, [&stream, &io] { asio::post(io, [&stream] { stream.reset(); }); }));
     auto* raw = stream.get();
 
     asio::co_spawn(
@@ -343,11 +338,12 @@ TEST_CASE("stream cancels a pending operation when destroyed", "[stream]") {
 }
 
 TEST_CASE("server cancels an idle stream when the client disconnects", "[stream][disconnect]") {
-    std::atomic<bool> cancelled{false};
+    std::promise<void> cancelled_promise;
+    auto cancelled = cancelled_promise.get_future();
 
     fiasco_test::test_server server;
-    fiasco_test::get(server.app(), "/events", [&cancelled]() -> fiasco::response {
-        return fiasco::response::stream("text/event-stream", idle_stream(cancelled));
+    fiasco_test::get(server.app(), "/events", [&cancelled_promise]() -> fiasco::response {
+        return fiasco::response::stream("text/event-stream", idle_stream(cancelled_promise));
     });
     server.start();
 
@@ -372,10 +368,7 @@ TEST_CASE("server cancels an idle stream when the client disconnects", "[stream]
     REQUIRE(received.find("data: first\n\n") != std::string::npos);
     socket.close();
 
-    for (int i = 0; i < 100 && !cancelled.load(); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    CHECK(cancelled.load());
+    REQUIRE(cancelled.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
 
     server.stop();
 }
