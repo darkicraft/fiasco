@@ -434,6 +434,10 @@ inline task<void> app::handle(exchange& ex) {
 inline task<void> app::write_response(response_sink& sink, response res) {
     const bool bodyless = res.status_code == 204 || res.status_code == 304 ||
                           (res.status_code >= 100 && res.status_code < 200);
+    if (!res.stream_source && sink.send) {
+        co_await sink.send(res);
+        co_return;
+    }
     if (!res.stream_source && !bodyless && !res.headers.contains("Content-Length")) {
         res.headers["Content-Length"] = std::to_string(res.body.size());
     }

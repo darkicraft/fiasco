@@ -15,6 +15,7 @@
 namespace fiasco::detail {
 
 struct body_source;
+struct response;
 
 /// Push side of the ASGI-style boundary. Move-only callbacks keep the sink
 /// type-erased without a virtual base.
@@ -30,6 +31,11 @@ struct response_sink {
     /// Finish the response. Transports may close or reuse the connection after
     /// this completes.
     std::move_only_function<task<void>()> end;
+
+    /// Optional fast path for fully buffered responses. Transports that can
+    /// emit the head and body together implement this; the application prefers
+    /// it over the status/header/write/end sequence.
+    std::move_only_function<task<void>(response&)> send{};
 
     /// Optional transport hooks for streamed response bodies. The application
     /// calls these around the pull loop; transports use them to watch for a

@@ -45,6 +45,11 @@ class test_client {
                 co_return;
             },
             .end = []() -> task<void> { co_return; },
+            .send =
+                [&out](response& res) -> task<void> {
+                    out = std::move(res);
+                    co_return;
+                },
         };
 
         std::string_view body_view = req.body;
