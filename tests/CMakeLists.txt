@@ -9,6 +9,10 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 function(fiasco_add_test name source)
     add_executable(${name} ${source})
     target_link_libraries(${name} PRIVATE Catch2::Catch2WithMain ${ARGN})
+    if(FIASCO_TEST_EXECUTOR)
+        set_target_properties(${name} PROPERTIES
+            CROSSCOMPILING_EMULATOR "${FIASCO_TEST_EXECUTOR}")
+    endif()
     catch_discover_tests(${name})
 endfunction()
 

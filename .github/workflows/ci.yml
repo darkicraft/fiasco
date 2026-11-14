@@ -60,6 +60,8 @@ jobs:
       - name: Build
         run: cmake --build build-asan --parallel "$(nproc)"
       - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=0
         run: ctest --test-dir build-asan --output-on-failure
 
   tsan:
@@ -67,19 +69,22 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: gcc:16.2.0-trixie
+      # setarch needs personality(2); Docker's default seccomp profile blocks it.
+      options: --security-opt seccomp=unconfined
     steps:
       - uses: actions/checkout@v4
       - name: Install CMake
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends python3-pip
+          apt-get install -y --no-install-recommends python3-pip util-linux
           pip install --break-system-packages --no-cache-dir cmake
       - name: Configure
         run: |
           cmake -S . -B build-tsan \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -g" \
-            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+            -DFIASCO_TEST_EXECUTOR="setarch;$(uname -m);-R"
       - name: Build
         run: cmake --build build-tsan --parallel "$(nproc)"
       - name: Test

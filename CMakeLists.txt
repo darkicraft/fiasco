@@ -24,6 +24,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Optional launcher for test executables. Used by sanitizer CI runs that need
+# to disable ASLR, e.g. "-DFIASCO_TEST_EXECUTOR=setarch;x86_64;-R".
+set(FIASCO_TEST_EXECUTOR "" CACHE STRING
+    "Semicolon-separated launcher command for test executables")
+
 # C++20 modules are parked until the module surface is repaired.
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
