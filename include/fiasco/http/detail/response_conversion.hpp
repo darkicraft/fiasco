@@ -48,8 +48,7 @@ template <typename T>
                          std::floating_point<clean>) {
         return response::text(std::to_string(value));
     } else if constexpr (JsonSerializable<clean>) {
-        json_type j = std::forward<T>(value);
-        return response::json(j.dump());
+        return response::json(dump_json(value));
     } else {
         static_assert(!sizeof(T),
                       "Handler return type must be a primitive, fiasco::response, "

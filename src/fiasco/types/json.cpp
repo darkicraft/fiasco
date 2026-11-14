@@ -13,13 +13,16 @@ struct json_type::impl {
     nlohmann::ordered_json m_json;
 };
 
+json_type::impl& json_type::null_impl() {
+    static impl value;
+    return value;
+}
+
 json_type::json_type()
-    : m_data(std::make_shared<impl>()) {}
+    : m_data(nullptr) {}
 
 json_type::json_type(std::nullptr_t)
-    : m_data(std::make_shared<impl>()) {
-    m_data->m_json = nullptr;
-}
+    : m_data(nullptr) {}
 
 json_type::json_type(bool b)
     : m_data(std::make_shared<impl>()) {
@@ -53,13 +56,24 @@ json_type::json_type(const char* s)
 
 json_type::json_type(const json_type& other)
     : m_data(other.m_data),
-      m_path(other.m_path) {}
+      m_path(other.m_path),
+      m_node(other.m_node) {}
 
 json_type::json_type(json_type&& other) noexcept
     : m_data(std::move(other.m_data)),
-      m_path(std::move(other.m_path)) {
-    other.m_data = std::make_shared<impl>();
+      m_path(std::move(other.m_path)),
+      m_node(other.m_node) {
+    other.m_data = nullptr;
+    other.m_node = nullptr;
 }
+
+json_type::json_type(std::shared_ptr<impl> data, std::vector<path_segment> path)
+    : m_data(std::move(data)),
+      m_path(std::move(path)) {}
+
+json_type::json_type(std::shared_ptr<impl> data, const void* node)
+    : m_data(std::move(data)),
+      m_node(node) {}
 
 json_type::json_type(std::initializer_list<json_entry> entries)
     : m_data(std::make_shared<impl>()) {
@@ -71,14 +85,14 @@ json_type::json_type(std::initializer_list<json_entry> entries)
 
 json_type json_type::object() {
     json_type j;
-    j.m_data->m_json = nlohmann::ordered_json::object();
+    *static_cast<nlohmann::ordered_json*>(j.data()) = nlohmann::ordered_json::object();
     return j;
 }
 
 json_type json_type::array(std::initializer_list<json_type> values) {
     json_type j;
-    j.m_data->m_json = nlohmann::ordered_json::array();
-    auto& arr = j.m_data->m_json;
+    auto& arr = *static_cast<nlohmann::ordered_json*>(j.data());
+    arr = nlohmann::ordered_json::array();
     for (const auto& v : values) {
         arr.push_back(*static_cast<const nlohmann::ordered_json*>(v.data()));
     }
@@ -97,26 +111,26 @@ json_type& json_type::operator=(const json_type& other) {
 json_type& json_type::operator=(json_type&& other) noexcept {
     if (this != &other) {
         auto& self = *static_cast<nlohmann::ordered_json*>(data());
-        auto& src = *static_cast<nlohmann::ordered_json*>(other.data());
-        self = std::move(src);
+        if (other.m_data) {
+            auto& src = *static_cast<nlohmann::ordered_json*>(other.data());
+            self = std::move(src);
+        } else {
+            self = nullptr;
+        }
     }
     return *this;
 }
 
 json_type json_type::operator[](const std::string& key) {
-    json_type result;
-    result.m_data = m_data;
-    result.m_path = m_path;
-    result.m_path.push_back(key);
-    return result;
+    auto& self = *static_cast<nlohmann::ordered_json*>(data());
+    auto& child = self[std::string(key)];
+    return json_type(m_data, static_cast<const void*>(&child));
 }
 
 json_type json_type::operator[](std::size_t index) {
-    json_type result;
-    result.m_data = m_data;
-    result.m_path = m_path;
-    result.m_path.push_back(index);
-    return result;
+    auto& self = *static_cast<nlohmann::ordered_json*>(data());
+    auto& child = self[index];
+    return json_type(m_data, static_cast<const void*>(&child));
 }
 
 json_type json_type::operator[](const std::string& key) const {
@@ -141,6 +155,59 @@ json_type json_type::operator[](std::size_t index) const {
         result.m_data->m_json = self[index];
     }
     return result;
+}
+
+json_type json_type::view(const std::string& key) const {
+    const auto& self = *static_cast<const nlohmann::ordered_json*>(data());
+    if (self.is_object()) {
+        if (auto it = self.find(key); it != self.end()) {
+            return json_type(m_data, static_cast<const void*>(&*it));
+        }
+    }
+    return json_type();
+}
+
+json_type json_type::view(std::size_t index) const {
+    const auto& self = *static_cast<const nlohmann::ordered_json*>(data());
+    if (self.is_array() && index < self.size()) {
+        return json_type(m_data, static_cast<const void*>(&self[index]));
+    }
+    return json_type();
+}
+
+void json_type::set_field(std::string_view key, const json_type& value) {
+    auto& self = *static_cast<nlohmann::ordered_json*>(data());
+    self[std::string(key)] = *static_cast<const nlohmann::ordered_json*>(value.data());
+}
+
+void json_type::set_field(std::string_view key, std::string_view value) {
+    auto& self = *static_cast<nlohmann::ordered_json*>(data());
+    self[std::string(key)] = std::string(value);
+}
+
+void json_type::set_field(std::string_view key, bool value) {
+    auto& self = *static_cast<nlohmann::ordered_json*>(data());
+    self[std::string(key)] = value;
+}
+
+void json_type::set_field(std::string_view key, std::int64_t value) {
+    auto& self = *static_cast<nlohmann::ordered_json*>(data());
+    self[std::string(key)] = value;
+}
+
+void json_type::set_field(std::string_view key, std::uint64_t value) {
+    auto& self = *static_cast<nlohmann::ordered_json*>(data());
+    self[std::string(key)] = value;
+}
+
+void json_type::set_field(std::string_view key, double value) {
+    auto& self = *static_cast<nlohmann::ordered_json*>(data());
+    self[std::string(key)] = value;
+}
+
+void json_type::set_field(std::string_view key, std::nullptr_t) {
+    auto& self = *static_cast<nlohmann::ordered_json*>(data());
+    self[std::string(key)] = nullptr;
 }
 
 bool json_type::is_null() const noexcept {
@@ -182,7 +249,7 @@ std::size_t json_type::size() const noexcept {
 json_type json_type::parse(const std::string& str) {
     try {
         json_type j;
-        j.m_data->m_json = nlohmann::ordered_json::parse(str);
+        *static_cast<nlohmann::ordered_json*>(j.data()) = nlohmann::ordered_json::parse(str);
         return j;
     } catch (const nlohmann::ordered_json::parse_error& e) {
         throw json_type::parse_exception(e.what(), static_cast<std::size_t>(e.byte));
@@ -197,7 +264,9 @@ std::string json_type::dump(int indent) const {
 
 void json_type::push_back(json_type value) {
     auto& arr = *static_cast<nlohmann::ordered_json*>(data());
-    arr.push_back(std::move(*static_cast<nlohmann::ordered_json*>(value.data())));
+    const auto& source =
+        *static_cast<const nlohmann::ordered_json*>(static_cast<const json_type&>(value).data());
+    arr.push_back(source);
 }
 
 void json_type::erase(const std::string& key) {
@@ -237,6 +306,12 @@ std::vector<std::string> json_type::object_keys() const {
 }
 
 void* json_type::data() {
+    if (m_node) {
+        return const_cast<void*>(m_node);
+    }
+    if (!m_data) {
+        m_data = std::make_shared<impl>();
+    }
     nlohmann::ordered_json* current = &m_data->m_json;
     for (const auto& seg : m_path) {
         if (auto* key = std::get_if<std::string>(&seg)) {
@@ -249,6 +324,12 @@ void* json_type::data() {
 }
 
 const void* json_type::data() const {
+    if (m_node) {
+        return m_node;
+    }
+    if (!m_data) {
+        return &null_impl().m_json;
+    }
     const nlohmann::ordered_json* current = &m_data->m_json;
     for (const auto& seg : m_path) {
         if (auto* key = std::get_if<std::string>(&seg)) {

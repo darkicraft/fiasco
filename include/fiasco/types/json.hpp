@@ -4,6 +4,7 @@
 /// @brief JSON value type and reflection-based serialization.
 /// @internal
 
+#include <algorithm>
 #include <charconv>
 #include <cmath>
 #include <concepts>
@@ -97,6 +98,20 @@ class json_type {
     json_type operator[](const std::string& key) const;
     json_type operator[](std::size_t index) const;
 
+    /// @internal Return a non-owning view of an existing member without
+    /// copying the underlying value. Used by the model binding fast path.
+    [[nodiscard]] json_type view(const std::string& key) const;
+    [[nodiscard]] json_type view(std::size_t index) const;
+
+    /// @internal Set a member directly without materialising a temporary view.
+    void set_field(std::string_view key, const json_type& value);
+    void set_field(std::string_view key, std::string_view value);
+    void set_field(std::string_view key, bool value);
+    void set_field(std::string_view key, std::int64_t value);
+    void set_field(std::string_view key, std::uint64_t value);
+    void set_field(std::string_view key, double value);
+    void set_field(std::string_view key, std::nullptr_t);
+
     /// True when the value is JSON null.
     [[nodiscard]] bool is_null() const noexcept;
     /// True for booleans.
@@ -178,8 +193,12 @@ class json_type {
     }
 
     struct impl;
+    json_type(std::shared_ptr<impl> data, std::vector<path_segment> path);
+    json_type(std::shared_ptr<impl> data, const void* node);
+    static impl& null_impl();
     std::shared_ptr<impl> m_data;
     std::vector<path_segment> m_path;
+    const void* m_node = nullptr;
 };
 
 // Enables json_type{{"key", val}, {"k2", v2}} without ambiguity vs arrays.
@@ -574,7 +593,27 @@ void from_json(const json_type& j, T& tuple) {
 // ---- Field-level helpers ---------------------------------------------------
 template <typename T>
 void to_json_field(json_type& j, std::string_view key, const T& field) {
-    j[std::string(key)] = json_type(field);
+    using U = std::remove_cvref_t<T>;
+    if constexpr (std::same_as<U, bool>) {
+        j.set_field(key, field);
+    } else if constexpr (std::integral<U>) {
+        if constexpr (std::signed_integral<U>) {
+            j.set_field(key, static_cast<std::int64_t>(field));
+        } else {
+            j.set_field(key, static_cast<std::uint64_t>(field));
+        }
+    } else if constexpr (std::floating_point<U>) {
+        j.set_field(key, static_cast<double>(field));
+    } else if constexpr (std::same_as<U, std::string>) {
+        j.set_field(key, std::string_view(field));
+    } else if constexpr (std::same_as<U, std::string_view>) {
+        j.set_field(key, field);
+    } else if constexpr (std::same_as<U, const char*> || std::same_as<U, char*>) {
+        j.set_field(key, std::string_view(field));
+    } else {
+        json_type value(field);
+        j.set_field(key, value);
+    }
 }
 
 // ---- Constraint engine (Pydantic-exact) ------------------------------------
@@ -771,6 +810,12 @@ void apply_field_constraints(const D& value,
     }
 }
 
+template <fiasco::field<> Spec>
+consteval bool has_field_constraints() {
+    return Spec.gt.has || Spec.ge.has || Spec.lt.has || Spec.le.has || Spec.multiple_of.has ||
+           Spec.min_length.has || Spec.max_length.has || Spec.pattern.has;
+}
+
 // ---- Aggregate models (reflection) ----------------------------------------
 // Member-wise (de)serialisation driven by std::meta; replaces the FIASCO_MODEL
 // macro. Members without an identifier (e.g. anonymous unions, unnamed
@@ -823,7 +868,18 @@ void from_json(const json_type& j, T& v) {
             }
 
             try {
-                from_json(j[key_str], v.[:member:]);
+                const json_type field = j.view(key_str);
+                from_json(field, v.[:member:]);
+                if constexpr (has_field_constraints<spec>()) {
+                    if constexpr (JsonOptional<FieldT>) {
+                        if (v.[:member:].has_value()) {
+                            apply_field_constraints<spec>(
+                                *v.[:member:], field, key_str, errors);
+                        }
+                    } else {
+                        apply_field_constraints<spec>(v.[:member:], field, key_str, errors);
+                    }
+                }
             } catch (const request_validation_error& nested) {
                 for (auto err : nested.errors()) {
                     err.loc.insert(err.loc.begin(), key_str);
@@ -831,16 +887,8 @@ void from_json(const json_type& j, T& v) {
                 }
                 continue;
             } catch (const std::exception&) {
-                errors.push_back(make_type_error<FieldT>({key_str}, j[key_str]));
+                errors.push_back(make_type_error<FieldT>({key_str}, j.view(key_str)));
                 continue;
-            }
-
-            if constexpr (JsonOptional<FieldT>) {
-                if (v.[:member:].has_value()) {
-                    apply_field_constraints<spec>(*v.[:member:], j[key_str], key_str, errors);
-                }
-            } else {
-                apply_field_constraints<spec>(v.[:member:], j[key_str], key_str, errors);
             }
         }
     }
@@ -848,6 +896,184 @@ void from_json(const json_type& j, T& v) {
     if (!errors.empty()) {
         throw request_validation_error(std::move(errors));
     }
+}
+
+namespace json_detail {
+
+inline void append_escaped(std::string& out, std::string_view value) {
+    static constexpr char hex[] = "0123456789abcdef";
+    out.push_back('"');
+    for (const unsigned char c : value) {
+        switch (c) {
+        case '"':
+            out += "\\\"";
+            break;
+        case '\\':
+            out += "\\\\";
+            break;
+        case '\b':
+            out += "\\b";
+            break;
+        case '\f':
+            out += "\\f";
+            break;
+        case '\n':
+            out += "\\n";
+            break;
+        case '\r':
+            out += "\\r";
+            break;
+        case '\t':
+            out += "\\t";
+            break;
+        default:
+            if (c < 0x20) {
+                out += "\\u00";
+                out.push_back(hex[(c >> 4) & 0x0f]);
+                out.push_back(hex[c & 0x0f]);
+            } else {
+                out.push_back(static_cast<char>(c));
+            }
+        }
+    }
+    out.push_back('"');
+}
+
+template <typename T>
+void append_json_value(std::string& out, const T& value);
+
+template <typename T>
+void append_json_element(std::string& out, bool& first, const T& value) {
+    if (!first) {
+        out.push_back(',');
+    }
+    first = false;
+    append_json_value(out, value);
+}
+
+template <typename T>
+void append_json_value(std::string& out, const T& value) {
+    using U = std::remove_cvref_t<T>;
+
+    if constexpr (std::same_as<U, std::nullptr_t>) {
+        out += "null";
+    } else if constexpr (std::same_as<U, bool>) {
+        out += value ? "true" : "false";
+    } else if constexpr (std::integral<U>) {
+        char buffer[32];
+        const auto [end, ec] = std::to_chars(buffer, buffer + sizeof(buffer), value);
+        if (ec == std::errc()) {
+            out.append(buffer, end);
+        }
+    } else if constexpr (std::floating_point<U>) {
+        if (!std::isfinite(static_cast<double>(value))) {
+            out += "null";
+        } else {
+            char buffer[64];
+            const auto [end, ec] = std::to_chars(
+                buffer, buffer + sizeof(buffer), value, std::chars_format::general);
+            if (ec == std::errc()) {
+                out.append(buffer, end);
+                if (std::find(buffer, end, '.') == end && std::find(buffer, end, 'e') == end &&
+                    std::find(buffer, end, 'E') == end) {
+                    out += ".0";
+                }
+            }
+        }
+    } else if constexpr (std::same_as<U, std::string>) {
+        append_escaped(out, value);
+    } else if constexpr (std::same_as<U, std::string_view>) {
+        append_escaped(out, value);
+    } else if constexpr (std::same_as<U, const char*> || std::same_as<U, char*>) {
+        if (value == nullptr) {
+            out += "null";
+        } else {
+            append_escaped(out, std::string_view(value));
+        }
+    } else if constexpr (std::is_array_v<U> &&
+                         std::same_as<std::remove_cv_t<std::remove_extent_t<U>>, char>) {
+        append_escaped(out, std::string_view(value));
+    } else if constexpr (std::same_as<U, json_type>) {
+        out += value.dump();
+    } else if constexpr (JsonOptional<U>) {
+        if (value.has_value()) {
+            append_json_value(out, *value);
+        } else {
+            out += "null";
+        }
+    } else if constexpr (JsonMap<U>) {
+        out.push_back('{');
+        bool first = true;
+        for (const auto& [key, item] : value) {
+            if (!first) {
+                out.push_back(',');
+            }
+            first = false;
+            if constexpr (std::convertible_to<decltype(key), std::string_view>) {
+                append_escaped(out, std::string_view(key));
+            } else {
+                append_escaped(out, std::to_string(key));
+            }
+            out.push_back(':');
+            append_json_value(out, item);
+        }
+        out.push_back('}');
+    } else if constexpr (JsonSequence<U>) {
+        out.push_back('[');
+        bool first = true;
+        for (const auto& item : value) {
+            if constexpr (std::same_as<std::remove_cvref_t<typename U::value_type>, bool>) {
+                append_json_element(out, first, static_cast<bool>(item));
+            } else {
+                append_json_element(out, first, item);
+            }
+        }
+        out.push_back(']');
+    } else if constexpr (JsonTupleLike<U>) {
+        out.push_back('[');
+        bool first = true;
+        std::apply(
+            [&](const auto&... items) {
+                (append_json_element(out, first, items), ...);
+            },
+            value);
+        out.push_back(']');
+    } else if constexpr (JsonModel<U>) {
+        out.push_back('{');
+        bool first = true;
+        template for (constexpr auto member :
+                      std::define_static_array(std::meta::nonstatic_data_members_of(
+                          ^^U, std::meta::access_context::unchecked()))) {
+            if constexpr (std::meta::has_identifier(member)) {
+                constexpr auto spec = fiasco::detail::meta::field_of(member);
+                constexpr std::string_view key =
+                    spec.alias.has ? spec.alias.view() : std::meta::identifier_of(member);
+                if (!first) {
+                    out.push_back(',');
+                }
+                first = false;
+                append_escaped(out, key);
+                out.push_back(':');
+                append_json_value(out, value.[:member:]);
+            }
+        }
+        out.push_back('}');
+    } else {
+        json_type temporary(value);
+        out += temporary.dump();
+    }
+}
+
+}  // namespace json_detail
+
+/// Serialize a reflected value directly to compact JSON, bypassing the
+/// intermediate dynamic JSON tree for models and containers.
+template <JsonSerializable T>
+[[nodiscard]] std::string dump_json(const T& value) {
+    std::string out;
+    out.reserve(128);
+    json_detail::append_json_value(out, value);
+    return out;
 }
 
 using json = json_type;

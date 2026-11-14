@@ -16,6 +16,7 @@
 #include <string_view>
 #include <system_error>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "fiasco/contract/sink.hpp"
@@ -444,30 +445,30 @@ struct response {
     }
 
     /// Create a plain-text response. A trailing newline is appended.
-    static response text(const std::string& body, int status = 200) {
+    static response text(std::string body, int status = 200) {
         response r;
         r.status_code = status;
-        r.body = body;
+        r.body = std::move(body);
         r.body += '\n';
         r.headers["Content-Type"] = "text/plain";
         return r;
     }
 
     /// Create a JSON response. A trailing newline is appended.
-    static response json(const std::string& json_body, int status = 200) {
+    static response json(std::string json_body, int status = 200) {
         response r;
         r.status_code = status;
-        r.body = json_body;
+        r.body = std::move(json_body);
         r.body += '\n';
         r.headers["Content-Type"] = "application/json";
         return r;
     }
 
     /// Create an HTML response. A trailing newline is appended.
-    static response html(const std::string& body, int status = 200) {
+    static response html(std::string body, int status = 200) {
         response r;
         r.status_code = status;
-        r.body = body;
+        r.body = std::move(body);
         r.body += '\n';
         r.headers["Content-Type"] = "text/html";
         return r;

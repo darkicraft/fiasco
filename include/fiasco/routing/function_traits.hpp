@@ -366,10 +366,13 @@ template <typename T, fiasco::field<> Spec>
                                              .input = json_type(std::string(raw))}});
         }
 
-        std::vector<validation_error> errors;
-        apply_field_constraints<Spec>(value, json_type(std::string(raw)), std::string(key), errors);
-        if (!errors.empty()) {
-            throw request_validation_error(prefix_loc(std::move(errors), source));
+        if constexpr (has_field_constraints<Spec>()) {
+            std::vector<validation_error> errors;
+            apply_field_constraints<Spec>(
+                value, json_type(std::string(raw)), std::string(key), errors);
+            if (!errors.empty()) {
+                throw request_validation_error(prefix_loc(std::move(errors), source));
+            }
         }
         return value;
     }
@@ -423,7 +426,7 @@ template <typename T, fiasco::field<> Spec>
 
     const json_type& j = body.get();
 
-    const auto validate = [&](const CleanT& value, const json_type& raw) {
+    [[maybe_unused]] const auto validate = [&](const CleanT& value, const json_type& raw) {
         std::vector<validation_error> errors;
         apply_field_constraints<Spec>(value, raw, std::string(key), errors);
         if (!errors.empty()) {
@@ -438,7 +441,7 @@ template <typename T, fiasco::field<> Spec>
                                              .msg = "Field required",
                                              .input = j}});
         }
-        const json_type& sub = j[std::string(key)];
+        const json_type sub = j.view(std::string(key));
         CleanT val{};
         try {
             from_json(sub, val);
@@ -449,11 +452,13 @@ template <typename T, fiasco::field<> Spec>
             throw request_validation_error(
                 {make_type_error<CleanT>({std::string("body"), std::string(key)}, sub)});
         }
-        if constexpr (Primitive<CleanT>) {
-            validate(val, sub);
-        } else if constexpr (OptionalPrimitive<CleanT>) {
-            if (val.has_value()) {
-                validate(*val, sub);
+        if constexpr (has_field_constraints<Spec>()) {
+            if constexpr (Primitive<CleanT>) {
+                validate(val, sub);
+            } else if constexpr (OptionalPrimitive<CleanT>) {
+                if (val.has_value()) {
+                    validate(*val, sub);
+                }
             }
         }
         return val;
@@ -470,11 +475,13 @@ template <typename T, fiasco::field<> Spec>
                                          .msg = std::string(pydantic_message<CleanT>()),
                                          .input = j}});
     }
-    if constexpr (Primitive<CleanT>) {
-        validate(val, j);
-    } else if constexpr (OptionalPrimitive<CleanT>) {
-        if (val.has_value()) {
-            validate(*val, j);
+    if constexpr (has_field_constraints<Spec>()) {
+        if constexpr (Primitive<CleanT>) {
+            validate(val, j);
+        } else if constexpr (OptionalPrimitive<CleanT>) {
+            if (val.has_value()) {
+                validate(*val, j);
+            }
         }
     }
     return val;
