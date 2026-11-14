@@ -22,6 +22,10 @@ class llhttp_parser {
     /// True once a complete request is available.
     [[nodiscard]] bool is_complete() const noexcept;
 
+    /// The request currently being parsed.
+    [[nodiscard]] request& current() noexcept;
+    [[nodiscard]] const request& current() const noexcept;
+
     /// Move the completed request out and reset the parser.
     [[nodiscard]] request take_request();
 

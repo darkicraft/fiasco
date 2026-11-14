@@ -88,6 +88,9 @@ struct request {
     /// Request body.
     std::string body;
 
+    /// Whether the connection may be reused after this request.
+    bool keep_alive = true;
+
     /// Named path parameters populated by the router.
     std::unordered_map<std::string_view, std::string_view> path_params;
 
@@ -99,6 +102,21 @@ struct request {
 
     /// Remote client address, when the transport can determine it.
     std::string client_address;
+
+    /// Reset the request for reuse, retaining container capacity.
+    void clear() {
+        method = http_method::unknown;
+        url.clear();
+        path = {};
+        query_string = {};
+        headers.clear();
+        body.clear();
+        keep_alive = true;
+        path_params.clear();
+        ordered_path_params.clear();
+        query_params.clear();
+        client_address.clear();
+    }
 
     /// Re-anchor path and query views after the request object has been moved.
     /// Callers must do this before reading path/query_string; path_params are

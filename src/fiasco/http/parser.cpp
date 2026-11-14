@@ -2,12 +2,38 @@
 
 #include <llhttp.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
 #include "fiasco/http/detail/request.hpp"
 
 namespace fiasco::detail {
+
+namespace {
+
+http_method method_from_llhttp(unsigned int method) {
+    switch (static_cast<llhttp_method_t>(method)) {
+    case HTTP_GET:
+        return http_method::get;
+    case HTTP_POST:
+        return http_method::post;
+    case HTTP_PUT:
+        return http_method::put;
+    case HTTP_DELETE:
+        return http_method::del;
+    case HTTP_PATCH:
+        return http_method::patch;
+    case HTTP_HEAD:
+        return http_method::head;
+    case HTTP_OPTIONS:
+        return http_method::options;
+    default:
+        return http_method::unknown;
+    }
+}
+
+}  // namespace
 
 struct llhttp_parser::impl {
     struct parser_state {
@@ -17,7 +43,6 @@ struct llhttp_parser::impl {
         bool last_was_value = false;
         bool headers_complete = false;
         bool message_complete = false;
-        std::string url_buf;
     };
 
     llhttp_t m_parser{};
@@ -31,7 +56,7 @@ struct llhttp_parser::impl {
         // -- Callbacks --
         m_settings.on_url = [](llhttp_t* p, const char* at, size_t len) {
             auto* s = static_cast<parser_state*>(p->data);
-            s->url_buf.append(at, len);
+            s->req.url.append(at, len);
             return 0;
         };
 
@@ -66,12 +91,8 @@ struct llhttp_parser::impl {
                 s->current_header_value.clear();
             }
 
-            // Set method
-            s->req.method =
-                string_to_method(llhttp_method_name(static_cast<llhttp_method_t>(p->method)));
-
-            // Steal the allocation first
-            s->req.url = std::move(s->url_buf);
+            s->req.method = method_from_llhttp(p->method);
+            s->req.keep_alive = llhttp_should_keep_alive(p) != 0;
 
             // Parse URL into path + query_string (views into req.url)
             auto qpos = s->req.url.find('?');
@@ -82,6 +103,13 @@ struct llhttp_parser::impl {
             } else {
                 s->req.path = std::string_view(s->req.url);
                 s->req.query_string = std::string_view();
+            }
+
+            // Reserve the body once the length is known. Cap the reservation so
+            // a lying Content-Length cannot force a huge upfront allocation.
+            constexpr std::uint64_t max_reserve = 1024 * 1024;
+            if (p->content_length > 0 && p->content_length <= max_reserve) {
+                s->req.body.reserve(static_cast<std::size_t>(p->content_length));
             }
 
             s->headers_complete = true;
@@ -104,6 +132,8 @@ struct llhttp_parser::impl {
 
 llhttp_parser::llhttp_parser()
     : p_impl(std::make_unique<impl>()) {
+    llhttp_init(&p_impl->m_parser, HTTP_REQUEST, &p_impl->m_settings);
+    p_impl->m_parser.data = &p_impl->m_state;
     reset();
 }
 
@@ -118,6 +148,14 @@ bool llhttp_parser::feed(const char* data, size_t len) {
 
 [[nodiscard]] bool llhttp_parser::is_complete() const noexcept {
     return p_impl->m_state.message_complete;
+}
+
+[[nodiscard]] request& llhttp_parser::current() noexcept {
+    return p_impl->m_state.req;
+}
+
+[[nodiscard]] const request& llhttp_parser::current() const noexcept {
+    return p_impl->m_state.req;
 }
 
 [[nodiscard]] request llhttp_parser::take_request() {
@@ -142,10 +180,14 @@ bool llhttp_parser::feed(const char* data, size_t len) {
 }
 
 void llhttp_parser::reset() {
-    p_impl->m_state = impl::parser_state{};
-    llhttp_init(&p_impl->m_parser, HTTP_REQUEST, &p_impl->m_settings);
-    p_impl->m_parser.data = &p_impl->m_state;
+    p_impl->m_state.req.clear();
+    p_impl->m_state.current_header_field.clear();
+    p_impl->m_state.current_header_value.clear();
+    p_impl->m_state.last_was_value = false;
+    p_impl->m_state.headers_complete = false;
+    p_impl->m_state.message_complete = false;
     p_impl->m_error_reason.clear();
+    llhttp_reset(&p_impl->m_parser);
 }
 
 llhttp_parser::~llhttp_parser() = default;
