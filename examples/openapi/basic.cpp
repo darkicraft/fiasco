@@ -5,8 +5,7 @@
 //
 //   curl localhost:8080/items/7
 //   curl localhost:8080/items/7/raw
-//   curl -X POST localhost:8080/items -H 'Content-Type: application/json' \
-//        -d '{"name":"widget","quantity":3}'
+//   curl -X POST localhost:8080/items -H 'Content-Type: application/json' -d '{"name":"widget","quantity":3}'
 //   curl localhost:8080/openapi.json
 //   curl localhost:8080/docs
 //   curl localhost:8080/redoc

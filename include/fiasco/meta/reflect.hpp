@@ -60,7 +60,7 @@ consteval std::meta::info parameter_type(std::meta::info param) {
 }
 
 template <std::size_t... Is>
-consteval std::meta::info arguments_type_impl_for(std::meta::info callable,
+consteval std::meta::info arguments_type_impl_for([[maybe_unused]] std::meta::info callable,
                                                   std::index_sequence<Is...>) {
     return std::meta::substitute(^^std::tuple,
                                  {parameter_type(std::meta::parameters_of(callable)[Is])...});

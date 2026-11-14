@@ -26,13 +26,13 @@ namespace fiasco::detail {
 /// Options for setting a response cookie.
 struct cookie_options {
     /// Maximum cookie age in seconds.
-    std::optional<std::int64_t> max_age;
+    std::optional<std::int64_t> max_age{};
     /// Absolute expiration time.
-    std::optional<std::chrono::system_clock::time_point> expires;
+    std::optional<std::chrono::system_clock::time_point> expires{};
     /// Cookie path. Defaults to `/`.
     std::string path = "/";
     /// Optional cookie domain.
-    std::optional<std::string> domain;
+    std::optional<std::string> domain{};
     /// Restrict the cookie to HTTPS.
     bool secure = false;
     /// Hide the cookie from JavaScript.
@@ -44,9 +44,9 @@ struct cookie_options {
 /// Options for a file response.
 struct file_options {
     /// Download filename used in `Content-Disposition`.
-    std::optional<std::string> filename;
+    std::optional<std::string> filename{};
     /// Override the inferred media type.
-    std::optional<std::string> media_type;
+    std::optional<std::string> media_type{};
     /// `Content-Disposition` type, usually `attachment` or `inline`.
     std::string content_disposition_type = "attachment";
 };

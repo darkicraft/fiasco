@@ -3,9 +3,7 @@
 //   cmake --build build --target multiple_bodies
 //   ./build/examples/models/multiple_bodies
 //
-//   curl -X POST localhost:8080/search \
-//     -H 'Content-Type: application/json' \
-//     -d '{"request":{"query":"cats"},"options":{"limit":10}}'
+//   curl -X POST localhost:8080/search -H 'Content-Type: application/json' -d '{"request":{"query":"cats"},"options":{"limit":10}}'
 //
 // The body is one JSON object whose keys are the parameter names:
 //   request -> search_request

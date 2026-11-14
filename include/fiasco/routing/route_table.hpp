@@ -34,8 +34,8 @@ struct string_hash {
 
 /// Stored handler and descriptor for one route.
 struct route_entry {
-    handler_fn handler;
-    async_handler_fn async_handler;
+    handler_fn handler{};
+    async_handler_fn async_handler{};
     route_descriptor descriptor;
 };
 
@@ -51,7 +51,7 @@ struct match_result {
     async_handler_fn* async_handler = nullptr;
     // Non-owning pointer to the matched route's registration metadata.
     const route_descriptor* descriptor = nullptr;
-    std::vector<std::pair<std::string_view, std::string_view>> path_params;
+    std::vector<std::pair<std::string_view, std::string_view>> path_params{};
 };
 
 /// Owns registered routes and matches requests against them.

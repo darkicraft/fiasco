@@ -21,7 +21,11 @@ TEST_CASE("callable_traits reflects a lambda", "[meta]") {
 }
 
 TEST_CASE("callable_traits reflects parameter names", "[meta]") {
-    auto lam = [](int user_id, std::string name) { return 0; };
+    auto lam = [](int user_id, std::string name) {
+        (void)user_id;
+        (void)name;
+        return 0;
+    };
     using traits = meta::callable_traits<decltype(lam)>;
 
     STATIC_REQUIRE(traits::argument_name(0) == "user_id");

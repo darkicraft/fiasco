@@ -3,11 +3,7 @@
 //   cmake --build build --target param_sources
 //   ./build/examples/params/sources
 //
-//   curl -X POST 'localhost:8080/items/7?search=cats' \
-//     -H 'X-Token: abc' \
-//     -H 'Cookie: session_id=xyz' \
-//     -H 'Content-Type: application/json' \
-//     -d '{"note":"hello"}'
+//   curl -X POST 'localhost:8080/items/7?search=cats' -H 'X-Token: abc' -H 'Cookie: session_id=xyz' -H 'Content-Type: application/json' -d '{"note":"hello"}'
 //
 //   curl 'localhost:8080/optional'
 //   curl 'localhost:8080/optional' -H 'X-Trace: trace-1'

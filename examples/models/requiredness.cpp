@@ -3,21 +3,13 @@
 //   cmake --build build --target requiredness
 //   ./build/examples/models/requiredness
 //
-//   curl -X POST localhost:8080/requiredness \
-//     -H 'Content-Type: application/json' \
-//     -d '{"a":1,"c":null}'                    # valid: b defaults, c is null
+//   curl -X POST localhost:8080/requiredness -H 'Content-Type: application/json' -d '{"a":1,"c":null}'                    # valid: b defaults, c is null
 //
-//   curl -X POST localhost:8080/requiredness \
-//     -H 'Content-Type: application/json' \
-//     -d '{"a":1,"b":2,"c":3,"d":4}'           # valid: everything present
+//   curl -X POST localhost:8080/requiredness -H 'Content-Type: application/json' -d '{"a":1,"b":2,"c":3,"d":4}'           # valid: everything present
 //
-//   curl -X POST localhost:8080/requiredness \
-//     -H 'Content-Type: application/json' \
-//     -d '{"c":null}'                          # 422: a is missing
+//   curl -X POST localhost:8080/requiredness -H 'Content-Type: application/json' -d '{"c":null}'                          # 422: a is missing
 //
-//   curl -X POST localhost:8080/requiredness \
-//     -H 'Content-Type: application/json' \
-//     -d '{"a":null,"c":null}'                 # 422: a is not nullable
+//   curl -X POST localhost:8080/requiredness -H 'Content-Type: application/json' -d '{"a":null,"c":null}'                 # 422: a is not nullable
 
 #include <fiasco/fiasco.hpp>
 

@@ -10,9 +10,7 @@
 //   # calls should equal graph_nodes
 //
 //   curl localhost:8080/graph/reset
-//   curl -X POST localhost:8080/graph/body \
-//     -H 'Content-Type: application/json' \
-//     -d '{"request":{"seed":2},"graph":{"seed":3}}'
+//   curl -X POST localhost:8080/graph/body -H 'Content-Type: application/json' -d '{"request":{"seed":2},"graph":{"seed":3}}'
 //   # calls should equal body_graph_nodes
 
 #include <fiasco/fiasco.hpp>

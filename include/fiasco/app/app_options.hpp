@@ -36,11 +36,11 @@ struct app_options {
     /// Application version shown in the OpenAPI document.
     std::string version = "0.1.0";
     /// Long description used by the API document.
-    std::string description;
+    std::string description{};
     /// Short summary used by the API document.
-    std::string summary;
+    std::string summary{};
     /// Terms-of-service URL or text.
-    std::string terms_of_service;
+    std::string terms_of_service{};
     /// Contact information for the API document.
     contact_info contact{};
     /// License information for the API document.
@@ -61,11 +61,11 @@ struct app_options {
     std::string swagger_ui_css_url =
         "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css";
     /// Optional Swagger UI favicon URL; empty uses the browser default.
-    std::string swagger_ui_favicon_url;
+    std::string swagger_ui_favicon_url{};
     /// ReDoc JavaScript asset URL.
     std::string redoc_js_url = "https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js";
     /// Optional ReDoc favicon URL; empty uses the browser default.
-    std::string redoc_favicon_url;
+    std::string redoc_favicon_url{};
     /// Load Google Fonts in the ReDoc page.
     bool redoc_with_google_fonts = true;
 

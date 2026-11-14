@@ -28,7 +28,9 @@ using Catch::Approx;
 namespace {
 struct Aggregate {};  // auto (reflection) model
 struct WithToJson {};
-void to_json(json_type&, const WithToJson&);
+[[maybe_unused]] void to_json(json_type& out, const WithToJson&) {
+    out = json_type::object();
+}
 struct NotAnAggregate {
     explicit NotAnAggregate(int) {}  // user-declared ctor -> no automatic to_json
 };

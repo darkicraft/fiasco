@@ -259,7 +259,7 @@ class stream {
 
             promise_type* promise;
             Op op;
-            std::optional<result_type> result;
+            std::optional<result_type> result{};
 
             bool await_ready() const noexcept { return promise->cancelled; }
 

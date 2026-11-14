@@ -27,13 +27,13 @@ namespace fiasco {
 /// One Server-Sent Events message.
 struct sse_event {
     /// Event payload. Newlines are split across multiple `data:` fields.
-    std::string data;
+    std::string data{};
     /// Optional event name.
-    std::string event;
+    std::string event{};
     /// Optional event identifier.
-    std::string id;
+    std::string id{};
     /// Optional reconnection delay in milliseconds.
-    std::optional<std::uint32_t> retry;
+    std::optional<std::uint32_t> retry{};
 };
 
 namespace sse_detail {

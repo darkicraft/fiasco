@@ -160,7 +160,7 @@ class app {
         }
         if (path.starts_with(prefix)) {
             return prefix.back() == '/' ||
-                   path.size() > prefix.size() && path[prefix.size()] == '/';
+                   (path.size() > prefix.size() && path[prefix.size()] == '/');
         }
         return false;
     }

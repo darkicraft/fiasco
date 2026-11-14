@@ -12,11 +12,11 @@ namespace fiasco {
 /// concatenated, tags append, scalars most-specific-wins.
 struct router_options {
     /// Path prefix applied to every route in the router.
-    std::string prefix;
+    std::string prefix{};
     /// Tags appended to every route in the router.
     std::vector<std::string> tags;
     /// Shared response metadata for the router.
-    std::vector<std::string> responses;
+    std::vector<std::string> responses{};
     /// Mark all routes in the router as deprecated in OpenAPI.
     bool deprecated = false;
     /// Include the router's routes in the OpenAPI document.

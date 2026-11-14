@@ -498,7 +498,7 @@ template <std::meta::info Provider, typename Cache, std::size_t... Is>
 auto invoke_dependency(const request& req,
                        std::size_t& path_idx,
                        body_context& body,
-                       bool embed,
+                       [[maybe_unused]] bool embed,
                        Cache& cache,
                        std::index_sequence<Is...>) {
     using traits = dependency_traits<Provider>;
@@ -664,11 +664,10 @@ template <typename T, std::meta::info Provider>
 using parameter_storage_t = std::conditional_t<Provider != std::meta::info{}, T, arg_storage_t<T>>;
 
 template <typename F, typename ArgsTuple, typename Cache, size_t... Is>
-auto resolve_arguments(F& fn,
-                       const request& req,
+auto resolve_arguments(const request& req,
                        std::size_t& path_idx,
                        body_context& body,
-                       bool embed,
+                       [[maybe_unused]] bool embed,
                        Cache& cache,
                        std::index_sequence<Is...>) {
     using traits = meta::callable_traits<std::decay_t<F>>;
@@ -695,7 +694,7 @@ response dispatch_impl(F& fn,
                        Cache& cache,
                        std::index_sequence<Is...>) {
     auto args = resolve_arguments<F, ArgsTuple>(
-        fn, req, path_idx, body, embed, cache, std::index_sequence<Is...>{});
+        req, path_idx, body, embed, cache, std::index_sequence<Is...>{});
 
     if constexpr (std::is_void_v<std::invoke_result_t<F, std::tuple_element_t<Is, ArgsTuple>...>>) {
         fn(static_cast<std::tuple_element_t<Is, ArgsTuple>>(std::get<Is>(args))...);
@@ -760,7 +759,7 @@ template <typename F>
         body_context body{req};
         std::size_t path_idx = 0;
         auto args = resolve_arguments<decltype(fn), args_tuple>(
-            fn, req, path_idx, body, embed_body, cache, std::make_index_sequence<traits::arity>{});
+            req, path_idx, body, embed_body, cache, std::make_index_sequence<traits::arity>{});
         co_return co_await invoke_async_handler<decltype(fn), args_tuple>(
             fn, args, std::make_index_sequence<traits::arity>{});
     };

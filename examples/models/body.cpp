@@ -3,13 +3,9 @@
 //   cmake --build build --target body_model
 //   ./build/examples/models/body
 //
-//   curl -X POST localhost:8080/users \
-//     -H 'Content-Type: application/json' \
-//     -d '{"username":"ada","age":36}'
+//   curl -X POST localhost:8080/users -H 'Content-Type: application/json' -d '{"username":"ada","age":36}'
 //
-//   curl -X POST localhost:8080/users \
-//     -H 'Content-Type: application/json' \
-//     -d '{"username":"ada"}'                    # 422: age is required
+//   curl -X POST localhost:8080/users -H 'Content-Type: application/json' -d '{"username":"ada"}'                    # 422: age is required
 //
 // Any aggregate struct is a model automatically. JSON keys are member names.
 

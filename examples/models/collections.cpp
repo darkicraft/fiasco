@@ -3,9 +3,7 @@
 //   cmake --build build --target collections
 //   ./build/examples/models/collections
 //
-//   curl -X POST localhost:8080/collections \
-//     -H 'Content-Type: application/json' \
-//     -d '{
+//   curl -X POST localhost:8080/collections -H 'Content-Type: application/json' -d '{
 //       "values": [3, 1, 4, 1, 5],
 //       "weights": {"a": 1.5, "b": 2.0},
 //       "window": [2, 9],

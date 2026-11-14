@@ -3,9 +3,7 @@
 //   cmake --build build --target constraints
 //   ./build/examples/validation/constraints
 //
-//   curl -X POST localhost:8080/constrained \
-//     -H 'Content-Type: application/json' \
-//     -d '{
+//   curl -X POST localhost:8080/constrained -H 'Content-Type: application/json' -d '{
 //       "percent": 50,
 //       "boxes": 9,
 //       "damping": 1.5,
@@ -15,9 +13,7 @@
 //       "user-name": "ada"
 //     }'
 //
-//   curl -X POST localhost:8080/constrained \
-//     -H 'Content-Type: application/json' \
-//     -d '{
+//   curl -X POST localhost:8080/constrained -H 'Content-Type: application/json' -d '{
 //       "percent": 0,
 //       "boxes": 4,
 //       "damping": 12.0,

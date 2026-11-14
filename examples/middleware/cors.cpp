@@ -5,10 +5,7 @@
 //
 //   curl -i localhost:8080/hello -H 'Origin: https://example.com'
 //
-//   curl -i -X OPTIONS localhost:8080/hello \
-//     -H 'Origin: https://example.com' \
-//     -H 'Access-Control-Request-Method: POST' \
-//     -H 'Access-Control-Request-Headers: x-token'
+//   curl -i -X OPTIONS localhost:8080/hello -H 'Origin: https://example.com' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: x-token'
 
 #include <fiasco/fiasco.hpp>
 

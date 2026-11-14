@@ -34,8 +34,8 @@ struct response_sink {
     /// Optional transport hooks for streamed response bodies. The application
     /// calls these around the pull loop; transports use them to watch for a
     /// disconnected peer without polling.
-    std::move_only_function<void(body_source*)> begin_stream;
-    std::move_only_function<void()> end_stream;
+    std::move_only_function<void(body_source*)> begin_stream{};
+    std::move_only_function<void()> end_stream{};
 };
 
 /// Pull side of the boundary. The buffered implementation returns the request
@@ -44,7 +44,7 @@ struct body_source {
     /// Pull the next body chunk, or nullopt at end of body.
     std::move_only_function<task<std::optional<std::span<const std::byte>>>()> read;
     /// Cancel an in-flight body pull.
-    std::move_only_function<void()> cancel;
+    std::move_only_function<void()> cancel{};
 };
 
 }  // namespace fiasco::detail
