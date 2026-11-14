@@ -1,14 +1,15 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <asio/any_io_executor.hpp>
 #include <asio/buffer.hpp>
 #include <asio/co_spawn.hpp>
 #include <asio/deferred.hpp>
 #include <asio/detached.hpp>
+#include <asio/error.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/post.hpp>
 #include <asio/steady_timer.hpp>
-#include <asio/system_executor.hpp>
 #include <asio/write.hpp>
 
 #include <array>
@@ -54,22 +55,21 @@ fiasco::stream<int> executor_stream() {
 }
 
 template <typename Token>
-auto async_error(Token&& token) {
+auto async_error(asio::any_io_executor executor, Token&& token) {
     return asio::async_initiate<Token, void(asio::error_code)>(
-        [](auto&& handler) {
-            asio::post(asio::system_executor{},
-                       [handler = std::forward<decltype(handler)>(handler)]() mutable {
-                           std::move(handler)(asio::error::operation_aborted);
-                       });
+        [executor = std::move(executor)](auto&& handler) mutable {
+            asio::post(executor, [handler = std::forward<decltype(handler)>(handler)]() mutable {
+                std::move(handler)(asio::error::operation_aborted);
+            });
         },
         token);
 }
 
 template <typename Token>
-auto async_value(int value, Token&& token) {
+auto async_value(asio::any_io_executor executor, int value, Token&& token) {
     return asio::async_initiate<Token, void(asio::error_code, int)>(
-        [value](auto&& handler) {
-            asio::post(asio::system_executor{},
+        [executor = std::move(executor), value](auto&& handler) mutable {
+            asio::post(executor,
                        [handler = std::forward<decltype(handler)>(handler), value]() mutable {
                            std::move(handler)(asio::error_code{}, value);
                        });
@@ -78,7 +78,8 @@ auto async_value(int value, Token&& token) {
 }
 
 fiasco::stream<int> awaited_failure_stream() {
-    co_await async_error(asio::deferred);
+    auto executor = co_await asio::this_coro::executor;
+    co_await async_error(executor, asio::deferred);
     co_yield 1;
 }
 
@@ -151,7 +152,8 @@ fiasco::stream<int> delayed_stream(asio::steady_timer& timer) {
     co_await timer.async_wait(asio::deferred);
     co_yield 2;
 
-    const int value = co_await async_value(42, asio::deferred);
+    auto executor = co_await asio::this_coro::executor;
+    const int value = co_await async_value(executor, 42, asio::deferred);
     co_yield value;
     co_return;
 }
