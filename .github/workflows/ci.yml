@@ -12,16 +12,19 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Fiasco needs GCC 16 (C++26 reflection) and CMake >= 3.30. The official gcc
+# Fiasco needs GCC 16 (C++26 reflection) and CMake >= 3.30. The official GCC
 # image carries the compiler; CMake is installed from PyPI because the image's
 # Debian package is older than the project's minimum.
+#
+# Docker Hub publishes GCC 16 images on Debian trixie. There is no
+# gcc:16.2.0-bookworm tag.
 
 jobs:
   build:
     name: GCC 16 build + ctest
     runs-on: ubuntu-latest
     container:
-      image: gcc:16.2.0-bookworm
+      image: gcc:16.2.0-trixie
     steps:
       - uses: actions/checkout@v4
       - name: Install CMake
@@ -40,7 +43,7 @@ jobs:
     name: ASan
     runs-on: ubuntu-latest
     container:
-      image: gcc:16.2.0-bookworm
+      image: gcc:16.2.0-trixie
     steps:
       - uses: actions/checkout@v4
       - name: Install CMake
@@ -63,7 +66,7 @@ jobs:
     name: TSan
     runs-on: ubuntu-latest
     container:
-      image: gcc:16.2.0-bookworm
+      image: gcc:16.2.0-trixie
     steps:
       - uses: actions/checkout@v4
       - name: Install CMake
