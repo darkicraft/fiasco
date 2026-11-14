@@ -46,15 +46,16 @@ thread count, and tool version next to the result.
 
 | Target | Requests/sec | Median | Commit | Host | CPU | Workers | Tool |
 |---|---|---|---|---|---|---|---|
-| Fiasco, epoll | 48,691 / 46,568 / 47,599 / 51,117 / 44,765 | 47,599 | `edd9ef2` | WSL2, Linux 6.18.33.2 | AMD Ryzen 5 PRO 5650U | 4 | wrk 4.1.0, `-t4` |
-| Fiasco, io_uring | 65,318 / 67,696 / 62,966 / 54,576 / 70,296 | 65,318 | `edd9ef2` | WSL2, Linux 6.18.33.2 | AMD Ryzen 5 PRO 5650U | 4 | wrk 4.1.0, `-t4` |
-| Raw Asio/Beast | 78,259 / 84,740 / 83,565 / 69,124 / 88,864 | 83,565 | `edd9ef2` | WSL2, Linux 6.18.33.2 | AMD Ryzen 5 PRO 5650U | 4 | wrk 4.1.0, `-t4` |
+| Fiasco, epoll | 81,023 / 82,251 / 80,632 | 81,023 | `dd82c16` | WSL2, Linux 6.18.33.2 | AMD Ryzen 5 PRO 5650U | 4 | wrk 4.1.0, `-t4` |
+| Fiasco, io_uring | 95,829 / 101,936 / 104,017 | 101,936 | `dd82c16` | WSL2, Linux 6.18.33.2 | AMD Ryzen 5 PRO 5650U | 4 | wrk 4.1.0, `-t4` |
+| Raw Asio/Beast | 93,411 / 91,196 / 93,418 | 93,411 | `dd82c16` | WSL2, Linux 6.18.33.2 | AMD Ryzen 5 PRO 5650U | 4 | wrk 4.1.0, `-t4` |
 
-Five interleaved rounds each, 10 seconds, 100 connections, 4 Fiasco workers,
+Three interleaved rounds each, 10 seconds, 100 connections, 4 Fiasco workers,
 4 raw workers, 4 `wrk` threads, Release build. io_uring is enabled with
 `-DFIASCO_WITH_IO_URING=ON` (liburing 2.14). Fiasco's io_uring backend is about
-**+37%** over its epoll backend on this run. The raw server is a baseline, not
-an apples-to-apples competitor: it does less work per request.
+**+26%** over its epoll backend on this run and slightly ahead of the raw
+baseline. The raw server still does less work per request; treat it as a
+reference, not an apples-to-apples competitor.
 
 ## Caveats
 
