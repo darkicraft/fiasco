@@ -98,6 +98,11 @@ endif()
 # examples/tests/modules below) is compiled with GCC's reflection flag. Added
 # after the dependencies so third-party targets are left untouched.
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-freflection>)
+add_compile_options(
+    $<$<COMPILE_LANGUAGE:CXX>:-Wall>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wextra>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wpedantic>
+)
 
 # == FIASCO ===================================================================
 
