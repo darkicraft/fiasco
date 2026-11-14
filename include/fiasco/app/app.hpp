@@ -362,6 +362,8 @@ inline std::optional<response> app::try_static(const request& req) const {
 }
 
 inline request_result app::dispatch(request& req) {
+    // A request can be moved (e.g. through the test client), which invalidates
+    // path/query views into an SSO URL. Re-anchor before routing.
     req.reanchor_url_views();
 
     if (auto sub_result = try_sub_app(req)) {
@@ -398,7 +400,11 @@ inline request_result app::dispatch(request& req) {
         req.path_params.emplace(name, value);
         req.ordered_path_params.push_back(value);
     }
-    req.query_params = parse_query(req.query_string);
+    if (req.query_string.empty()) {
+        req.query_params.clear();
+    } else {
+        req.query_params = parse_query(req.query_string);
+    }
 
     response res;
     try {
@@ -487,7 +493,11 @@ inline async app::dispatch_async(request req, async_handler_fn& handler) {
         req.path_params.emplace(name, value);
         req.ordered_path_params.push_back(value);
     }
-    req.query_params = parse_query(req.query_string);
+    if (req.query_string.empty()) {
+        req.query_params.clear();
+    } else {
+        req.query_params = parse_query(req.query_string);
+    }
 
     response res;
     try {
@@ -533,7 +543,11 @@ inline asio::awaitable<response> app::endpoint_handler(request& req) {
         req.path_params.emplace(name, value);
         req.ordered_path_params.push_back(value);
     }
-    req.query_params = parse_query(req.query_string);
+    if (req.query_string.empty()) {
+        req.query_params.clear();
+    } else {
+        req.query_params = parse_query(req.query_string);
+    }
 
     if (match.is_async) {
         try {
