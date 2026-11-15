@@ -170,7 +170,15 @@ struct session : std::enable_shared_from_this<session> {
                             state.sink = make_sink(state);
                             co_await handler.write(state.sink, res);
                         } else {
-                            co_await send_response(state, res);
+                            std::string head;
+                            bool no_body = false;
+                            if (!prepare_buffered_response(state, res, head, no_body)) {
+                                break;
+                            }
+                            std::array<asio::const_buffer, 2> buffers{
+                                asio::buffer(head.data(), head.size()),
+                                no_body ? asio::const_buffer{} : asio::buffer(res.body)};
+                            co_await asio::async_write(socket, buffers, asio::use_awaitable);
                         }
                     } catch (...) {
                         failed = true;
@@ -303,16 +311,19 @@ struct session : std::enable_shared_from_this<session> {
             socket, asio::buffer(bytes.data(), bytes.size()), asio::use_awaitable);
     }
 
-    task<void> send_response(exchange_state& state, response& res) {
+    bool prepare_buffered_response(exchange_state& state,
+                                   response& res,
+                                   std::string& head,
+                                   bool& no_body) {
         stop_peer_watch();
         if (peer_closed) {
             close_socket();
-            co_return;
+            return false;
         }
 
         const bool status_bodyless = res.status_code == 204 || res.status_code == 304 ||
                                      (res.status_code >= 100 && res.status_code < 200);
-        const bool no_body = status_bodyless || state.method == http_method::head;
+        no_body = status_bodyless || state.method == http_method::head;
 
         std::size_t capacity = 96;
         for (const auto& [key, value] : res.headers) {
@@ -326,7 +337,7 @@ struct session : std::enable_shared_from_this<session> {
         bool has_connection = false;
         bool has_transfer_encoding = false;
 
-        std::string head;
+        head.clear();
         head.reserve(capacity);
         head += "HTTP/1.1 ";
         head += std::to_string(res.status_code);
@@ -368,10 +379,7 @@ struct session : std::enable_shared_from_this<session> {
         head += "\r\n";
 
         state.headers_sent = true;
-        std::array<asio::const_buffer, 2> buffers{
-            asio::buffer(head.data(), head.size()),
-            no_body ? asio::const_buffer{} : asio::buffer(res.body)};
-        co_await asio::async_write(socket, buffers, asio::use_awaitable);
+        return true;
     }
 
     static std::string build_headers(exchange_state& state) {
