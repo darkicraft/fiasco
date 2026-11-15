@@ -103,6 +103,13 @@ add_compile_options(
     $<$<COMPILE_LANGUAGE:CXX>:-Wextra>
     $<$<COMPILE_LANGUAGE:CXX>:-Wpedantic>
 )
+# Asio's recycled awaitable frames allocate through aligned_new and release
+# through awaitable_frame::operator delete. GCC reports that pair as a
+# mismatched new/delete at the coroutine instantiation site. This is an Asio
+# implementation detail, not a Fiasco allocation bug.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-mismatched-new-delete>)
+endif()
 
 # == FIASCO ===================================================================
 
