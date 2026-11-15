@@ -77,8 +77,17 @@ std::unique_ptr<tcp::acceptor> make_acceptor(asio::io_context& context,
 
 }  // namespace
 
+// A per-core io_context is driven by exactly one thread, so a session never
+// races with itself and does not need strand serialisation. On Windows a
+// single shared io_context is run by several threads, so the strand stays.
+#if defined(_WIN32)
+using session_executor = asio::strand<asio::io_context::executor_type>;
+#else
+using session_executor = asio::io_context::executor_type;
+#endif
+
 struct session : std::enable_shared_from_this<session> {
-    asio::strand<asio::io_context::executor_type> strand;
+    session_executor exec;
     tcp::socket socket;
     llhttp_parser parser;
     std::array<char, 8192> buf;
@@ -91,7 +100,11 @@ struct session : std::enable_shared_from_this<session> {
     bool peer_closed = false;
 
     session(tcp::socket sock, asio::io_context::executor_type ex, application& h)
-        : strand(asio::make_strand(ex)),
+#if defined(_WIN32)
+        : exec(asio::make_strand(ex)),
+#else
+        : exec(ex),
+#endif
           socket(std::move(sock)),
           handler(h) {
         // Responses are small and written with keep-alive, so Nagle only adds
@@ -109,7 +122,7 @@ struct session : std::enable_shared_from_this<session> {
     void start() {
         auto self = shared_from_this();
         asio::co_spawn(
-            strand,
+            exec,
             [self]() -> task<void> { co_await self->run(); },
             asio::detached);
     }
@@ -142,7 +155,8 @@ struct session : std::enable_shared_from_this<session> {
                 active_stream = nullptr;
 
                 request_result result;
-                response res;
+                std::optional<response> async_response;
+                response* res = nullptr;
                 bool failed = false;
                 try {
                     result = handler.handle(req);
@@ -152,11 +166,14 @@ struct session : std::enable_shared_from_this<session> {
 
                 if (!failed) {
                     if (auto* ready = std::get_if<response>(&result)) {
-                        res = std::move(*ready);
+                        // Keep the synchronous response in the variant instead
+                        // of moving it into a second response object.
+                        res = ready;
                     } else {
                         try {
                             auto async_res = co_await std::get<async>(std::move(result));
-                            res = std::move(async_res).take();
+                            async_response.emplace(std::move(async_res).take());
+                            res = &*async_response;
                         } catch (...) {
                             failed = true;
                         }
@@ -165,19 +182,19 @@ struct session : std::enable_shared_from_this<session> {
 
                 if (!failed) {
                     try {
-                        handler.prepare(req, res);
-                        if (res.stream_source) {
+                        handler.prepare(req, *res);
+                        if (res->stream_source) {
                             state.sink = make_sink(state);
-                            co_await handler.write(state.sink, res);
+                            co_await handler.write(state.sink, *res);
                         } else {
                             std::string head;
                             bool no_body = false;
-                            if (!prepare_buffered_response(state, res, head, no_body)) {
+                            if (!prepare_buffered_response(state, *res, head, no_body)) {
                                 break;
                             }
                             std::array<asio::const_buffer, 2> buffers{
                                 asio::buffer(head.data(), head.size()),
-                                no_body ? asio::const_buffer{} : asio::buffer(res.body)};
+                                no_body ? asio::const_buffer{} : asio::buffer(res->body)};
                             co_await asio::async_write(socket, buffers, asio::use_awaitable);
                         }
                     } catch (...) {
@@ -245,7 +262,7 @@ struct session : std::enable_shared_from_this<session> {
             tcp::socket::wait_read,
             asio::bind_cancellation_slot(
                 peer_watch_cancel.slot(),
-                asio::bind_executor(strand, [self, generation](asio::error_code error) {
+                asio::bind_executor(exec, [self, generation](asio::error_code error) {
                     self->on_peer_readable(generation, error);
                 })));
     }

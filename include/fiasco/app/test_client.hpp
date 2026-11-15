@@ -37,7 +37,7 @@ class test_client {
                     if (key == "Set-Cookie") {
                         out.set_cookie_headers.emplace_back(value);
                     } else {
-                        out.headers[std::string(key)] = std::string(value);
+                        out.headers.emplace(key, value);
                     }
                 },
             .write = [&out](std::span<const std::byte> bytes) -> task<void> {

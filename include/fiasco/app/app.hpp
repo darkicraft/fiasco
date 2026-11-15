@@ -130,6 +130,12 @@ class app {
     request_result handle(request& req);
 
     /// @internal
+    /// Entry point for a request whose owner does not outlive the returned
+    /// coroutine (mounted sub-apps). The request is moved into the coroutine
+    /// frame instead of being copied eagerly.
+    request_result handle(request&& req);
+
+    /// @internal
     /// Transport entry points used by the server.
     application handler() {
         return application{
@@ -229,7 +235,7 @@ class app {
                 }
                 allow += method_to_string(method);
             }
-            res.headers["Allow"] = std::move(allow);
+            res.headers.emplace("Allow", std::move(allow));
         }
         return res;
     }
@@ -256,7 +262,7 @@ class app {
             location += '?';
             location.append(req.query_string);
         }
-        res.headers["Location"] = std::move(location);
+        res.headers.emplace("Location", std::move(location));
         return res;
     }
 
@@ -265,7 +271,7 @@ class app {
         body["detail"] = error.detail();
         response res = response::json(body.dump(), error.status_code());
         for (const auto& [name, value] : error.headers()) {
-            res.headers[name] = value;
+            res.headers.emplace(name, value);
         }
         return res;
     }
@@ -329,11 +335,13 @@ class app {
         }
     }
 
-    async dispatch_async(request req, async_handler_fn& handler);
+    async dispatch_async(request& req, async_handler_fn& handler);
 
-    asio::awaitable<response> endpoint_handler(request& req);
+    static asio::awaitable<response> endpoint_handler(void* context, request& req);
 
-    async dispatch_pipeline(request req);
+    async dispatch_pipeline(request& req);
+
+    async handle_owned(request req);
 
     static task<void> write_response(response_sink& sink, response res);
 
@@ -355,7 +363,7 @@ inline std::optional<request_result> app::try_sub_app(request& req) {
         }
         sub_req.url = std::move(new_url);
         sub_req.reanchor_url_views();
-        return sub.target->handle(sub_req);
+        return sub.target->handle(std::move(sub_req));
     }
     return std::nullopt;
 }
@@ -370,10 +378,9 @@ inline std::optional<response> app::try_static(const request& req) const {
 }
 
 inline request_result app::dispatch(request& req) {
-    // A request can be moved (e.g. through the test client), which invalidates
-    // path/query views into an SSO URL. Re-anchor before routing.
-    req.reanchor_url_views();
-
+    // Path/query views must be current here. The transport and the test client
+    // re-anchor at their boundary; a moved request is re-anchored by
+    // `handle(request&&)`.
     if (auto sub_result = try_sub_app(req)) {
         return std::move(*sub_result);
     }
@@ -398,15 +405,22 @@ inline request_result app::dispatch(request& req) {
     }
 
     if (match.is_async) {
-        // Async handlers outlive this frame, so hand them their own request.
-        return dispatch_async(request(req), *match.async_handler);
+        // The transport awaits the coroutine before reusing the request.
+        return dispatch_async(req, *match.async_handler);
     }
 
-    req.path_params.clear();
-    req.ordered_path_params.clear();
-    for (const auto& [name, value] : match.path_params) {
-        req.path_params.emplace(name, value);
-        req.ordered_path_params.push_back(value);
+    if (!match.path_params.empty()) {
+        req.path_params.clear();
+        req.ordered_path_params.clear();
+        req.path_params.reserve(match.path_params.size());
+        req.ordered_path_params.reserve(match.path_params.size());
+        for (const auto& [name, value] : match.path_params) {
+            req.path_params.emplace(name, value);
+            req.ordered_path_params.push_back(value);
+        }
+    } else {
+        req.path_params.clear();
+        req.ordered_path_params.clear();
     }
     if (req.query_string.empty()) {
         req.query_params.clear();
@@ -414,24 +428,43 @@ inline request_result app::dispatch(request& req) {
         req.query_params = parse_query(req.query_string);
     }
 
-    response res;
+    // Return the handler's response directly: `request_result` can hold it
+    // without an intermediate default-constructed response and assignment.
     try {
-        res = (*match.handler)(req);
+        return (*match.handler)(req);
     } catch (...) {
-        res = translate_exception(std::current_exception());
+        return translate_exception(std::current_exception());
     }
-    return res;
 }
 
 inline request_result app::handle(request& req) {
     if (!m_middleware.empty()) {
-        // Middleware pipelines own the request across suspensions.
-        return dispatch_pipeline(request(req));
+        // The transport awaits the returned coroutine before reusing `req`, so
+        // the pipeline can borrow it instead of paying for a deep copy.
+        return dispatch_pipeline(req);
     }
     return dispatch(req);
 }
 
+inline request_result app::handle(request&& req) {
+    return handle_owned(std::move(req));
+}
+
+inline async app::handle_owned(request req) {
+    req.reanchor_url_views();
+    if (!m_middleware.empty()) {
+        try {
+            endpoint_fn endpoint{this, &app::endpoint_handler};
+            co_return co_await m_middleware.run(req, endpoint);
+        } catch (...) {
+            co_return translate_exception(std::current_exception());
+        }
+    }
+    co_return co_await endpoint_handler(this, req);
+}
+
 inline task<void> app::handle(exchange& ex) {
+    ex.req.reanchor_url_views();
     auto result = handle(ex.req);
     if (auto* res = std::get_if<response>(&result)) {
         prepare_file_response(*res, ex.req);
@@ -453,7 +486,7 @@ inline task<void> app::write_response(response_sink& sink, response res) {
         co_return;
     }
     if (!res.stream_source && !bodyless && !res.headers.contains("Content-Length")) {
-        res.headers["Content-Length"] = std::to_string(res.body.size());
+        res.headers.emplace("Content-Length", std::to_string(res.body.size()));
     }
 
     sink.status(res.status_code);
@@ -492,7 +525,7 @@ inline task<void> app::write_response(response_sink& sink, response res) {
     co_return;
 }
 
-inline async app::dispatch_async(request req, async_handler_fn& handler) {
+inline async app::dispatch_async(request& req, async_handler_fn& handler) {
     req.reanchor_url_views();
     auto match = m_router.match(req.method, req.path);
     req.path_params.clear();
@@ -517,29 +550,30 @@ inline async app::dispatch_async(request req, async_handler_fn& handler) {
     co_return res;
 }
 
-inline asio::awaitable<response> app::endpoint_handler(request& req) {
-    if (auto sub_result = try_sub_app(req)) {
+inline asio::awaitable<response> app::endpoint_handler(void* context, request& req) {
+    auto& self = *static_cast<app*>(context);
+
+    if (auto sub_result = self.try_sub_app(req)) {
         if (auto* res = std::get_if<response>(&*sub_result)) {
             co_return *res;
         }
-        auto res = co_await std::get<async>(std::move(*sub_result));
-        co_return std::move(res).take();
+        co_return (co_await std::get<async>(std::move(*sub_result))).take();
     }
 
-    if (auto builtin = try_builtin(req)) {
+    if (auto builtin = self.try_builtin(req)) {
         co_return std::move(*builtin);
     }
 
-    if (auto static_result = try_static(req)) {
+    if (auto static_result = self.try_static(req)) {
         co_return std::move(*static_result);
     }
 
-    auto match = m_router.match(req.method, req.path);
+    auto match = self.m_router.match(req.method, req.path);
     if (!match.matched) {
-        if (m_router.any_method_matches(req.path)) {
-            co_return method_not_allowed(req);
+        if (self.m_router.any_method_matches(req.path)) {
+            co_return self.method_not_allowed(req);
         }
-        if (auto redirect = try_redirect(req)) {
+        if (auto redirect = self.try_redirect(req)) {
             co_return std::move(*redirect);
         }
         co_return response::error("Not Found", 404);
@@ -559,33 +593,28 @@ inline asio::awaitable<response> app::endpoint_handler(request& req) {
 
     if (match.is_async) {
         try {
-            auto result = co_await (*match.async_handler)(req);
-            co_return std::move(result).take();
+            co_return (co_await (*match.async_handler)(req)).take();
         } catch (...) {
-            co_return translate_known_exception(std::current_exception());
+            co_return self.translate_known_exception(std::current_exception());
         }
     }
 
     try {
         co_return (*match.handler)(req);
     } catch (...) {
-        co_return translate_known_exception(std::current_exception());
+        co_return self.translate_known_exception(std::current_exception());
     }
 }
 
-inline async app::dispatch_pipeline(request req) {
+inline async app::dispatch_pipeline(request& req) {
     req.reanchor_url_views();
 
-    response res;
     try {
-        endpoint_fn endpoint = [this](request& request) -> asio::awaitable<response> {
-            co_return co_await endpoint_handler(request);
-        };
-        res = co_await m_middleware.run(req, std::move(endpoint));
+        endpoint_fn endpoint{this, &app::endpoint_handler};
+        co_return co_await m_middleware.run(req, endpoint);
     } catch (...) {
-        res = translate_exception(std::current_exception());
+        co_return translate_exception(std::current_exception());
     }
-    co_return res;
 }
 
 }  // namespace fiasco::detail

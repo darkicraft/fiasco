@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "fiasco/contract/header_map.hpp"
+
 namespace fiasco::detail {
 
 /// HTTP request method.
@@ -84,7 +86,7 @@ struct request {
     /// Query string portion of `url`, without the leading `?`.
     std::string_view query_string;
     /// HTTP headers with case-insensitive lookup through `header()`.
-    std::unordered_map<std::string, std::string> headers;
+    header_map headers;
     /// Request body.
     std::string body;
 
@@ -139,7 +141,7 @@ struct request {
 
     /// Find a header by case-insensitive name. Returns null when absent.
     [[nodiscard]] const std::string* find_header(std::string_view key) const {
-        if (auto it = headers.find(std::string(key)); it != headers.end()) {
+        if (auto it = headers.find(key); it != headers.end()) {
             return &it->second;
         }
         for (const auto& [name, value] : headers) {

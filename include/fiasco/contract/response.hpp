@@ -15,10 +15,10 @@
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "fiasco/contract/header_map.hpp"
 #include "fiasco/contract/sink.hpp"
 #include "fiasco/stream/generator.hpp"
 
@@ -348,7 +348,7 @@ struct response {
     /// HTTP status code. Defaults to 200.
     int status_code = 200;
     /// Response headers.
-    std::unordered_map<std::string, std::string> headers;
+    header_map headers;
     /// Additional `Set-Cookie` header values.
     std::vector<std::string> set_cookie_headers;
     /// Buffered response body. Streamed responses leave this empty.
@@ -406,12 +406,13 @@ struct response {
                 std::chrono::system_clock::now());
 
         response r;
-        r.headers["Content-Type"] = options.media_type.has_value()
-                                        ? *options.media_type
-                                        : response_detail::media_type_for_path(path.string());
+        r.headers.emplace("Content-Type",
+                          options.media_type.has_value()
+                              ? *options.media_type
+                              : response_detail::media_type_for_path(path.string()));
         const auto disposition = response_detail::content_disposition(options);
         if (!disposition.empty()) {
-            r.headers["Content-Disposition"] = disposition;
+            r.headers.emplace("Content-Disposition", disposition);
         }
 
         r.file_source = std::make_shared<response_detail::file_body>(response_detail::file_body{
@@ -433,7 +434,7 @@ struct response {
         auto state = std::make_shared<response_detail::stream_state<T>>(std::move(producer));
 
         response r;
-        r.headers["Content-Type"] = std::move(content_type);
+        r.headers.emplace("Content-Type", std::move(content_type));
         r.stream_source = std::make_shared<body_source>(body_source{
             .read = [state]() -> task<std::optional<std::span<const std::byte>>> {
                 auto chunk = co_await state->read();
@@ -450,7 +451,7 @@ struct response {
         r.status_code = status;
         r.body = std::move(body);
         r.body += '\n';
-        r.headers["Content-Type"] = "text/plain";
+        r.headers.emplace("Content-Type", "text/plain");
         return r;
     }
 
@@ -460,7 +461,7 @@ struct response {
         r.status_code = status;
         r.body = std::move(json_body);
         r.body += '\n';
-        r.headers["Content-Type"] = "application/json";
+        r.headers.emplace("Content-Type", "application/json");
         return r;
     }
 
@@ -470,7 +471,7 @@ struct response {
         r.status_code = status;
         r.body = std::move(body);
         r.body += '\n';
-        r.headers["Content-Type"] = "text/html";
+        r.headers.emplace("Content-Type", "text/html");
         return r;
     }
 
@@ -478,7 +479,7 @@ struct response {
     static response redirect(const std::string& location, int status = 302) {
         response r;
         r.status_code = status;
-        r.headers["Location"] = location;
+        r.headers.emplace("Location", location);
         return r;
     }
 
@@ -487,7 +488,7 @@ struct response {
         response r;
         r.status_code = status;
         r.body = "{\"detail\":\"" + response_detail::json_escape(message) + "\"}\n";
-        r.headers["Content-Type"] = "application/json";
+        r.headers.emplace("Content-Type", "application/json");
         return r;
     }
 

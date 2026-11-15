@@ -20,7 +20,15 @@ namespace fiasco::detail {
 
 class middleware_chain;
 
-using endpoint_fn = std::move_only_function<asio::awaitable<response>(request&)>;
+/// A callable endpoint with no owning storage: the app passes itself as the
+/// context and a coroutine entry point as the function. Keeping this trivial
+/// removes a type-erasure allocation from every middleware request.
+struct endpoint_fn {
+    void* context = nullptr;
+    asio::awaitable<response> (*call)(void*, request&) = nullptr;
+
+    asio::awaitable<response> operator()(request& req) const { return call(context, req); }
+};
 
 class next_handler {
   public:
@@ -50,13 +58,15 @@ class middleware_chain {
     [[nodiscard]] bool empty() const noexcept { return m_middleware.empty(); }
 
     asio::awaitable<response> run(request& req, endpoint_fn endpoint) {
-        co_return co_await invoke(0, req, endpoint);
+        // `invoke` copies the trivially copyable endpoint into its own coroutine
+        // frame, so this level does not need a frame of its own.
+        return invoke(0, req, endpoint);
     }
 
   private:
     friend class next_handler;
 
-    asio::awaitable<response> invoke(std::size_t index, request& req, endpoint_fn& endpoint) {
+    asio::awaitable<response> invoke(std::size_t index, request& req, endpoint_fn endpoint) {
         if (index >= m_middleware.size()) {
             co_return co_await endpoint(req);
         }
@@ -75,7 +85,12 @@ inline asio::awaitable<response> next_handler::operator()(request& req) const {
         throw std::logic_error("middleware called next more than once");
     }
     *m_called = true;
-    co_return co_await m_chain->invoke(m_index, req, *m_endpoint);
+    if (m_index >= m_chain->m_middleware.size()) {
+        // Last layer: call the endpoint directly instead of entering another
+        // chain coroutine.
+        return (*m_endpoint)(req);
+    }
+    return m_chain->invoke(m_index, req, *m_endpoint);
 }
 
 }  // namespace fiasco::detail

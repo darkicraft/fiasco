@@ -736,40 +736,64 @@ consteval bool returns_async_handler() {
 template <typename F>
 [[nodiscard]] handler_fn make_handler(F&& f) {
     using traits = meta::callable_traits<std::decay_t<F>>;
-    using args_tuple = traits::args_tuple;
-    static constexpr auto providers = meta::providers_for<traits::reflection()>();
-    static constexpr auto uncached = meta::uncached_parameters_for<traits::reflection()>();
-    static constexpr bool embed_body = body_embedding_for<traits::reflection()>();
-    using cache_type = dependency_cache<providers, uncached>;
 
-    return [fn = std::forward<F>(f)](const request& req) mutable -> response {
-        cache_type cache;
-        body_context body{req};
-        std::size_t path_idx = 0;
-        return dispatch_impl<decltype(fn), args_tuple>(
-            fn, req, path_idx, body, embed_body, cache, std::make_index_sequence<traits::arity>{});
-    };
+    if constexpr (traits::arity == 0) {
+        // Zero-argument routes (the common plaintext/health-check case) do not
+        // need a dependency cache, a body context or argument resolution.
+        return [fn = std::forward<F>(f)](const request&) mutable -> response {
+            if constexpr (std::is_void_v<std::invoke_result_t<decltype(fn)&>>) {
+                std::invoke(fn);
+                return response::json("null");
+            } else {
+                return serialize_return(std::invoke(fn));
+            }
+        };
+    } else {
+        using args_tuple = traits::args_tuple;
+        static constexpr auto providers = meta::providers_for<traits::reflection()>();
+        static constexpr auto uncached = meta::uncached_parameters_for<traits::reflection()>();
+        static constexpr bool embed_body = body_embedding_for<traits::reflection()>();
+        using cache_type = dependency_cache<providers, uncached>;
+
+        return [fn = std::forward<F>(f)](const request& req) mutable -> response {
+            cache_type cache;
+            body_context body{req};
+            std::size_t path_idx = 0;
+            return dispatch_impl<decltype(fn), args_tuple>(
+                fn, req, path_idx, body, embed_body, cache,
+                std::make_index_sequence<traits::arity>{});
+        };
+    }
 }
 
 /// Wrap a reflected callable into an asynchronous route handler.
 template <typename F>
 [[nodiscard]] async_handler_fn make_async_handler(F&& f) {
     using traits = meta::callable_traits<std::decay_t<F>>;
-    using args_tuple = traits::args_tuple;
-    static constexpr auto providers = meta::providers_for<traits::reflection()>();
-    static constexpr auto uncached = meta::uncached_parameters_for<traits::reflection()>();
-    static constexpr bool embed_body = body_embedding_for<traits::reflection()>();
-    using cache_type = dependency_cache<providers, uncached>;
 
-    return [fn = std::forward<F>(f)](const request& req) mutable -> async {
-        cache_type cache;
-        body_context body{req};
-        std::size_t path_idx = 0;
-        auto args = resolve_arguments<decltype(fn), args_tuple>(
-            req, path_idx, body, embed_body, cache, std::make_index_sequence<traits::arity>{});
-        co_return co_await invoke_async_handler<decltype(fn), args_tuple>(
-            fn, args, std::make_index_sequence<traits::arity>{});
-    };
+    if constexpr (traits::arity == 0) {
+        return [fn = std::forward<F>(f)](const request&) mutable -> async {
+            auto result = co_await std::invoke(fn);
+            co_return std::move(result).take();
+        };
+    } else {
+        using args_tuple = traits::args_tuple;
+        static constexpr auto providers = meta::providers_for<traits::reflection()>();
+        static constexpr auto uncached = meta::uncached_parameters_for<traits::reflection()>();
+        static constexpr bool embed_body = body_embedding_for<traits::reflection()>();
+        using cache_type = dependency_cache<providers, uncached>;
+
+        return [fn = std::forward<F>(f)](const request& req) mutable -> async {
+            cache_type cache;
+            body_context body{req};
+            std::size_t path_idx = 0;
+            auto args = resolve_arguments<decltype(fn), args_tuple>(
+                req, path_idx, body, embed_body, cache,
+                std::make_index_sequence<traits::arity>{});
+            co_return co_await invoke_async_handler<decltype(fn), args_tuple>(
+                fn, args, std::make_index_sequence<traits::arity>{});
+        };
+    }
 }
 
 }  // namespace fiasco::detail
