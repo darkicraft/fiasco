@@ -82,7 +82,7 @@ struct session : std::enable_shared_from_this<session> {
     tcp::socket socket;
     llhttp_parser parser;
     std::array<char, 8192> buf;
-    application_handler& handler;
+    application& handler;
     std::string peer_address = "unknown";
     body_source* active_stream = nullptr;
     asio::cancellation_signal peer_watch_cancel;
@@ -90,7 +90,7 @@ struct session : std::enable_shared_from_this<session> {
     bool watching_peer = false;
     bool peer_closed = false;
 
-    session(tcp::socket sock, asio::io_context::executor_type ex, application_handler& h)
+    session(tcp::socket sock, asio::io_context::executor_type ex, application& h)
         : strand(asio::make_strand(ex)),
           socket(std::move(sock)),
           handler(h) {
@@ -141,54 +141,42 @@ struct session : std::enable_shared_from_this<session> {
                 peer_closed = false;
                 active_stream = nullptr;
 
-                state.sink = response_sink{
-                    .status = [&state](int status) { state.status = status; },
-                    .header =
-                        [&state](std::string_view key, std::string_view value) {
-                            state.headers.emplace_back(std::string(key), std::string(value));
-                        },
-                    .write =
-                        [this, &state](std::span<const std::byte> bytes) -> task<void> {
-                            co_await write_chunk(state, bytes);
-                        },
-                    .end = [this, &state]() -> task<void> { co_await end_response(state); },
-                    .send =
-                        [this, &state](response& res) -> task<void> {
-                            co_await send_response(state, res);
-                        },
-                    .begin_stream =
-                        [this](body_source* source) {
-                            active_stream = source;
-                            start_peer_watch();
-                        },
-                    .end_stream =
-                        [this]() {
-                            active_stream = nullptr;
-                            stop_peer_watch();
-                        },
-                };
-
-                std::string_view body_view = req.body;
-                body_source body{
-                    .read = [body_view, pos = std::size_t{0}]() mutable
-                        -> task<std::optional<std::span<const std::byte>>> {
-                        if (pos >= body_view.size()) {
-                            co_return std::nullopt;
-                        }
-                        auto chunk = std::as_bytes(
-                            std::span(body_view.data() + pos, body_view.size() - pos));
-                        pos = body_view.size();
-                        co_return chunk;
-                    },
-                };
-
-                exchange ex{req, body, state.sink};
+                request_result result;
+                response res;
                 bool failed = false;
                 try {
-                    co_await handler(ex);
+                    result = handler.handle(req);
                 } catch (...) {
                     failed = true;
                 }
+
+                if (!failed) {
+                    if (auto* ready = std::get_if<response>(&result)) {
+                        res = std::move(*ready);
+                    } else {
+                        try {
+                            auto async_res = co_await std::get<async>(std::move(result));
+                            res = std::move(async_res).take();
+                        } catch (...) {
+                            failed = true;
+                        }
+                    }
+                }
+
+                if (!failed) {
+                    try {
+                        handler.prepare(req, res);
+                        if (res.stream_source) {
+                            state.sink = make_sink(state);
+                            co_await handler.write(state.sink, res);
+                        } else {
+                            co_await send_response(state, res);
+                        }
+                    } catch (...) {
+                        failed = true;
+                    }
+                }
+
                 if (failed) {
                     if (state.headers_sent || peer_closed) {
                         close_socket();
@@ -210,6 +198,31 @@ struct session : std::enable_shared_from_this<session> {
         } catch (...) {
         }
         close_socket();
+    }
+
+    response_sink make_sink(exchange_state& state) {
+        return response_sink{
+            .status = [&state](int status) { state.status = status; },
+            .header =
+                [&state](std::string_view key, std::string_view value) {
+                    state.headers.emplace_back(std::string(key), std::string(value));
+                },
+            .write =
+                [this, &state](std::span<const std::byte> bytes) -> task<void> {
+                    co_await write_chunk(state, bytes);
+                },
+            .end = [this, &state]() -> task<void> { co_await end_response(state); },
+            .begin_stream =
+                [this](body_source* source) {
+                    active_stream = source;
+                    start_peer_watch();
+                },
+            .end_stream =
+                [this]() {
+                    active_stream = nullptr;
+                    stop_peer_watch();
+                },
+        };
     }
 
     void start_peer_watch() {
@@ -489,7 +502,7 @@ struct session : std::enable_shared_from_this<session> {
 };
 
 struct tcp_server::impl {
-    application_handler m_handler;
+    application m_handler;
     std::vector<std::unique_ptr<asio::io_context>> m_contexts;
     std::vector<std::unique_ptr<tcp::acceptor>> m_acceptors;
     std::vector<std::thread> m_threads;
@@ -498,7 +511,7 @@ struct tcp_server::impl {
 
     impl(uint16_t port,
          const std::string& host,
-         application_handler handler,
+         application handler,
          unsigned int num_threads)
         : m_handler(std::move(handler)),
           m_workers(num_threads == 0 ? std::max(std::thread::hardware_concurrency(), 2u)
@@ -575,7 +588,7 @@ struct tcp_server::impl {
 
 tcp_server::tcp_server(uint16_t port,
                        const std::string& host,
-                       application_handler handler,
+                       application handler,
                        unsigned int num_threads)
     : p_impl(std::make_unique<impl>(port, host, std::move(handler), num_threads)) {}
 

@@ -130,9 +130,17 @@ class app {
     request_result handle(request& req);
 
     /// @internal
-    /// Type-erased handler used by the transport.
-    application_handler handler() {
-        return [this](exchange& ex) { return handle(ex); };
+    /// Transport entry points used by the server.
+    application handler() {
+        return application{
+            .handle = [this](request& req) { return handle(req); },
+            .prepare =
+                [](const request& req, response& res) { prepare_file_response(res, req); },
+            .write =
+                [](response_sink& sink, response& res) -> task<void> {
+                    co_await write_response(sink, std::move(res));
+                },
+        };
     }
 
     /// @internal

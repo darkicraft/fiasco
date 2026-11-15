@@ -21,8 +21,8 @@ namespace fiasco::detail {
 /// Owns the listening socket and worker threads for an application.
 class server {
   public:
-    /// Create a server for an application handler and network configuration.
-    explicit server(application_handler handler, fiasco::server_config config = {})
+    /// Create a server for an application and network configuration.
+    explicit server(application handler, fiasco::server_config config = {})
         : m_handler(std::move(handler)),
           m_config(std::move(config)) {}
 
@@ -75,7 +75,7 @@ class server {
     }
 
   private:
-    application_handler m_handler;
+    application m_handler;
     fiasco::server_config m_config;
     mutable std::mutex m_server_mutex;
     std::condition_variable m_server_cv;

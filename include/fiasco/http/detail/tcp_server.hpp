@@ -18,7 +18,7 @@ class tcp_server {
     /// Bind `host:port` and prepare worker threads. Port `0` is ephemeral.
     tcp_server(uint16_t port,
                const std::string& host,
-               application_handler handler,
+               application handler,
                unsigned int num_threads = 0);
 
     /// Run the accept loop and worker event loops until stop().
