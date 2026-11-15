@@ -26,7 +26,6 @@ Useful options:
 -DCMAKE_BUILD_TYPE=Debug
 -DFIASCO_BUILD_TESTS=OFF
 -DFIASCO_BUILD_EXAMPLES=OFF
--DFIASCO_BUILD_BENCHMARKS=ON
 -DFIASCO_WITH_IO_URING=ON   # Linux, requires liburing
 ```
 
@@ -153,28 +152,6 @@ Every app serves an OpenAPI 3.1 document by default:
 | Static files | Mounted directories, MIME lookup, index files, HEAD, traversal protection |
 | Runtime | Asio HTTP/1.1, keep-alive, per-core workers, `SO_REUSEPORT`, optional io_uring |
 | Async | `fiasco::async` (untyped) and `fiasco::async_t<T>` (typed) |
-
-Not implemented yet: request body streaming, multipart/file uploads, WebSockets,
-TLS, security helpers, `app.state`, dependency overrides, `url_path_for`, and
-imperative `add_route` registration.
-C++20 modules are parked: the sources remain under `modules/`, but there is no
-module build target.
-
-## Examples and demo
-
-The focused examples live in [`examples/`](examples/README.md). They cover
-routing, parameter sources, models, validation, DI, middleware, errors,
-responses, OpenAPI, static files, cookies, streaming and file downloads.
-[`examples/all_in_one/main.cpp`](examples/all_in_one/main.cpp) combines every
-major feature in one application.
-
-The 30-second tour is [`demo/demo.sh`](demo/demo.sh). It starts the all-in-one
-server and exercises the endpoints:
-
-```shell
-cmake --build build --target all_in_one
-./demo/demo.sh
-```
 
 ## Third-party dependencies
 

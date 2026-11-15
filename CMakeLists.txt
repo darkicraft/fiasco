@@ -3,7 +3,6 @@ project(fiasco LANGUAGES CXX)
 
 option(FIASCO_BUILD_EXAMPLES "Build examples" ON)
 option(FIASCO_BUILD_TESTS "Build tests" ON)
-option(FIASCO_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(FIASCO_WITH_IO_URING "Use Asio's io_uring backend (requires liburing)" OFF)
 
 # C++26 reflection (std::meta) is required and, for now, only GCC 16+ provides
@@ -234,10 +233,6 @@ endif()
 
 if(FIASCO_BUILD_EXAMPLES)
   add_subdirectory(examples)
-endif()
-
-if(FIASCO_BUILD_BENCHMARKS)
-  add_subdirectory(benchmarks)
 endif()
 
 # C++20 modules are intentionally not built. The sources remain under modules/
